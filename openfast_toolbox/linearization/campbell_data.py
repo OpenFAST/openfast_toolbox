@@ -328,10 +328,6 @@ def IdentifyModes(CampbellData):
 
     Original contribution by: Srinivasa B. Ramisett, ramisettisrinivas@yahoo.com, http://ramisetti.github.io
     """
-    #import pickle
-    #pickle.dump(CampbellData, open('C:/Work/_libs/python-toolbox/data/_CampbellData_UA4_DB2.pkl','wb'))
-
-
     # --- Looking at states descriptions (of first run, first mode), to see if we are offshore. 
     # NOTE: DescStates is likely the same for all modes
     DescStates  = CampbellData[0]['Modes'][0]['DescStates']

@@ -31,7 +31,7 @@ twine upload dist/*     # upload to pypi
 ### Step 1: go to your repo
 Go to folder
 ```bash
-cd path/to/python-toolbox
+cd path/to/openfast_toolbox
 ```
 
 ### Step 2: change version in setup.py and tag it
@@ -57,13 +57,6 @@ Run twine to upload to Pypi (will ask for username and password)
 ```bash
 twine upload dist/*
 ```
-
-### After clone / first time
-Add `.gitconfig` to your path, to apply filters on jupyter notebooks
-```bash
-git config --local include.path ../.gitconfig
-```
-
 
 
 ## Upload a new version to Conda 
