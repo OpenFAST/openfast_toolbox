@@ -19,7 +19,7 @@ setup(
     description="openfast_toolbox",
     long_description=LONG_DESCRIPTION,
     version=VERSION,
-    url="https://github.com/openfast/python-toolbox/",
+    url="https://github.com/openfast/openfast_toolbox/",
     classifiers=[
         "Topic :: Utilities",
         "Topic :: Software Development :: Testing",

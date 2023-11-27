@@ -2,7 +2,7 @@
 Script to postprocess linearization files from OpenFAST for one operating point.
 
 Adapted from:
-     https://github.com/OpenFAST/python-toolbox/blob/dev/openfast_toolbox/linearization/examples/ex2a_MultiLinFiles_OneOP.py
+     https://github.com/OpenFAST/openfast_toolbox/blob/dev/openfast_toolbox/linearization/examples/ex2a_MultiLinFiles_OneOP.py
 
 """
 import os

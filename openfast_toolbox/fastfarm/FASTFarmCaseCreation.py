@@ -1190,7 +1190,7 @@ class FFCaseCreation:
 
     
     def TS_low_setup(self, writeFiles=True, runOnce=False):
-        # Loops on all conditions/seeds creating Low-res TurbSim box  (following python-toolbox/openfast_toolbox/fastfarm/examples/Ex1_TurbSimInputSetup.py)
+        # Loops on all conditions/seeds creating Low-res TurbSim box  (following openfast_toolbox/openfast_toolbox/fastfarm/examples/Ex1_TurbSimInputSetup.py)
 
         boxType='lowres'
         for cond in range(self.nConditions):

@@ -1,6 +1,6 @@
 # openfast_toolbox
 
-[![Build status](https://github.com/openfast/python-toolbox/workflows/Development%20Pipeline/badge.svg)](https://github.com/OpenFAST/python-toolbox/actions?query=workflow%3A%22Development+Pipeline%22)
+[![Build status](https://github.com/openfast/openfast_toolbox/workflows/Development%20Pipeline/badge.svg)](https://github.com/OpenFAST/openfast_toolbox/actions?query=workflow%3A%22Development+Pipeline%22)
 [![Python: 3.6+](https://img.shields.io/badge/python-3.6%2B-informational)](https://www.python.org/)
 
 Python package to work with NREL-supported [OpenFAST](https://github.com/OpenFAST/openfast) tool.
@@ -10,8 +10,8 @@ This repository intends to provide simple scripts to help OpenFAST users setup m
 ## Installation and testing
 
 ```bash
-git clone http://github.com/OpenFAST/python-toolbox
-cd python-toolbox
+git clone http://github.com/OpenFAST/openfast_toolbox
+cd openfast_toolbox
 python -m pip install -e .
 pytest
 ```
