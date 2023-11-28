@@ -142,7 +142,7 @@ class ROSCODISCONFile(File):
                         fmtFloat=fmt
                         break
                 if type(v) is str:
-                    sval='"{:15s}"    '.format(v)
+                    sval='"{}"    '.format(v)
                 elif hasattr(v, '__len__'):
                     if isinstance(v[0], (np.floating, float)):
                         sval=' '.join([fmtFloat.format(vi) for vi in v]  )+'    '
@@ -154,7 +154,7 @@ class ROSCODISCONFile(File):
                     sval=fmtFloat.format(v) + '     '
                 else:
                     sval='{} '.format(v)
-                s+='{}{}{}\n'.format(sval, sparam, comment)
+                s+='{:20s}{}{}\n'.format(sval, sparam, comment)
         return s
 
 
