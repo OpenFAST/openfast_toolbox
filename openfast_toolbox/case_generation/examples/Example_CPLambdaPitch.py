@@ -20,25 +20,26 @@ def CPLambdaExample():
     Lambda = np.linspace(0.1,10,3)
     Pitch  = np.linspace(-10,10,4)
 
-    CP,CT,Lambda,Pitch,MaxVal,result = case_gen.CPCT_LambdaPitch(ref_dir,main_file,Lambda,Pitch,fastExe=FAST_EXE,showOutputs=False,nCores=4,TMax=10)
+    # We return a ROSCOPerformanceFile, "rs"
+    rs, result, _ = case_gen.CPCT_LambdaPitch(ref_dir, main_file, Lambda, Pitch, fastExe=FAST_EXE, showOutputs=False, nCores=4, TMax=10)
 
-    print('CP max',MaxVal)
+    # --- Methods of ROSCOPerformanceFile
+    # see openfast_toolbox/io/ROSCOPerformanceFile.py
 
-    # --- Plotting matrix of CP values
-    from mpl_toolkits.mplot3d import Axes3D
-    from matplotlib import cm
-    fig = plt.figure()
-    ax = fig.gca(projection='3d')
-    LAMBDA, PITCH = np.meshgrid(Lambda, Pitch)
-    CP[CP<0]=0
-    surf = ax.plot_surface(LAMBDA, PITCH, np.transpose(CP), cmap=cm.coolwarm, linewidth=0, antialiased=True,alpha=0.8)
-    ax.scatter(MaxVal['lambda_opt'],MaxVal['pitch_opt'],MaxVal['CP_max'],c='k',marker='o',s=20)
-    ax.set_xlabel('lambda')
-    ax.set_ylabel('pitch')
-    ax.set_zlabel('CP')
-    fig.colorbar(surf, shrink=0.5, aspect=5)
+    # Get values at CPmax
+    CPmax, tsr_max, pitch_max = rs.CPmax()
+    print('CP max',CPmax)
 
+    # Plot 3D figure
+    fig = rs.plotCP3D(plotMax=True)
 
+    # Get vectors / arrays from parametric study
+    #pitch = rs['pitch'] 
+    #tsr   = rs['TSR']   
+    #WS    = rs['WS']    
+    #CP    = rs['CP']    
+    #CT    = rs['CT']    
+    #CQ    = rs['CQ']    
 
 if __name__=='__main__':
     CPLambdaExample()
