@@ -335,6 +335,8 @@ class FFCaseCreation:
         if self.yaw_init is None:
             yaw = np.ones((1,self.nTurbines))*0
             self.yaw_init = np.repeat(yaw, len(self.inflow_deg), axis=0)      
+        if not isinstance(self.yaw_init, np.ndarray):
+            self.yaw_init = np.array(self.yaw_init)
 
         # Check TI values if given in percent
         for t in self.TIvalue:
@@ -2210,6 +2212,7 @@ class FFCaseCreation:
             # plot convex hull of farm (or line) for given inflow
             turbs = self.wts_rot_ds.sel(inflow_deg=inflow)[['x','y']].to_array().transpose()
             try:
+                from scipy.spatial import ConvexHull
                 hull = ConvexHull(turbs)
                 for simplex in hull.simplices:
                     ax.plot(turbs[simplex, 0], turbs[simplex, 1], 'gray', alpha=alphas[j], label=f'Inflow {inflow.values} deg')

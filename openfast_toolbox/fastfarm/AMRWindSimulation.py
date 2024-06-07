@@ -331,17 +331,23 @@ class AMRWindSimulation:
 
             # Check domain extents
             if xhigh_hr > self.prob_hi[0]:
-                raise ValueError(f"HR domain point {xhigh_hr} extends beyond maximum AMR-Wind x-extent!")
+                raise ValueError(f"Turbine {turbkey}: HR domain point {xhigh_hr} extends beyond maximum AMR-Wind x-extent!")
+                #print(f"Turbine {turbkey}: ERROR: HR domain point {xhigh_hr} extends beyond maximum AMR-Wind x-extent!")
             if xlow_hr < self.prob_lo[0]:
-                raise ValueError(f"HR domain point {xlow_hr} extends beyond minimum AMR-Wind x-extent!")
+                raise ValueError(f"Turbine {turbkey}: HR domain point {xlow_hr} extends beyond minimum AMR-Wind x-extent!")
+                #print(f"Turbine {turbkey}: ERROR: HR domain point {xlow_hr} extends beyond minimum AMR-Wind x-extent!")
             if yhigh_hr > self.prob_hi[1]:
-                raise ValueError(f"HR domain point {yhigh_hr} extends beyond maximum AMR-Wind y-extent!")
+                raise ValueError(f"Turbine {turbkey}: HR domain point {yhigh_hr} extends beyond maximum AMR-Wind y-extent!")
+                #print(f"Turbine {turbkey}: ERROR: HR domain point {yhigh_hr} extends beyond maximum AMR-Wind y-extent!")
             if ylow_hr < self.prob_lo[1]:
-                raise ValueError(f"HR domain point {ylow_hr} extends beyond minimum AMR-Wind y-extent!")
+                raise ValueError(f"Turbine {turbkey}: HR domain point {ylow_hr} extends beyond minimum AMR-Wind y-extent!")
+                #print(f"Turbine {turbkey}: ERROR: HR domain point {ylow_hr} extends beyond minimum AMR-Wind y-extent!")
             if zhigh_hr > self.prob_hi[2]:
-                raise ValueError(f"HR domain point {zhigh_hr} extends beyond maximum AMR-Wind z-extent!")
+                raise ValueError(f"Turbine {turbkey}: HR domain point {zhigh_hr} extends beyond maximum AMR-Wind z-extent!")
+                #print(f"Turbine {turbkey}: ERROR: HR domain point {zhigh_hr} extends beyond maximum AMR-Wind z-extent!")
             if zlow_hr < self.prob_lo[2]:
-                raise ValueError(f"HR domain point {zlow_hr} extends beyond minimum AMR-Wind z-extent!")
+                raise ValueError(f"Turbine {turbkey}: HR domain point {zlow_hr} extends beyond minimum AMR-Wind z-extent!")
+                #print(f"Turbine {turbkey}: ERROR: HR domain point {zlow_hr} extends beyond minimum AMR-Wind z-extent!")
 
             # Save out info for FFCaseCreation
             self.extent_high = self.buffer_hr*2
