@@ -173,10 +173,17 @@ class AMRWindSimulation:
 
 
         # Flags of given/calculated spatial resolution for warning/error printing purposes
-        self.given_ds_hr = True
-        self.given_ds_lr = True
-        if self.ds_hr is None: self.given_ds_hr = False
-        if self.ds_lr is None: self.given_ds_lr = False
+        self.given_ds_hr = False
+        self.given_ds_lr = False
+        warn_msg = ""
+        if self.ds_hr is not None:
+            warn_msg += f"--- WARNING: HIGH-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON HIGH-RES BOXES CHECKS TO WARNINGS. ---\n"
+            self.given_ds_hr = True
+        if self.ds_lr is not None:
+            warn_msg += f"--- WARNING: LOW-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON LOW-RES BOX CHECKS TO WARNINGS. ---\n"
+            self.given_ds_lr = True
+        print(f'{warn_msg}\n')
+        a=1
 
 
     def _calc_simple_params(self):
@@ -187,21 +194,12 @@ class AMRWindSimulation:
         self.dx0 = (self.prob_hi[0] - self.prob_lo[0]) / self.n_cell[0]
         self.dy0 = (self.prob_hi[1] - self.prob_lo[1]) / self.n_cell[1]
         self.dz0 = (self.prob_hi[2] - self.prob_lo[2]) / self.n_cell[2]
-        #self.ds0_max = max(self.dx0, self.dy0, self.dz0)
-
-        # Grid resolution at finest refinement level
-        #self.dx_refine = self.dx0/(2**self.max_level)
-        #self.dy_refine = self.dy0/(2**self.max_level)
-        #self.dz_refine = self.dz0/(2**self.max_level)
-        #self.ds_refine_max = max(self.dx_refine, self.dy_refine, self.dz_refine)
-
 
         # Create grid resolutions at every level. Each array position corresponds to one level
         # Access using res[1]['dx'], where `1` is the desired level
         res = {}
         for lvl in np.arange(0,self.max_level+1):
             res[lvl] = {'dx':self.dx0/(2**lvl), 'dy':self.dy0/(2**lvl), 'dz':self.dz0/(2**lvl)}
-
 
         # Get grid resolutions at the levels of each box
         self.dx_at_lr_level = res[self.level_lr]['dx']
@@ -216,7 +214,6 @@ class AMRWindSimulation:
         self.ds_max_at_lr_level = max(res[self.level_lr]['dx'], res[self.level_lr]['dy'], res[self.level_lr]['dz'])
         self.ds_max_at_hr_level = max(res[self.level_hr]['dx'], res[self.level_hr]['dy'], res[self.level_hr]['dz'])
 
-
         # Hub height wind speed
         self.vhub = np.sqrt(self.incflo_velocity_hh[0]**2 + self.incflo_velocity_hh[1]**2)
 
@@ -230,6 +227,7 @@ class AMRWindSimulation:
         self._calc_sampling_time()
         self._calc_grid_resolution()
         self._calc_grid_placement()
+
 
     def _calc_sampling_labels(self):
         '''
@@ -247,6 +245,7 @@ class AMRWindSimulation:
             sampling_labels_hr.append(f"High{wt_name}_inflow0deg")
         
         self.sampling_labels_hr = sampling_labels_hr
+
 
     def _calc_sampling_time(self):
         '''
@@ -384,7 +383,7 @@ class AMRWindSimulation:
 
         '''
 
-        ### ~~~~~~~~~ Calculate high resolution grid placement ~~~~~~~~~
+        # Calculate high resolution grid placement
         hr_domains = {} 
         for turbkey in self.wts:
             wt_x = self.wts[turbkey]['x']
@@ -419,7 +418,7 @@ class AMRWindSimulation:
             ylow_hr = getMultipleOf(ylow_hr_min, multipleof=self.ds_high_les) - 0.5*self.dy_at_hr_level + self.prob_lo[1]%self.ds_high_les
             yhigh_hr = ylow_hr + ydist_hr
 
-            zlow_hr = 0.5 * self.dz_at_lr_level / (2**self.max_level)
+            zlow_hr = 0.5 * self.dz_at_hr_level
             zhigh_hr = zlow_hr + zdist_hr
 
             zoffsets_hr = np.arange(zlow_hr, zhigh_hr+self.ds_high_les, self.ds_high_les) - zlow_hr
@@ -455,6 +454,7 @@ class AMRWindSimulation:
                             'zoffsets_hr': zoffsets_hr}
             hr_domains[turbkey] = hr_turb_info
         self.hr_domains = hr_domains
+
 
     def _calc_grid_placement_lr(self):
         '''
@@ -528,8 +528,7 @@ class AMRWindSimulation:
         Check the values of parameters that were calculated by _calc_sampling_params
         '''
 
-        ## Check that sampling grids are at cell centers
-        # Low resolution grid
+        # Calculate parameters of the low-res grid to allow checking
         amr_xgrid_at_lr_level = np.arange(self.prob_lo[0], self.prob_hi[0], self.dx_at_lr_level)
         amr_ygrid_at_lr_level = np.arange(self.prob_lo[1], self.prob_hi[1], self.dy_at_lr_level)
         amr_zgrid_at_lr_level = np.arange(self.prob_lo[2], self.prob_hi[2], self.dz_at_lr_level)
@@ -542,16 +541,12 @@ class AMRWindSimulation:
         sampling_ygrid_lr = self.ylow_lr + self.ds_lr*np.arange(self.ny_lr)
         sampling_zgrid_lr = self.zlow_lr + self.zoffsets_lr
 
-        # TODO: These for loops could be replaced with a faster operation
-        for coord in sampling_xgrid_lr:
-            if coord not in amr_xgrid_at_lr_level_cc:
-                print(f"ERROR Low resolution x-sampling grid is not cell-centered with AMR-Wind's grid!\nx-sampling grid is {sampling_xgrid_lr}\nAMR-Wind grid: {amr_xgrid_at_lr_level_cc}")
-        for coord in sampling_ygrid_lr:
-            if coord not in amr_ygrid_at_lr_level_cc:
-                raise ValueError("Low resolution y-sampling grid is not cell-centered with AMR-Wind's grid!")
-        for coord in sampling_zgrid_lr:
-            if coord not in amr_zgrid_at_lr_level_cc:
-                raise ValueError("Low resolution z-sampling grid is not cell-centered with AMR-Wind's grid!")
+        # Check the low-res grid placement
+        self._check_grid_placement_single(sampling_xgrid_lr, amr_xgrid_at_lr_level_cc, boxstr='Low', dirstr='x')
+        self._check_grid_placement_single(sampling_ygrid_lr, amr_ygrid_at_lr_level_cc, boxstr='Low', dirstr='y')
+        self._check_grid_placement_single(sampling_zgrid_lr, amr_zgrid_at_lr_level_cc, boxstr='Low', dirstr='z')
+
+
 
         # High resolution grids (span the entire domain to make this check easier)
         amr_xgrid_at_hr_level = np.arange(self.prob_lo[0], self.prob_hi[0], self.dx_at_hr_level)
@@ -563,8 +558,8 @@ class AMRWindSimulation:
         amr_zgrid_at_hr_level_cc = amr_zgrid_at_hr_level + 0.5*self.dz_at_hr_level
 
         for turbkey in self.hr_domains:
-            nx_hr = self.hr_domains[turbkey]['nx_hr']
-            ny_hr = self.hr_domains[turbkey]['ny_hr']
+            nx_hr   = self.hr_domains[turbkey]['nx_hr']
+            ny_hr   = self.hr_domains[turbkey]['ny_hr']
             xlow_hr = self.hr_domains[turbkey]['xlow_hr']
             ylow_hr = self.hr_domains[turbkey]['ylow_hr']
 
@@ -572,16 +567,45 @@ class AMRWindSimulation:
             sampling_ygrid_hr = ylow_hr + self.ds_hr*np.arange(ny_hr)
             sampling_zgrid_hr = self.hr_domains[turbkey]['zlow_hr'] + self.hr_domains[turbkey]['zoffsets_hr']
 
-            # TODO: These for loops could be replaced with a faster operation
-            for coord in sampling_xgrid_hr:
-                if coord not in amr_xgrid_at_hr_level_cc:
-                    raise ValueError("High resolution x-sampling grid is not cell cenetered with AMR-Wind's grid!")
-            for coord in sampling_ygrid_hr:
-                if coord not in amr_ygrid_at_hr_level_cc:
-                    raise ValueError("High resolution y-sampling grid is not cell cenetered with AMR-Wind's grid!")
-            for coord in sampling_zgrid_hr:
-                if coord not in amr_zgrid_at_hr_level_cc:
-                    raise ValueError("High resolution z-sampling grid is not cell cenetered with AMR-Wind's grid!")
+            # Check the high-res grid placement
+            self._check_grid_placement_single(sampling_xgrid_hr, amr_xgrid_at_hr_level_cc, boxstr='High', dirstr='x')
+            self._check_grid_placement_single(sampling_ygrid_hr, amr_ygrid_at_hr_level_cc, boxstr='High', dirstr='y')
+            self._check_grid_placement_single(sampling_zgrid_hr, amr_zgrid_at_hr_level_cc, boxstr='High', dirstr='z')
+
+
+
+    def _check_grid_placement_single(self, sampling_xyzgrid_lhr, amr_xyzgrid_at_lhr_level_cc, boxstr, dirstr):
+        '''
+        Generic function to check placement of x, y, z grids in low, high-res boxes
+
+        Inputs
+        ------
+        sampling_xyzgrid_lhr: np array
+            Actual sampling locations of {x,y,z}grid on either low or high res (`lhr`) 
+        amr_xyzgrid_at_lhr_level_cc: np array
+            Actual AMR-Wind grid cell-center location of {x,y,z}grid at either low- or high-res levels
+        boxstr: str
+            Either 'Low', or 'High'
+        distr: str
+            Either 'x', 'y', or 'z'
+
+        '''
+        
+	# Check if all values in sampling grid sampling_{x,y,z}grid_lr are part of AMR-Wind cell-centered values amr_{x,y,z}grid_at_lr_level_cc
+        is_sampling_xyzgrid_subset = set(sampling_xyzgrid_lhr).issubset(set(amr_xyzgrid_at_lhr_level_cc))
+
+        if is_sampling_xyzgrid_subset is False:
+            amr_index = np.argmin(np.abs(amr_xyzgrid_at_lhr_level_cc - sampling_xyzgrid_lhr[0]))
+            error_msg = f"{boxstr} resolution {dirstr}-sampling grid is not cell-centered with AMR-Wind's grid. \n    "\
+        		f"{dirstr}-sampling grid:        {sampling_xyzgrid_lhr[0]}, {sampling_xyzgrid_lhr[1]}, "\
+                        f"{sampling_xyzgrid_lhr[2]}, {sampling_xyzgrid_lhr[3]}, ... \n    "\
+        		f"AMR-Wind grid (subset): {amr_xyzgrid_at_lhr_level_cc[amr_index  ]}, {amr_xyzgrid_at_lhr_level_cc[amr_index+1]}, "\
+        		f"{amr_xyzgrid_at_lhr_level_cc[amr_index+2]}, {amr_xyzgrid_at_lhr_level_cc[amr_index+3]}, ..."
+            if self.given_ds_lr:
+                print(f'WARNING: {error_msg}')
+            else:
+                print(f'ERROR: {error_msg}')
+                #raise ValueError(error_msg)
 
 
 
