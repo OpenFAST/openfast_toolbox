@@ -102,9 +102,13 @@ class AMRWindSimulation:
         self._calc_simple_params()
         self._calc_sampling_params()
 
+        # Get execution time 
+        from datetime import datetime
+        self.curr_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 
     def __repr__(self):
-        s  = f'<{type(self).__name__} object>\n'
+        s  = f'<{type(self).__name__} object>\n\n'
         s += f'Requested parameters:\n'
         s += f' - Wake model: {self.mod_wake} (1:Polar; 2:Curl; 3:Cartesian)\n'
         s += f' - Extent of high-res boxes: {self.extent_high} D to each side\n'
@@ -137,7 +141,7 @@ class AMRWindSimulation:
         s += f' - dt high: {self.dt_high_les} s (with LES dt = {self.dt} s, output frequency is {self.output_frequency_hr})\n'
         s += f' - Sampling labels: {self.sampling_labels_hr}\n'
         for t in np.arange(len(self.hr_domains)):
-            s += f" - Turbine {t}\n"
+            s += f" - Turbine {t}, base located at ({self.wts[t]['x']:.2f}, {self.wts[t]['y']:.2f}, {self.wts[t]['z']:.2f}), hub height of {self.wts[t]['zhub']} m\n"
             s += f"   - Extents: ({self.hr_domains[t]['xdist_hr']}, {self.hr_domains[t]['ydist_hr']}, {self.hr_domains[t]['zdist_hr']}) m\n"
             s += f"     - x: {self.hr_domains[t]['xlow_hr']}:{self.ds_high_les}:{self.hr_domains[t]['xhigh_hr']} m,\t  ({self.hr_domains[t]['nx_hr']} points at level {self.level_hr})\n"
             s += f"     - y: {self.hr_domains[t]['ylow_hr']}:{self.ds_high_les}:{self.hr_domains[t]['yhigh_hr']} m,\t  ({self.hr_domains[t]['ny_hr']} points at level {self.level_hr})\n"
@@ -337,8 +341,7 @@ class AMRWindSimulation:
             if self.given_ds_hr:
                 print(f'WARNING: {error_msg}')
             else:
-                print(f'ERROR: {error_msg}')
-                #raise ValueError(error_msg)
+                raise ValueError(error_msg)
 
         if self.ds_low_les % self.ds_high_les != 0:
             raise ValueError(f"Low resolution grid spacing of {self.ds_low_les} m not a multiple of the high resolution grid spacing {self.ds_high_les} m.")
@@ -388,7 +391,8 @@ class AMRWindSimulation:
         for turbkey in self.wts:
             wt_x = self.wts[turbkey]['x']
             wt_y = self.wts[turbkey]['y']
-            wt_z = self.wts[turbkey]['zhub']
+            wt_z = self.wts[turbkey]['z']
+            wt_h = self.wts[turbkey]['zhub']
             wt_D = self.wts[turbkey]['D']
 
             # Calculate minimum/maximum HR domain extents
@@ -396,7 +400,8 @@ class AMRWindSimulation:
             xhigh_hr_max = wt_x + self.buffer_hr * wt_D 
             ylow_hr_min  = wt_y - self.buffer_hr * wt_D 
             yhigh_hr_max = wt_y + self.buffer_hr * wt_D 
-            zhigh_hr_max = wt_z + self.buffer_hr * wt_D 
+            zlow_hr_min  = wt_z
+            zhigh_hr_max = wt_z + wt_h + self.buffer_hr * wt_D 
 
             # Calculate the minimum/maximum HR domain coordinate lengths & number of grid cells
             xdist_hr_min = xhigh_hr_max - xlow_hr_min  # Minumum possible length of x-extent of HR domain
@@ -407,7 +412,8 @@ class AMRWindSimulation:
             ydist_hr = self.ds_high_les * np.ceil(ydist_hr_min/self.ds_high_les)
             ny_hr = int(ydist_hr/self.ds_high_les) + 1
 
-            zdist_hr = self.ds_high_les * np.ceil(zhigh_hr_max/self.ds_high_les)
+            zdist_hr_min = zhigh_hr_max - zlow_hr_min
+            zdist_hr = self.ds_high_les * np.ceil(zdist_hr_min/self.ds_high_les)
             nz_hr = int(zdist_hr/self.ds_high_les) + 1
 
             # Calculate actual HR domain extent
@@ -418,9 +424,9 @@ class AMRWindSimulation:
             ylow_hr = getMultipleOf(ylow_hr_min, multipleof=self.ds_high_les) - 0.5*self.dy_at_hr_level + self.prob_lo[1]%self.ds_high_les
             yhigh_hr = ylow_hr + ydist_hr
 
-            zlow_hr = 0.5 * self.dz_at_hr_level
+            #zlow_hr = zlow_hr_min + 0.5 * self.dz_at_hr_level
+            zlow_hr = getMultipleOf(zlow_hr_min, multipleof=self.ds_high_les) - 0.5*self.dz_at_hr_level + self.prob_lo[2]%self.ds_high_les
             zhigh_hr = zlow_hr + zdist_hr
-
             zoffsets_hr = np.arange(zlow_hr, zhigh_hr+self.ds_high_les, self.ds_high_les) - zlow_hr
 
 
@@ -467,6 +473,7 @@ class AMRWindSimulation:
         wt_all_x_max = max(turb['x'] for turb in self.wts.values())
         wt_all_y_min = min(turb['y'] for turb in self.wts.values())
         wt_all_y_max = max(turb['y'] for turb in self.wts.values())
+        wt_all_z_min = min(turb['z'] for turb in self.wts.values())
         wt_all_z_max = max(turb['z']+turb['zhub']+0.5*turb['D'] for turb in self.wts.values())
         D_max = max(turb['D'] for turb in self.wts.values())
             
@@ -474,8 +481,12 @@ class AMRWindSimulation:
         xhigh_lr_max = wt_all_x_max + self.buffer_lr[1] * D_max 
         ylow_lr_min  = wt_all_y_min - self.buffer_lr[2] * D_max 
         yhigh_lr_max = wt_all_y_max + self.buffer_lr[3] * D_max 
-        zlow_lr_min = self.prob_lo[2]
+        zlow_lr_min  = wt_all_z_min - 0.5               * D_max
         zhigh_lr_max = wt_all_z_max + self.buffer_lr[4] * D_max 
+
+        # Carve out exception for flat terrain
+        if wt_all_z_min == 0:
+            zlow_lr_min = wt_all_z_min
 
         # Calculate the minimum/maximum LR domain coordinate lengths & number of grid cells
         xdist_lr_min = xhigh_lr_max - xlow_lr_min  # Minumum possible length of x-extent of LR domain
@@ -484,7 +495,7 @@ class AMRWindSimulation:
 
         self.xdist_lr = self.ds_low_les * np.ceil(xdist_lr_min/self.ds_low_les)  # The `+ ds_lr` comes from the +1 to NS_LOW in Sec. 4.2.15.6.4.1.1
         self.ydist_lr = self.ds_low_les * np.ceil(ydist_lr_min/self.ds_low_les)
-        self.zdist_lr = self.ds_low_les * np.ceil(zhigh_lr_max/self.ds_low_les)
+        self.zdist_lr = self.ds_low_les * np.ceil(zdist_lr_min/self.ds_low_les)
 
         self.nx_lr = int(self.xdist_lr/self.ds_low_les) + 1  # TODO: adjust xdist_lr calculation by also using `inflow_deg`
         self.ny_lr = int(self.ydist_lr/self.ds_low_les) + 1  # TODO: adjust ydist_lr calculation by also using `inflow_deg`
@@ -496,10 +507,11 @@ class AMRWindSimulation:
         #           - AR: I think it's correct to use ds_lr to get to the xlow values,
         #               but then offset by 0.5*amr_dx0 if need be
         self.xlow_lr = getMultipleOf(xlow_lr_min, multipleof=self.ds_low_les) - 0.5*self.dx_at_lr_level + self.prob_lo[0]%self.ds_low_les
-        self.xhigh_lr = self.xlow_lr + self.xdist_lr
         self.ylow_lr = getMultipleOf(ylow_lr_min, multipleof=self.ds_low_les) - 0.5*self.dy_at_lr_level + self.prob_lo[1]%self.ds_low_les
+        self.zlow_lr = getMultipleOf(zlow_lr_min, multipleof=self.ds_low_les) - 0.5*self.dz_at_lr_level + self.prob_lo[2]%self.ds_low_les
+
+        self.xhigh_lr = self.xlow_lr + self.xdist_lr
         self.yhigh_lr = self.ylow_lr + self.ydist_lr
-        self.zlow_lr = 0.5 * self.dz_at_lr_level  # Lowest z point is half the height of the lowest grid cell
         self.zhigh_lr = self.zlow_lr + self.zdist_lr
         self.zoffsets_lr = np.arange(self.zlow_lr, self.zhigh_lr+self.ds_low_les, self.ds_low_les) - self.zlow_lr
 
@@ -522,6 +534,7 @@ class AMRWindSimulation:
 
         # Save out info for FFCaseCreation
         self.extent_low = self.buffer_lr
+
 
     def _check_grid_placement(self):
         '''
@@ -604,12 +617,11 @@ class AMRWindSimulation:
             if self.given_ds_lr:
                 print(f'WARNING: {error_msg}')
             else:
-                print(f'ERROR: {error_msg}')
-                #raise ValueError(error_msg)
+                raise ValueError(error_msg)
 
 
 
-    def write_sampling_params(self, outdir=None):
+    def write_sampling_params(self, outdir=None, overwrite=False):
         '''
         Write out text that can be used for the sampling planes in an 
           AMR-Wind input file
@@ -618,10 +630,13 @@ class AMRWindSimulation:
             Input file to be written. If None, result is written to screen
         '''
 
+        # Write time step information for consistenty with sampling frequency
+        s = f"time.fixed_dt    = {self.dt}\n\n\n"
+
         # Write high-level info for sampling
         sampling_labels_lr_str = " ".join(str(item) for item in self.sampling_labels_lr)
         sampling_labels_hr_str = " ".join(str(item) for item in self.sampling_labels_hr)
-        s = f"# Sampling info generated by AMRWindSamplingCreation.py\n"
+        s += f"# Sampling info generated by AMRWindSamplingCreation.py on {self.curr_datetime}\n"
         s += f"incflo.post_processing                = {self.postproc_name_lr} {self.postproc_name_hr} # averaging\n\n\n"
 
         s += f"# ---- Low-res sampling parameters ----\n"
@@ -652,6 +667,8 @@ class AMRWindSimulation:
         for turbkey in self.hr_domains:
             wt_x = self.wts[turbkey]['x']
             wt_y = self.wts[turbkey]['y']
+            wt_z = self.wts[turbkey]['z']
+            wt_h = self.wts[turbkey]['zhub']
             wt_D = self.wts[turbkey]['D']
             if 'name' in self.wts[turbkey].keys():
                 wt_name = self.wts[turbkey]['name']
@@ -668,7 +685,7 @@ class AMRWindSimulation:
             zoffsets_hr = self.hr_domains[turbkey]['zoffsets_hr']
             zoffsets_hr_str = " ".join(str(item) for item in zoffsets_hr)
 
-            s += f"\n# Turbine {wt_name} at (x,y) = ({wt_x}, {wt_y}), with D = {wt_D}, grid spacing = {self.ds_hr} m\n"
+            s += f"\n# Turbine {wt_name} with base at (x,y) = ({wt_x:.4f}, {wt_y:.4f}, {wt_z:.4f}), with hh = {wt_h}, D = {wt_D}, grid spacing = {self.ds_hr} m\n"
             s += f"{self.postproc_name_hr}.{sampling_name}.type         = PlaneSampler\n"
             s += f"{self.postproc_name_hr}.{sampling_name}.num_points   = {nx_hr} {ny_hr}\n"
             s += f"{self.postproc_name_hr}.{sampling_name}.origin       = {xlow_hr:.4f} {ylow_hr:.4f} {zlow_hr:.4f}\n"  # Round the float output
@@ -682,11 +699,14 @@ class AMRWindSimulation:
             print(s)
         else:
             outfile = os.path.join(outdir, 'sampling_config.i')
+
+            if not os.path.isdir(outdir):
+                raise ValueError(f"outdir should be a directory")
             if not os.path.exists(outdir):
-                print(f'Path {outdir} does not exist. Creating it')
-                os.makedirs(outdir)
-            if os.path.isfile(outfile):
-                raise FileExistsError(f"{str(outfile)} already exists! Aborting...")
+                raise ValueError(f'Path {outdir} does not exist. Creating it')
+            if not overwrite:
+                if os.path.isfile(outfile):
+                    raise FileExistsError(f"{str(outfile)} already exists! Aborting...")
 
             with open(outfile,"w") as out:
                 out.write(s)
