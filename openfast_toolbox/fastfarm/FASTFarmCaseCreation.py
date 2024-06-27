@@ -598,7 +598,7 @@ class FFCaseCreation:
                 notepath = os.getcwd();  os.chdir(self.path)
                 for seed in range(self.nSeeds):
                     try:
-                        src = os.path.join('../', self.controllerInputfilename)
+                        src = os.path.join('..', self.controllerInputfilename)
                         dst = os.path.join(self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', self.controllerInputfilename)
                         if writeFiles:
                             os.symlink(src, dst)                
@@ -1306,7 +1306,7 @@ class FFCaseCreation:
             for case in range(self.nCases):
                 for seed in range(self.nSeeds):
                     try:
-                        src = os.path.join('../../../..', self.condDirList[cond], f'Seed_{seed}', 'Low.bts')
+                        src = os.path.join('..', '..', '..', '..', self.condDirList[cond], f'Seed_{seed}', 'Low.bts')
                         dst = os.path.join(self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', 'TurbSim', 'Low.bts')
                         os.symlink(src, dst)                
                     except FileExistsError:
@@ -1611,7 +1611,7 @@ class FFCaseCreation:
                 # Now that we have the correct arrays, we perform the loop on the turbines and seeds
                 for t in range(self.nTurbines):
                     for seed in range(self.nSeeds):
-                        src = os.path.join('../../../..', self.condDirList[cond], self.caseDirList[src_case], f'Seed_{seed}', 'TurbSim', f'HighT{t+1}.bts')
+                        src = os.path.join('..', '..', '..', '..', self.condDirList[cond], self.caseDirList[src_case], f'Seed_{seed}', 'TurbSim', f'HighT{t+1}.bts')
                         dst = os.path.join(self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', 'TurbSim', f'HighT{t+1}.bts')
                        
                         try:

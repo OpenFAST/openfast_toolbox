@@ -16,8 +16,8 @@ from openfast_toolbox.fastfarm.TurbSimCaseCreation import TSCaseCreation
 MyDir=os.path.dirname(__file__)
 
 # --- Define parameters necessary for this script
-OldTSFile = os.path.join(MyDir, 'SampleFiles/TestCase.inp'     )   # Template file used for TurbSim, need to exist
-NewTSFile = os.path.join(MyDir, 'SampleFiles/_TestCase_mod.inp')   # New file that will be written
+OldTSFile = os.path.join(MyDir, 'SampleFiles', 'TestCase.inp'     )   # Template file used for TurbSim, need to exist
+NewTSFile = os.path.join(MyDir, 'SampleFiles', '_TestCase_mod.inp')   # New file that will be written
 D     = 77.0                                                # Turbine diameter (m)
 HubHt = 78.045                                              # Hub Height (m)
 Vhub  = 6                                                   # mean wind speed at hub height (m/s)
