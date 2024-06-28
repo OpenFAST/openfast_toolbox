@@ -441,7 +441,6 @@ class FFCaseCreation:
             raise ValueError(f'The grid resolution dS_High should not be greater than dS_Low on the LES side')
 
 
-
         # Check the reference turbine for rotation
         if self.refTurb_rot >= self.nTurbines:
             raise ValueError(f'The index for the reference turbine for the farm to be rotated around is greater than the number of turbines')
@@ -812,7 +811,6 @@ class FFCaseCreation:
         self.BDfilepath    = "unused";  self.BDfilename    = "unused" 
         self.bladefilename = "unused";  self.bladefilepath = "unused" 
         self.towerfilename = "unused";  self.towerfilepath = "unused" 
-
 
         if templatePath is None:
             print(f'--- WARNING: No template files given. Complete setup will not be possible')
@@ -2159,7 +2157,7 @@ class FFCaseCreation:
 
 
 
-    def plot(self, figsize=(15,7), fontsize=14, saveFig=True, returnFig=False, figFormat='png'):
+    def plot(self, figsize=(14,7), fontsize=13, saveFig=True, returnFig=False, figFormat='png', showTurbNumber=False):
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(figsize=figsize)
@@ -2184,7 +2182,7 @@ class FFCaseCreation:
         for j, inflow in enumerate(self.wts_rot_ds['inflow_deg']):
             ax.set_prop_cycle(None)  # Reset the colormap for every inflow
             for i, currTurbine in enumerate(self.wts_rot_ds.turbine):
-                color = next(ax._get_lines.prop_cycler)['color']
+                color = ax._get_lines.get_next_color()
 
                 dst = self.wts_rot_ds.sel(turbine=currTurbine, inflow_deg=inflow)
 
@@ -2201,6 +2199,9 @@ class FFCaseCreation:
 
                 # plot turbine location
                 ax.scatter(dst.x, dst.y, s=dst.D/6, c=color, marker='o') #, label=f'WT{i+1}')
+                if j==0 and showTurbNumber:
+                    # Show turbine number
+                    ax.annotate(f'T{str(currTurbine.values+1)}', (dst.x, dst.y), textcoords="offset points", xytext=(4,4), ha='center')
 
                 # plot turbine disk accoding to all yaws in current wdir
                 allyaw_currwdir = self.allCases.where(self.allCases['inflow_deg']==inflow,drop=True).sel(turbine=currTurbine)['yaw']
@@ -2225,7 +2226,7 @@ class FFCaseCreation:
         # Remove duplicate entries from legend
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        plt.legend(by_label.values(), by_label.keys(), loc='upper left', bbox_to_anchor=(1.02,1.015), fontsize=fontsize)
+        plt.legend(by_label.values(), by_label.keys(), loc='upper left', bbox_to_anchor=(1.02,1.015), fontsize=fontsize, ncols=int(self.nTurbines/25))
 
         ax.set_xlabel("x [m]", fontsize=fontsize)
         ax.set_ylabel("y [m]", fontsize=fontsize)
