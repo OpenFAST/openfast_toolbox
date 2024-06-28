@@ -660,6 +660,7 @@ class FFCaseCreation:
                     # Update each turbine's ServoDyn
                     self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_
                     self.ServoDynFile['DLL_FileName'] = f'"{self.DLLfilepath}{t+1}.so"'
+                    self.ServoDynFile['DLL_InFile']   = f'"{self.controllerInputFilename}"'
                     if writeFiles:
                         self.ServoDynFile.write( os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
         
