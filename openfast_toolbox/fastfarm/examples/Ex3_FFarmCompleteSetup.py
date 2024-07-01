@@ -60,7 +60,7 @@ def main():
     
     # ----------- Turbine parameters
     # Set the yaw of each turbine for wind dir. One row for each wind direction.
-    yaw_init = [ [0,0,0,0,0,0,0,0,0,0,0,0] ]
+    yaw_init = None
     
     # ----------- Low- and high-res boxes parameters
     # Should match LES if comparisons are to be made; otherwise, set desired values
@@ -87,7 +87,7 @@ def main():
     # ----------- Template files
     templatePath            = '/full/path/where/template/files/are'
     
-    # Put 'unused' to any input that is not applicable to your case
+    # Put None on any input that is not applicable to your case
     # Files should be in templatePath
     EDfilename              = 'ElastoDyn.T'
     SEDfilename             = 'SimplifiedElastoDyn.T'
@@ -97,7 +97,7 @@ def main():
     ADskfilename            = 'AeroDisk.dat'
     SubDfilename            = 'SubDyn.dat'
     IWfilename              = 'InflowWind.dat'
-    BDfilepath              = 'unused'
+    BDfilepath              = None
     bladefilename           = 'Blade.dat'
     towerfilename           = 'Tower.dat'
     turbfilename            = 'Model.T'
@@ -125,8 +125,8 @@ def main():
     case = FFCaseCreation(path, wts, tmax, zbot, vhub, shear, TIvalue, inflow_deg,
                           dt_high_les, ds_high_les, extent_high,
                           dt_low_les, ds_low_les, extent_low,
-                          ffbin, mod_wake, yaw_init,
-                          nSeeds=nSeeds, LESpath=LESpath,
+                          ffbin=ffbin, mod_wake=mod_wake, yaw_init=yaw_init,
+                          nSeeds=nSeeds, LESpath=LESpath, refTurb_rot=refTurb_rot,
                           verbose=1)
 
     case.setTemplateFilename(templatePath, EDfilename, SEDfilename, HDfilename, SrvDfilename, ADfilename,

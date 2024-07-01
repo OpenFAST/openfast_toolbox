@@ -12,6 +12,8 @@ from openfast_toolbox.fastfarm.TurbSimCaseCreation import TSCaseCreation, writeT
 def cosd(t): return np.cos(np.deg2rad(t))
 def sind(t): return np.sin(np.deg2rad(t))
 def checkIfExists(f):
+    if os.path.basename(f) == 'unused':
+        return True
     if os.path.isfile(f):
         return True
     else:
@@ -335,6 +337,8 @@ class FFCaseCreation:
         if self.yaw_init is None:
             yaw = np.ones((1,self.nTurbines))*0
             self.yaw_init = np.repeat(yaw, len(self.inflow_deg), axis=0)      
+        if not isinstance(self.yaw_init, np.ndarray):
+            self.yaw_init = np.array(self.yaw_init)
 
         # Check TI values if given in percent
         for t in self.TIvalue:
@@ -437,7 +441,6 @@ class FFCaseCreation:
             raise ValueError(f'The temporal resolution dT_High should not be greater than dT_Low on the LES side')
         if self.ds_low_les < self.ds_high_les:
             raise ValueError(f'The grid resolution dS_High should not be greater than dS_Low on the LES side')
-
 
 
         # Check the reference turbine for rotation
@@ -596,7 +599,7 @@ class FFCaseCreation:
                 notepath = os.getcwd();  os.chdir(self.path)
                 for seed in range(self.nSeeds):
                     try:
-                        src = os.path.join('../', self.controllerInputfilename)
+                        src = os.path.join('..', self.controllerInputfilename)
                         dst = os.path.join(self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', self.controllerInputfilename)
                         if writeFiles:
                             os.symlink(src, dst)                
@@ -658,22 +661,38 @@ class FFCaseCreation:
                     # Update each turbine's ServoDyn
                     self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_
                     self.ServoDynFile['DLL_FileName'] = f'"{self.DLLfilepath}{t+1}.so"'
+                    self.ServoDynFile['DLL_InFile']   = f'"{self.controllerInputfilename}"'
                     if writeFiles:
                         self.ServoDynFile.write( os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
         
                     # Update each turbine's OpenFAST input
                     self.turbineFile['TMax']         = self.tmax
                     self.turbineFile['CompInflow']   = 1  # 1: InflowWind;     2: OpenFoam (fully coupled; not VTK input to FF)
-        
+
+                    if self.SubDfilename == 'unused':
+                        self.turbineFile['CompSub'] = 0
+                    else:
+                        self.turbineFile['CompSub'] = 1
+
+                    if self.HDfilename == 'unused':
+                        self.turbineFile['CompHydro'] = 0
+                    else:
+                        self.turbineFile['CompHydro'] = 1
+
+                    #if self.MDfilename == 'unused':
+                    #    self.turbineFile['CompMooring'] = 0
+                    #else:
+                    #    self.turbineFile['CompMooring'] = 1
+
                     if EDmodel_ == 'FED':
                         self.turbineFile['CompElast']    = 1  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
-                        self.turbineFile['CompSub']      = 1
-                        self.turbineFile['CompHydro']    = 1
+                        #self.turbineFile['CompSub']      = 1
+                        #self.turbineFile['CompHydro']    = 1
                         self.turbineFile['EDFile']       = f'"./{self.EDfilename}{t+1}_mod.dat"'
                     elif EDmodel_ == 'SED':
                         self.turbineFile['CompElast']    = 3  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
-                        self.turbineFile['CompSub']      = 0  # need to be disabled with SED
-                        self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
+                        #self.turbineFile['CompSub']      = 0  # need to be disabled with SED
+                        #self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
                         self.turbineFile['IntMethod']    = 3
                         self.turbineFile['EDFile']       = f'"./{self.SEDfilename}{t+1}_mod.dat"'
                     self.turbineFile['BDBldFile(1)'] = f'"{self.BDfilepath}"'
@@ -689,8 +708,8 @@ class FFCaseCreation:
                         self.turbineFile['AeroFile']     = f'"{self.ADskfilepath}"'
                         if writeFiles:
                             if t==0: shutilcopy2_untilSuccessful(self.coeffTablefilepath, os.path.join(currPath,self.coeffTablefilename))
-                    self.turbineFile['ServoFile']    = f'"./{self.SrvDfilename}{t+1}_mod.dat"'
-                    self.turbineFile['HydroFile']    = f'"./{self.HDfilename}"'
+                    self.turbineFile['ServoFile']    = f'"{self.SrvDfilename}{t+1}_mod.dat"'
+                    self.turbineFile['HydroFile']    = f'"{self.HDfilename}"'
                     self.turbineFile['SubFile']      = f'"{self.SubDfilepath}"'
                     self.turbineFile['MooringFile']  = f'"unused"'
                     self.turbineFile['IceFile']      = f'"unused"'
@@ -810,7 +829,6 @@ class FFCaseCreation:
         self.bladefilename = "unused";  self.bladefilepath = "unused" 
         self.towerfilename = "unused";  self.towerfilepath = "unused" 
 
-
         if templatePath is None:
             print(f'--- WARNING: No template files given. Complete setup will not be possible')
             return
@@ -841,6 +859,12 @@ class FFCaseCreation:
             checkIfExists(self.SEDfilepath)
             self.SEDfilename = SEDfilename
 
+            if HDfilename is not None and HDfilename != 'unused':
+                raise ValueError (f'Simplified ElastoDyn is not compatible with HydroDyn. Set HDfilename to None. ')
+            if SubDfilename is not None and SubDfilename != 'unused':
+                raise ValueError (f'Simplified ElastoDyn is not compatible with SubDyn. Set SubDfilename to None. ')
+
+
         if HDfilename is not None and HDfilename != 'unused':
             if not HDfilename.endswith('.dat'):
                 raise ValueError (f'The HydroDyn filename should end in `.dat`.')
@@ -868,6 +892,13 @@ class FFCaseCreation:
             self.ADskfilepath = os.path.join(self.templatePath,ADskfilename)
             checkIfExists(self.ADskfilepath)
             self.ADskfilename = ADskfilename
+
+            if coeffTablefilename is not None and coeffTablefilename != 'unused':
+                if not coeffTablefilename.endswith('.csv'):
+                    raise ValueError (f'The performance table `coeffTablefilename` file is needed for AeroDisk and should end in "*.csv"')
+                self.coeffTablefilepath = os.path.join(templatePath, coeffTablefilename)
+                checkIfExists(self.coeffTablefilepath)
+                self.coeffTablefilename = coeffTablefilename
 
         if SubDfilename is not None and SubDfilename != 'unused':
             if not SubDfilename.endswith('.dat'):
@@ -1304,7 +1335,7 @@ class FFCaseCreation:
             for case in range(self.nCases):
                 for seed in range(self.nSeeds):
                     try:
-                        src = os.path.join('../../../..', self.condDirList[cond], f'Seed_{seed}', 'Low.bts')
+                        src = os.path.join('..', '..', '..', '..', self.condDirList[cond], f'Seed_{seed}', 'Low.bts')
                         dst = os.path.join(self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', 'TurbSim', 'Low.bts')
                         os.symlink(src, dst)                
                     except FileExistsError:
@@ -1609,7 +1640,7 @@ class FFCaseCreation:
                 # Now that we have the correct arrays, we perform the loop on the turbines and seeds
                 for t in range(self.nTurbines):
                     for seed in range(self.nSeeds):
-                        src = os.path.join('../../../..', self.condDirList[cond], self.caseDirList[src_case], f'Seed_{seed}', 'TurbSim', f'HighT{t+1}.bts')
+                        src = os.path.join('..', '..', '..', '..', self.condDirList[cond], self.caseDirList[src_case], f'Seed_{seed}', 'TurbSim', f'HighT{t+1}.bts')
                         dst = os.path.join(self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', 'TurbSim', f'HighT{t+1}.bts')
                        
                         try:
@@ -2156,7 +2187,7 @@ class FFCaseCreation:
 
 
 
-    def plot(self, figsize=(15,7), fontsize=14, saveFig=True, returnFig=False, figFormat='png'):
+    def plot(self, figsize=(14,7), fontsize=13, saveFig=True, returnFig=False, figFormat='png', showTurbNumber=False):
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(figsize=figsize)
@@ -2181,7 +2212,7 @@ class FFCaseCreation:
         for j, inflow in enumerate(self.wts_rot_ds['inflow_deg']):
             ax.set_prop_cycle(None)  # Reset the colormap for every inflow
             for i, currTurbine in enumerate(self.wts_rot_ds.turbine):
-                color = next(ax._get_lines.prop_cycler)['color']
+                color = ax._get_lines.get_next_color()
 
                 dst = self.wts_rot_ds.sel(turbine=currTurbine, inflow_deg=inflow)
 
@@ -2198,6 +2229,9 @@ class FFCaseCreation:
 
                 # plot turbine location
                 ax.scatter(dst.x, dst.y, s=dst.D/6, c=color, marker='o') #, label=f'WT{i+1}')
+                if j==0 and showTurbNumber:
+                    # Show turbine number
+                    ax.annotate(f'T{str(currTurbine.values+1)}', (dst.x, dst.y), textcoords="offset points", xytext=(4,4), ha='center')
 
                 # plot turbine disk accoding to all yaws in current wdir
                 allyaw_currwdir = self.allCases.where(self.allCases['inflow_deg']==inflow,drop=True).sel(turbine=currTurbine)['yaw']
@@ -2210,6 +2244,7 @@ class FFCaseCreation:
             # plot convex hull of farm (or line) for given inflow
             turbs = self.wts_rot_ds.sel(inflow_deg=inflow)[['x','y']].to_array().transpose()
             try:
+                from scipy.spatial import ConvexHull
                 hull = ConvexHull(turbs)
                 for simplex in hull.simplices:
                     ax.plot(turbs[simplex, 0], turbs[simplex, 1], 'gray', alpha=alphas[j], label=f'Inflow {inflow.values} deg')
@@ -2221,7 +2256,7 @@ class FFCaseCreation:
         # Remove duplicate entries from legend
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        plt.legend(by_label.values(), by_label.keys(), loc='upper left', bbox_to_anchor=(1.02,1.015), fontsize=fontsize)
+        plt.legend(by_label.values(), by_label.keys(), loc='upper left', bbox_to_anchor=(1.02,1.015), fontsize=fontsize, ncols=int(self.nTurbines/25))
 
         ax.set_xlabel("x [m]", fontsize=fontsize)
         ax.set_ylabel("y [m]", fontsize=fontsize)
