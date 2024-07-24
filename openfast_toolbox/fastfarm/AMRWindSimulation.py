@@ -363,8 +363,16 @@ class AMRWindSimulation:
 
 
     def _calc_grid_resolution_lr(self):
-        ds_lr_max = self.dt_low_les * self.vhub**2 / 15
-        ds_low_les = getMultipleOf(ds_lr_max, multipleof=self.ds_hr)    # ds_hr is already a multiple of the AMR-Wind grid spacing, so here we need to make sure ds_lr is a multiple of ds_hr
+
+        ds_lr_max = self.cmeander_min * self.Dwake_min * self.vhub / 150
+        # The expression above is the same as
+        # For polar wake model:  ds_lr_max = self.dt_low_les * self.vhub**2 / 15
+        # For curled wake model: ds_lr_max = self.cmeander_max * self.dt_low_les * self.vhub**2 / 5
+
+        ds_low_les = getMultipleOf(ds_lr_max, multipleof=self.ds_hr) 
+        print(f"Low-res spatial resolution should be at least {ds_lr_max:.2f} m, but since it needs to be a multiple of high-res "\
+              f"resolution of {self.ds_hr}, we pick ds_low to be {ds_low_les} m")
+
         #self.ds_lr = self.ds_low_les
         return ds_low_les
 
