@@ -433,7 +433,8 @@ class AMRWindSimulation:
             yhigh_hr = ylow_hr + ydist_hr
 
             #zlow_hr = zlow_hr_min + 0.5 * self.dz_at_hr_level
-            zlow_hr = getMultipleOf(zlow_hr_min, multipleof=self.ds_high_les) - 0.5*self.dz_at_hr_level + self.prob_lo[2]%self.ds_high_les
+            # !!!! 2024-07-23: changed to positive the 0.5*gridres below so that z>0 in flat terrain. The wfip files will be off
+            zlow_hr = getMultipleOf(zlow_hr_min, multipleof=self.ds_high_les) + 0.5*self.dz_at_hr_level + self.prob_lo[2]%self.ds_high_les
             zhigh_hr = zlow_hr + zdist_hr
             zoffsets_hr = np.arange(zlow_hr, zhigh_hr+self.ds_high_les, self.ds_high_les) - zlow_hr
 
@@ -516,7 +517,7 @@ class AMRWindSimulation:
         #               but then offset by 0.5*amr_dx0 if need be
         self.xlow_lr = getMultipleOf(xlow_lr_min, multipleof=self.ds_low_les) - 0.5*self.dx_at_lr_level + self.prob_lo[0]%self.ds_low_les
         self.ylow_lr = getMultipleOf(ylow_lr_min, multipleof=self.ds_low_les) - 0.5*self.dy_at_lr_level + self.prob_lo[1]%self.ds_low_les
-        self.zlow_lr = getMultipleOf(zlow_lr_min, multipleof=self.ds_low_les) - 0.5*self.dz_at_lr_level + self.prob_lo[2]%self.ds_low_les
+        self.zlow_lr = getMultipleOf(zlow_lr_min, multipleof=self.ds_low_les) + 0.5*self.dz_at_lr_level + self.prob_lo[2]%self.ds_low_les
 
         self.xhigh_lr = self.xlow_lr + self.xdist_lr
         self.yhigh_lr = self.ylow_lr + self.ydist_lr
