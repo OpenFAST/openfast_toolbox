@@ -84,7 +84,6 @@ class FFCaseCreation:
                  nSeeds = 6,
                  seedValues = None,
                  LESpath = None,
-                 sweepWakeSteering = False,
                  sweepYawMisalignment = False,
                  refTurb_rot = 0,
                  verbose = 0):
@@ -144,8 +143,6 @@ class FFCaseCreation:
             Full path of the LES data, if driven by LES. If None, the setup will be for TurbSim inflow.
             LESpath can be a single path, or a list of paths of the same length as the sweep in conditions.
             For example, if TIvalue=[8,10,12], then LESpath can be 3 paths, related to each condition.
-        sweepWakeSteering: bool
-            Whether or not to perform a sweep with wake steering
         sweepYawMisalignment: bool
             Whether or not to perform a sweep with and without yaw misalignment perturbations
         refTurb_rot: int
@@ -177,12 +174,10 @@ class FFCaseCreation:
         self.EDmodel     = EDmodel
         self.nSeeds      = nSeeds
         self.LESpath     = LESpath
-        self.sweepWS     = sweepWakeSteering
         self.sweepYM     = sweepYawMisalignment
         self.seedValues  = seedValues
         self.refTurb_rot = refTurb_rot
         self.verbose     = verbose
-        self.mod_wake    = mod_wake
         self.attempt     = 1
                                         
                                         
@@ -527,7 +522,6 @@ class FFCaseCreation:
             for case in range(self.nCases):
                 # Recover information about current case for directory naming purposes
                 inflow_deg_   = self.allCases['inflow_deg'     ].sel(case=case).values
-                #wakeSteering_ = self.allCases['wakeSteering'   ].sel(case=case).values
                 misalignment_ = self.allCases['misalignment'   ].sel(case=case).values
                 nADyn_        = self.allCases['nFullAeroDyn'   ].sel(case=case).values
                 nFED_         = self.allCases['nFulllElastoDyn'].sel(case=case).values
@@ -537,8 +531,6 @@ class FFCaseCreation:
                 ndigits = len(str(self.nCases))
                 caseStr = f"Case{case:0{ndigits}d}_wdir{f'{int(inflow_deg_):+03d}'.replace('+','p').replace('-','m')}"
                 # Add standard sweeps to the case name
-                if self.sweepWS:
-                    caseStr += f"_WS{str(wakeSteering_).lower()}"
                 if self.sweepYM:
                     caseStr += f"_YM{str(misalignment_).lower()}"
                 if self.sweepEDmodel:
@@ -1079,7 +1071,7 @@ class FFCaseCreation:
 
 
     def _create_all_cases(self):
-        # Generate the different "cases" (inflow angle, and misalignment and wakesteer bools).
+        # Generate the different "cases" (inflow angle and yaw misalignment bools).
         # If misalignment true, then the actual yaw is yaw[turb]=np.random.uniform(low=-8.0, high=8.0).
 
         # Set sweep bools and multipliers
@@ -1365,7 +1357,7 @@ class FFCaseCreation:
             if self.verbose>1: print('    Running a TurbSim setup once to get domain extents')
             self.TS_low_setup(writeFiles=False, runOnce=True)
 
-        # Figure out how many (and which) high boxes actually need to be executed. Remember that wake steering, yaw misalignment, SED/ADsk models,
+        # Figure out how many (and which) high boxes actually need to be executed. Remember that yaw misalignment, SED/ADsk models,
         # and sweep in yaw do not require extra TurbSim runs
         self.nHighBoxCases = len(np.unique(self.inflow_deg))  # some wind dir might be repeated for sweep on yaws
         
@@ -1619,7 +1611,7 @@ class FFCaseCreation:
     
     def TS_high_create_symlink(self):
 
-        # Create symlink of all the high boxes for the cases with wake steering and yaw misalignment. These are the "repeated" boxes
+        # Create symlink of all the high boxes for the cases with yaw misalignment. These are the "repeated" boxes
 
         if self.verbose>0:
             print(f'Creating symlinks for all the high-resolution boxes')
