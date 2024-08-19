@@ -380,10 +380,24 @@ class FFCaseCreation:
         if len(self.inflow_deg) != len(self.yaw_init):
             raise ValueError(f'One row for each inflow angle should be given in yaw_init. '\
                              f'Currently {len(self.inflow_deg)} inflow angle(s) and {len(self.yaw_init)} yaw entrie(s)')
-        if self.ADmodel is None:
+
+        # Check reduced-order models
+        if self.ADmodel is None or self.ADmodel == 'ADyn':
             self.ADmodel = np.tile(['ADyn'],(1,self.nTurbines))
-        if self.EDmodel is None:
+        elif self.ADmodel == 'ADsk':
+            self.ADmodel = np.tile(['ADsk'],(1,self.nTurbines))
+        else:
+            raise ValueError(f"Aerodynamic model {self.ADmodel} not recognized. Options are None or 'ADyn' "\
+                             f"for AeroDyn and 'ADsk' for AeroDisk")
+
+        if self.EDmodel is None or self.EDmodel == 'FED' or self.EDmodel == 'ED':
             self.EDmodel = np.tile(['FED'],(1,self.nTurbines))
+        elif self.EDmodel == 'SED':
+            self.EDmodel = np.tile(['SED'],(1,self.nTurbines))
+        else:
+            raise ValueError(f"Elastic model {self.EDmodel} not recognized. Options are None, 'FED', or 'ED' "\
+                             f"for ElastoDyn and 'SED' for Simplified ElastoDyn")
+
         if np.shape(self.ADmodel) != np.shape(self.EDmodel):
             raise ValueError('Every case should have the aerodynamic and elastic model selected. The number of cases '\
                              '(lines) in `ADmodel` and `EDmodel` should be the same')
@@ -1075,6 +1089,7 @@ class FFCaseCreation:
             self.sweepEDmodel = False
             self.sweepADmodel = False
         else:
+            print(f"Sweeps in AD and ED enabled.")
             self.sweepEDmodel = True
             self.sweepADmodel = True
 
