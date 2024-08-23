@@ -460,6 +460,7 @@ class FFCaseCreation:
         self.templateFilesCreatedBool  = False
         self.TSlowBoxFilesCreatedBool  = False
         self.TShighBoxFilesCreatedBool = False
+        self.hasController             = False
 
 
 
@@ -593,7 +594,7 @@ class FFCaseCreation:
                         self.HydroDynFile.write(os.path.join(currPath, self.HDfilename))
         
                 # Write updated DISCON
-                if writeFiles:
+                if writeFiles and self.hasController:
                     shutilcopy2_untilSuccessful(os.path.join(self.templatePath,self.controllerInputfilename),
                                                 os.path.join(currPath,self.controllerInputfilename))
 
@@ -602,16 +603,17 @@ class FFCaseCreation:
                 # the compilation process and it is likely that a very long string with the full path will get cut. So we need to
                 # give the relative path. We give the path as the current one, so here we create a link to ensure it will work
                 # regardless of how the controller was compiled. There is no harm in having this extra link even if it's not needed.
-                notepath = os.getcwd();  os.chdir(self.path)
-                for seed in range(self.nSeeds):
-                    try:
-                        src = os.path.join('..', self.controllerInputfilename)
-                        dst = os.path.join(self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', self.controllerInputfilename)
-                        if writeFiles:
-                            os.symlink(src, dst)                
-                    except FileExistsError:
-                        pass
-                os.chdir(notepath)
+                if self.hasController:
+                    notepath = os.getcwd();  os.chdir(self.path)
+                    for seed in range(self.nSeeds):
+                        try:
+                            src = os.path.join('..', self.controllerInputfilename)
+                            dst = os.path.join(self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', self.controllerInputfilename)
+                            if writeFiles:
+                                os.symlink(src, dst)                
+                        except FileExistsError:
+                            pass
+                    os.chdir(notepath)
         
                 # Write InflowWind files. For FAST.FARM, the IW file needs to be inside the Seed* directories. If running standalone openfast,
                 # it needs to be on the same level as the fst file. Here, we copy to both places so that the workflow is general
@@ -624,6 +626,13 @@ class FFCaseCreation:
                         self.InflowWindFile.write( os.path.join(currPath,f'Seed_{seed}',self.IWfilename))
 
         
+                # Before starting the loop, print once the info about the controller is no controller is present
+                if not self.hasController:
+                    if self.verbose>=1:
+                        print(f"     No controller given through libdiscon/DLL. ",
+                              f"Using `VSContrl` {self.ServoDynFile['VSContrl']} from the template files.")
+
+                # Loop through all turbines of current condition and case
                 for t in range(self.nTurbines):
                     # Recover info about the current turbine in CondXX_*/CaseYY_
                     yaw_deg_     = self.allCases.sel(case=case, turbine=t)['yaw'].values
@@ -666,8 +675,13 @@ class FFCaseCreation:
         
                     # Update each turbine's ServoDyn
                     self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_
-                    self.ServoDynFile['DLL_FileName'] = f'"{self.DLLfilepath}{t+1}.so"'
-                    self.ServoDynFile['DLL_InFile']   = f'"{self.controllerInputfilename}"'
+                    if self.hasController:
+                        self.ServoDynFile['VSContrl']     = 5
+                        self.ServoDynFile['DLL_FileName'] = f'"{self.DLLfilepath}{t+1}.so"'
+                        self.ServoDynFile['DLL_InFile']   = f'"{self.controllerInputfilename}"'
+                    else:
+                        self.ServoDynFile['DLL_FileName'] = f'"unused"'
+                        self.ServoDynFile['DLL_InFile']   = f'"unused"'
                     if writeFiles:
                         self.ServoDynFile.write( os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
         
@@ -754,8 +768,11 @@ class FFCaseCreation:
         
                 _ = checkIfExists(os.path.join(currPath, self.HDfilename))
                 if not _: return False
-                _ = checkIfExists(os.path.join(currPath,self.controllerInputfilename))
-                if not _: return False
+
+                if self.hasController:
+                    _ = checkIfExists(os.path.join(currPath,self.controllerInputfilename))
+                    if not _: return False
+
                 _ = checkIfExists( os.path.join(currPath,self.IWfilename))
                 if not _: return False
 
@@ -834,6 +851,9 @@ class FFCaseCreation:
         self.BDfilepath    = "unused";  self.BDfilename    = "unused" 
         self.bladefilename = "unused";  self.bladefilepath = "unused" 
         self.towerfilename = "unused";  self.towerfilepath = "unused" 
+        self.libdisconfilepath       = None
+        self.controllerInputfilename = None
+        self.coeffTablefilename      = None
 
         if templatePath is None:
             print(f'--- WARNING: No template files given. Complete setup will not be possible')
@@ -898,6 +918,7 @@ class FFCaseCreation:
             self.ADskfilepath = os.path.join(self.templatePath,ADskfilename)
             checkIfExists(self.ADskfilepath)
             self.ADskfilename = ADskfilename
+            self.hasController = False
 
             if coeffTablefilename is not None and coeffTablefilename != 'unused':
                 if not coeffTablefilename.endswith('.csv'):
@@ -953,6 +974,7 @@ class FFCaseCreation:
             self.libdisconfilepath = libdisconfilepath
             checkIfExists(self.libdisconfilepath)
             self._create_copy_libdiscon()
+            self.hasController = True
 
         if controllerInputfilename is not None:
             if not controllerInputfilename.endswith('.IN'):
@@ -960,13 +982,9 @@ class FFCaseCreation:
             self.controllerInputfilepath = os.path.join(self.templatePath, controllerInputfilename)
             checkIfExists(self.controllerInputfilepath)
             self.controllerInputfilename = controllerInputfilename
-
-        if coeffTablefilename is not None and coeffTablefilename != 'unused':
-            if not coeffTablefilename.endswith('.csv'):
-                raise ValueError (f'The performance table `coeffTablefilename` file should end in "*.csv"')
-            self.coeffTablefilepath = os.path.join(templatePath, coeffTablefilename)
-            checkIfExists(self.coeffTablefilepath)
-            self.coeffTablefilename = coeffTablefilename
+        else:
+            if self.hasController:
+                raise ValueError (f'libdiscon has been given but no controller input filename. Stopping.')
 
         if turbsimLowfilepath is not None:
             if not turbsimLowfilepath.endswith('.inp'):
