@@ -1313,20 +1313,24 @@ class FFCaseCreation:
         memory_per_cpu = int(150000/self.nSeeds)
 
         # Change job name (for convenience only)
-        _ = subprocess.call(f"sed -i 's|#SBATCH --job-name=lowBox|#SBATCH --job-name=lowBox_{os.path.basename(self.path)}|g' {self.slurmfilename_low}", cwd=self.path, shell=True)
+        sed_command = f"sed -i 's|^#SBATCH --job-name=lowBox|#SBATCH --job-name=lowBox_{os.path.basename(self.path)}|g' {self.slurmfilename_low}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change the path inside the script to the desired one
-        sed_command = f"sed -i 's|/projects/shellwind/rthedin/Task2_2regis|{self.path}|g' {self.slurmfilename_low}"
+        sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_low}"""
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change number of nodes values 
-        _ = subprocess.call(f"sed -i 's|#SBATCH --nodes=2|#SBATCH --nodes={int(np.ceil(self.nConditions*self.nSeeds/6))}|g' {self.slurmfilename_low}", cwd=self.path, shell=True)
+        sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(self.nConditions*self.nSeeds/6))}|g' {self.slurmfilename_low}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change memory per cpu
-        _ = subprocess.call(f"sed -i 's|--mem-per-cpu=25000M|--mem-per-cpu={memory_per_cpu}M|g' {self.slurmfilename_low}", cwd=self.path, shell=True)
+        sed_command = f"sed -i 's|--mem-per-cpu=25000M|--mem-per-cpu={memory_per_cpu}M|g' {self.slurmfilename_low}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Assemble list of conditions and write it
         listtoprint = "' '".join(self.condDirList)
         sed_command = f"""sed -i "s|^condList.*|condList=('{listtoprint}')|g" {self.slurmfilename_low}"""
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change the number of seeds
-        _ = subprocess.call(f"sed -i 's|nSeeds=6|nSeeds={self.nSeeds}|g' {self.slurmfilename_low}", cwd=self.path, shell=True)
+        sed_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_low}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
 
 
         if self.nSeeds > 6:
@@ -1587,16 +1591,20 @@ class FFCaseCreation:
         shutil.copy2(slurmfilepath, os.path.join(self.path, self.slurmfilename_high))
         
         # Change job name (for convenience only)
-        _ = subprocess.call(f"sed -i 's|#SBATCH --job-name=highBox|#SBATCH --job-name=highBox_{os.path.basename(self.path)}|g' {self.slurmfilename_high}", cwd=self.path, shell=True)
+        sed_command = f"sed -i 's|^#SBATCH --job-name.*|#SBATCH --job-name=highBox_{os.path.basename(self.path)}|g' {self.slurmfilename_high}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change the path inside the script to the desired one
-        sed_command = f"sed -i 's|/projects/shellwind/rthedin/Task2_2regis|{self.path}|g' {self.slurmfilename_high}"
+        sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_high}"""
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change number of turbines
-        _ = subprocess.call(f"sed -i 's|nTurbines=12|nTurbines={self.nTurbines}|g' {self.slurmfilename_high}", cwd=self.path, shell=True)
+        sed_command = f"sed -i 's|^nTurbines.*|nTurbines={self.nTurbines}|g' {self.slurmfilename_high}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change number of seeds
-        _ = subprocess.call(f"sed -i 's|nSeeds=6|nSeeds={self.nSeeds}|g' {self.slurmfilename_high}", cwd=self.path, shell=True)
+        set_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_high}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change number of nodes values
-        _ = subprocess.call(f"sed -i 's|#SBATCH --nodes=3|#SBATCH --nodes={int(np.ceil(ntasks/36))}|g' {self.slurmfilename_high}", cwd=self.path, shell=True)
+        sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(ntasks/36))}|g' {self.slurmfilename_high}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Assemble list of conditions and write it
         listtoprint = "' '".join(self.condDirList)
         sed_command = f"""sed -i "s|^condList.*|condList=('{listtoprint}')|g" {self.slurmfilename_high}"""
@@ -2138,7 +2146,7 @@ class FFCaseCreation:
                     sed_command = f"""sed -i "s|^fastfarmbin.*|fastfarmbin='{self.ffbin}'|g" {fname}"""
                     _ = subprocess.call(sed_command, cwd=self.path, shell=True)
                     # Change the path inside the script to the desired one
-                    sed_command = f"sed -i 's|/projects/shellwind/rthedin/Task2_2regis|{self.path}|g' {fname}"
+                    sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {fname}"""
                     _ = subprocess.call(sed_command, cwd=self.path, shell=True)
                     # Write condition
                     sed_command = f"""sed -i "s|^cond.*|cond='{self.condDirList[cond]}'|g" {fname}"""
