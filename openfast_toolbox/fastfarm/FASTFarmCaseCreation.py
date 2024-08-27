@@ -418,9 +418,11 @@ class FFCaseCreation:
         # Check LES parameters
         if self.LESpath is None:
             self.inflowStr = 'TurbSim'
+            self.Mod_AmbWind = 3
         else:
             if isinstance(self.LESpath,str): self.LESpath = [self.LESpath]*len(self.vhub)
             self.inflowStr = 'LES'
+            self.Mod_AmbWind = 1
             for p in self.LESpath:
                 if not os.path.isdir(p):
                     raise ValueError (f'The LES path {p} does not exist')
@@ -615,15 +617,21 @@ class FFCaseCreation:
                             pass
                     os.chdir(notepath)
         
-                # Write InflowWind files. For FAST.FARM, the IW file needs to be inside the Seed* directories. If running standalone openfast,
-                # it needs to be on the same level as the fst file. Here, we copy to both places so that the workflow is general
+                # Write InflowWind files. For FAST.FARM with TS, the IW file needs to be inside the Seed* directories. If running standalone openfast
+                # or Mod_AmbWind==1 (VTK), it needs to be on the same level as the fst file. Here, we copy to both places so that the workflow is general
                 self.InflowWindFile['WindType']       = 3
                 self.InflowWindFile['PropagationDir'] = 0
                 self.InflowWindFile['Filename_BTS']   = '"./TurbSim"'
+                self.InflowWindFile['NWindVel'] = 1
+                self.InflowWindFile['WindVxiList'] = 0  # Sampling relative to the local reference frame
+                self.InflowWindFile['WindVyiList'] = 0
+                self.InflowWindFile['WindVziList'] = self.allCases.sel(case=case, turbine=0)['zhub'].values
+
                 if writeFiles:
                     self.InflowWindFile.write( os.path.join(currPath,self.IWfilename))
-                    for seed in range(self.nSeeds):
-                        self.InflowWindFile.write( os.path.join(currPath,f'Seed_{seed}',self.IWfilename))
+                    if self.Mod_AmbWind == 3:  # only for TS-driven cases
+                        for seed in range(self.nSeeds):
+                            self.InflowWindFile.write( os.path.join(currPath,f'Seed_{seed}',self.IWfilename))
 
         
                 # Before starting the loop, print once the info about the controller is no controller is present
@@ -1844,8 +1852,8 @@ class FFCaseCreation:
                     ff_file = FASTInputFile(outputFSTF)
         
                     # Open output file and change additional values manually or make sure we have the correct ones
-                    ff_file['InflowFile']  = f'"./{self.IWfilename}"'   
-                    ff_file['Mod_AmbWind'] = 1  # 1: LES boxes; 2: single TurbSim; 3: multiple TurbSim
+                    ff_file['InflowFile']  = f'"unused"'   
+                    ff_file['Mod_AmbWind'] = self.Mod_AmbWind  # LES 
                     ff_file['TMax'] = self.tmax
         
                     # LES-related parameters
@@ -1944,7 +1952,7 @@ class FFCaseCreation:
                     ff_file = FASTInputFile(outputFSTF)
                     ff_file['InflowFile'] = f'"./{self.IWfilename}"'
                     #ff_file['DT']=1.0
-                    ff_file['Mod_AmbWind'] = 3  # 1: LES boxes; 2: single TurbSim; 3: multiple TurbSim
+                    ff_file['Mod_AmbWind'] = self.Mod_AmbWind  # 3: multiple TurbSim
                     ff_file['TMax'] = self.tmax
         
                     # Super controller
