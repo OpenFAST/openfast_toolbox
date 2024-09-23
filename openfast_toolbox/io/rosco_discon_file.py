@@ -136,6 +136,7 @@ class ROSCODISCONFile(File):
                 FMTs['{:<4.4f}']=['WE_FOPoles_v']
                 FMTs['{:<10.8f}']=['WE_FOPoles']
                 FMTs['{:<10.3f}']=['PS_BldPitchMin']
+                FMTs['{:<7.0f}']=['PerfTableSize']
                 fmtFloat='{:<014.5f}'
                 for fmt,keys in FMTs.items():
                     if param in keys:
