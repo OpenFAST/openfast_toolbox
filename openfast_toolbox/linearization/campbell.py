@@ -197,7 +197,7 @@ def postproMBC(xlsFile=None, csvModesIDFile=None, xlssheet=None, verbose=True, W
     else:
         raise Exception('Provide either an Excel file or a csv (ModesID) file')
     # --- Mode Identification
-    ID.iloc[:,0].fillna('Unknown', inplace=True) # replace nan
+    ID.iloc[:,0] = ID.iloc[:,0].fillna('Unknown') # replace nan
     ModeNames = ID.iloc[2: ,0].values
     ModeIDs   = ID.iloc[2: ,1:].values
     nModesIDd = len(ModeNames)  # Number of modes identified in the ID file
