@@ -13,7 +13,7 @@ This repository intends to provide simple scripts to help OpenFAST users setup m
 git clone http://github.com/OpenFAST/openfast_toolbox
 cd openfast_toolbox
 python -m pip install -e .
-pytest
+python -m unittest discover 
 ```
 
 
