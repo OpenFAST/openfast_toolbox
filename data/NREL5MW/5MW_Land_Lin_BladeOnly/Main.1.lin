@@ -1,5 +1,5 @@
 
-Linearized model: Predictions were generated on 20-Oct-2023 at 14:04:02 using OpenFAST, compiled as a 64-bit application using single precision at commit v3.5.1-dirty
+Linearized model: Predictions were generated on 11-Oct-2024 at 11:25:07 using OpenFAST, compiled on Oct 11 2024 at 10:57:47 as a 64-bit application using single precision at commit v3.5.3-1907-g7fc29308-dirty
  linked with  NWTC Subroutine Library; ElastoDyn
 
 Description from the FAST input file: NREL Wind Turbine - linearization for blades only, in vaccuum

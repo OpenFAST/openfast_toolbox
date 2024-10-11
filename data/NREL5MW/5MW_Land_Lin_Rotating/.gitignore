@@ -2,4 +2,5 @@ vtk
 *.chkp
 *.pyPostMBC
 *.viz
+*.lin
 Campbell_*

@@ -3,7 +3,7 @@
 
 import os
 
-from setuptools import setup
+from setuptools import setup, find_packages
 
 ROOT = os.path.abspath(os.path.dirname(__file__))
 
@@ -28,7 +28,7 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Topic :: Software Development :: Version Control :: Git",
     ],
-    packages=["openfast_toolbox"],
+    packages=find_packages(),
     python_requires=">=3.6",
     install_requires=[
         "matplotlib",
@@ -41,7 +41,7 @@ setup(
         "xarray",  # for netcdf files
         "pytest",
     ],
-    test_suite="pytest",
-    tests_require=["pytest"],
-    entry_points={"console_scripts": ["openfast_toolbox = openfast_toolbox.__main__:main"]},
+#     test_suite="pytest",
+#     tests_require=["pytest"],
+#     entry_points={"console_scripts": ["openfast_toolbox = openfast_toolbox.__main__:main"]},
 )

@@ -360,8 +360,8 @@ def removeFASTOuputs(workDir):
 # --------------------------------------------------------------------------------{
 def paramsSteadyAero(p=None):
     p = dict() if p is None else p
-    p['AeroFile|AFAeroMod']=1 # remove dynamic effects dynamic
-    p['AeroFile|WakeMod']=1 # remove dynamic inflow dynamic
+    p['AeroFile|UA_Mod']=0 # remove ua
+    p['AeroFile|DBEMT_Mod']=0 # remove dynamic inflow dynamic
     p['AeroFile|TwrPotent']=0 # remove tower shadow
     p['AeroFile|TwrAero']=False # remove tower shadow
 
@@ -496,7 +496,7 @@ def paramsLinearTrim(p=None):
     p['LinOutMod']              = False
     p['OutFmt']                 = '"ES20.12E3"'  # Important for decent resolution
 
-    p['AeroFile|AFAeroMod']     = 1
+    p['AeroFile|UA_Mod']        = 0
     p['AeroFile|CavitCheck']    = 'False'
     p['AeroFile|CompAA']        = 'False'
     

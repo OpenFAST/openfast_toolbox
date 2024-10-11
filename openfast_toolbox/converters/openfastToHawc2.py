@@ -285,13 +285,13 @@ def FAST2Hawc2(fstIn, htcTemplate, htcOut, OPfile=None, TwrFAFreq=0.1, TwrSSFreq
     sec.pc_filename = pc_filename
     sec.ae_filename = ae_filename
     sec.induction_method 
-    sec.induction_method =  AD['WakeMod']
+    sec.induction_method =  AD['Wake_Mod']
     sec.tiploss_method   =  1 if AD['TipLoss'] else 0
     sec.aerosections = Bld['BldAeroNodes'].shape[0]
 
-    if AD['AFAeroMod']==2:
+    if AD['UA_Mod']>0:
         sec.dynstall_method= 2
-        if AD['UAMod']==6:
+        if AD['UA_Mod']==6:
             sec.dynstall_method= 1
     else:
         sec.dynstall_method  =  0
