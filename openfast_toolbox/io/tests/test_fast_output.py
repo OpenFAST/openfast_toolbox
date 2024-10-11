@@ -28,11 +28,11 @@ class Test(unittest.TestCase):
         # Read written file
         F2= FASTOutputFile(tempFilename)
         # Test that read data match
-        np.testing.assert_almost_equal(F.data,F2.data, 4)
-        np.testing.assert_almost_equal(F.data[-1,-1] ,40.57663190807828, 10)
-        np.testing.assert_almost_equal(F2.data[-1,-1],40.57663190807828, 10)
-        self.assertEqual(F2.info['attribute_names'][-1],'GenPwr')
-        self.assertEqual(F2.info['attribute_units'][-1],'kW')
+        np.testing.assert_almost_equal(F.data.values,F2.data.values, 4)
+        np.testing.assert_almost_equal(F.data.values[-1,-1] ,40.57663190807828, 10)
+        np.testing.assert_almost_equal(F2.data.values[-1,-1],40.57663190807828, 10)
+        self.assertEqual(F2.channels[-1],'GenPwr')
+        self.assertEqual(F2.units[-1],'kW')
         # cleanup
         try:
             os.remove(tempFilename)
