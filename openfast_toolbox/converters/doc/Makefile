@@ -14,7 +14,7 @@ ifdef OS
 	# Windows specific
 	#   INKSCAPE="C:/Program Files/Inkscape/inkscape.exe"
    RM=del
-   MV=move /Y 
+#    MV=move /Y 
    SLASH="\\"
 endif
 

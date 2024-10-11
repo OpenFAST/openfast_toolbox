@@ -1,4 +1,4 @@
-------- FAST v8.16.* INPUT FILE ------------------------------------------------
+------- OpenFAST EXAMPLE INPUT FILE -------------------------------------------
 NREL 5.0 MW Baseline Wind Turbine Onshore
 ---------------------- SIMULATION CONTROL --------------------------------------
 False         Echo            - Echo input data to <RootName>.ech (flag)
@@ -14,11 +14,12 @@ False         Echo            - Echo input data to <RootName>.ech (flag)
           1   CompInflow      - Compute inflow wind velocities (switch) {0=still air; 1=InflowWind; 2=external from OpenFOAM}
           2   CompAero        - Compute aerodynamic loads (switch) {0=None; 1=AeroDyn v14; 2=AeroDyn v15}
           1   CompServo       - Compute control and electrical-drive dynamics (switch) {0=None; 1=ServoDyn}
+          0   CompSeaSt       - Compute sea state information (switch) {0=None; 1=SeaState}
           0   CompHydro       - Compute hydrodynamic loads (switch) {0=None; 1=HydroDyn}
           0   CompSub         - Compute sub-structural dynamics (switch) {0=None; 1=SubDyn}
           0   CompMooring     - Compute mooring system (switch) {0=None; 1=MAP++; 2=FEAMooring; 3=MoorDyn; 4=OrcaFlex}
           0   CompIce         - Compute ice loads (switch) {0=None; 1=IceFloe; 2=IceDyn}
-0                      MHK           - MHK turbine type (switch) {0=Not an MHK turbine; 1=Fixed MHK turbine; 2=Floating MHK turbine}
+          0   MHK             - MHK turbine type (switch) {0=Not an MHK turbine; 1=Fixed MHK turbine; 2=Floating MHK turbine}
 ---------------------- ENVIRONMENTAL CONDITIONS --------------------------------
 9.80665                Gravity       - Gravitational acceleration (m/s^2)
 1.225                  AirDens       - Air density (kg/m^3)
@@ -37,6 +38,7 @@ False         Echo            - Echo input data to <RootName>.ech (flag)
 "5MW_Baseline/NRELOffshrBsline5MW_InflowWind_Steady8mps.dat"           InflowFile      - Name of file containing inflow wind input parameters (quoted string)
 "onshore/AeroDyn.dat"              AeroFile        - Name of file containing aerodynamic input parameters (quoted string)
 "onshore/ServoDyn_Simple.dat"      ServoFile       - Name of file containing control and electrical-drive input parameters (quoted string)
+"unused"      SeaStFile       - Name of file containing sea state input parameters (quoted string)
 "unused"      HydroFile       - Name of file containing hydrodynamic input parameters (quoted string)
 "unused"      SubFile         - Name of file containing sub-structural input parameters (quoted string)
 "unused"      MooringFile     - Name of file containing mooring system input parameters (quoted string)

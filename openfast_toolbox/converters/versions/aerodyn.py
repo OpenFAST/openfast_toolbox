@@ -73,12 +73,16 @@ def ad30_to_ad40(fileold, filenew=None, verbose=True, overwrite=False):
     f.data[0]['value'] = '------- AERODYN INPUT FILE --------------------------------------------------------------------------'
 #     f.data[1]['isComment'] = True
 #     f.data[1]['value']     = (str(f.data[1]['value']) +' '+ str(f.data[1]['label']) + ' '+ str(f.data[1]['descr'])).strip()
-    f.insertKeyValAfter('DTAero', 'Wake_Mod', Wake_Mod, 'Wake/induction model (switch) {0=none, 1=BEMT, 3=OLAF} [WakeMod cannot be 2 or 3 when linearizing]')
+    f.insertKeyValAfter('DTAero', 'Wake_Mod', Wake_Mod, 'Wake/induction model (switch) {0=none, 1=BEMT, 3=OLAF} [Wake_Mod cannot be 2 or 3 when linearizing]')
+    i = f.getID('CavitCheck')
+    f.data[i]['descr']= 'Perform cavitation check? (flag) [UA_Mod must be 0 when CavitCheck=true]'
+    i = f.getID('Buoyancy')
+    f.insertKeyVal(i+1, 'NacelleDrag', False, 'Include Nacelle Drag effects? (flag)')
 
     #i = f.getID('Pvap') # NOTE might not exist for old files..
     i = f.getID('TipLoss')-2
     f.pop(i+1) # Remove 'BEMT comment'
-    f.insertComment(i+1,'======  Blade-Element/Momentum Theory Options  ====================================================== [unused when WakeMod=0 or 3, except for BEM_Mod]')
+    f.insertComment(i+1,'======  Blade-Element/Momentum Theory Options  ====================================================== [unused when Wake_Mod=0 or 3, except for BEM_Mod]')
     f.insertKeyVal (i+2, 'BEM_Mod', BEM_Mod, 'BEM model {1=legacy NoSweepPitchTwist, 2=polar} (switch) [used for all Wake_Mod to determine output coordinate system]')
     f.insertComment(i+3, '--- Skew correction')
     f.insertKeyVal (i+4, 'Skew_Mod'         , Skew_Mod     ,'Skew model {0=No skew model, -1=Remove non-normal component for linearization, 1=skew model active}')
@@ -100,11 +104,42 @@ def ad30_to_ad40(fileold, filenew=None, verbose=True, overwrite=False):
     f.data[f.getID('tau1_const')]['descr']= 'Time constant for DBEMT (s) [used only when DBEMT_Mod=1 or 3]'
 
     #i = f.getID('OLAFInputFileName')
-    i = f.getID('FLookup')-2
+    i = f.getID('FLookup')
+    f.data[i]['descr'] = "Flag to indicate whether a lookup for f' will be calculated (TRUE) or whether best-fit exponential equations will be used (FALSE); if FALSE S1-S4 must be provided in airfoil input files (flag) [used only when UA_Mod>0]"
+    try:
+        i2 = f.getID('IntegrationMethod')
+    except:
+        f.insertKeyVal(i+1, 'IntegrationMethod', 3, "Switch to indicate which integration method UA uses (1=RK4, 2=AB4, 3=ABM4, 4=BDF2)")
+
+    i = i-2
     f.pop(i+1) # Remove 'BEDDOES comment'
     f.insertComment(i+1, '======  Unsteady Airfoil Aerodynamics Options  ====================================================')
     f.insertKeyVal (i+2, 'AoA34' , AoA34,  'Sample the angle of attack (AoA) at the 3/4 chord or the AC point {default=True} [always used]')
     f.insertKeyVal (i+3, 'UA_Mod', UA_Mod, 'Unsteady Aero Model Switch (switch) {0=Quasi-steady (no UA), 2=B-L Gonzalez, 3=B-L Minnema/Pierce, 4=B-L HGM 4-states, 5=B-L HGM+vortex 5 states, 6=Oye, 7=Boeing-Vertol}')
+
+
+
+    missing=[]
+    try:
+        i = f.getID('UAStartRad')
+        f.data[i]['descr'] = "Starting radius for dynamic stall (fraction of rotor radius) [used only when UA_Mod>0]"
+    except KeyError:
+        missing.append('UAStartRad')
+    try:
+        i = f.getID('UAEndRad')
+        f.data[i]['descr'] = "Ending radius for dynamic stall (fraction of rotor radius) [used only when UA_Mod>0]"
+    except KeyError:
+        missing.append('UAEndRad')
+
+    i = f.getID('NacCenB')
+    f.insertKeyVal(i+1,'NacArea',   [0, 0, 0], "Projected area of the nacelle in X, Y, Z in the nacelle coordinate system (m^2)")
+    f.insertKeyVal(i+2,'NacCd'  ,   [0, 0, 0], "Drag coefficient for the nacelle areas defined above (-)")
+    f.insertKeyVal(i+3,'NacDragAC', [0, 0, 0], "Position of aerodynamic center of nacelle drag in nacelle coordinates (m)")
+
+
+    for i in range(len(f.data)):
+        f.data[i]['descr'] = f.data[i]['descr'].replace('WakeMod', 'Wake_Mod')
+
     if verbose:
         print(' -------------- New AeroDyn inputs (with new meaning):')
         print('Wake_Mod         : {}'.format(Wake_Mod         ))
@@ -126,6 +161,8 @@ def ad30_to_ad40(fileold, filenew=None, verbose=True, overwrite=False):
         print('DBEMT_Mod  {}'.format(DBEMTMod))
         print('UAMod:     {}'.format(UAMod))
         print('-----------------------------------------------------')
+    if len(missing)>0:
+        print('[WARN] Missing variables '+missing)
 
     # --- Write new file
     f.write(filenew)

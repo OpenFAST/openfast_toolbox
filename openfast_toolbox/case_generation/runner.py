@@ -311,6 +311,8 @@ def removeFASTOuputs(workDir):
         os.remove(f)
     for f in glob.glob(os.path.join(workDir,'*.sum')):
         os.remove(f)
+    for f in glob.glob(os.path.join(workDir,'*.sum.yaml')):
+        os.remove(f)
 
 if __name__=='__main__':
     run_cmds(['main1.fst','main2.fst'], './Openfast.exe', parallel=True, showOutputs=False, nCores=4, showCommand=True)

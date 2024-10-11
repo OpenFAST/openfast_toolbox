@@ -254,7 +254,7 @@ def writeLinearizationFiles(main_fst, workDir, operatingPointsFile,
         print('[WARN] Deactivating VTK vizualization since not available in this version of OpenFAST')
 
     if AD is not None:
-        if AD['WakeMod']==2 and AD['DBEMT_Mod'] in [1,3]:
+        if AD['Wake_Mod']==1 and AD['DBEMT_Mod'] in [1,3]:
             if 'a_bar_[-]' not in OP.keys():
                 print('[WARN] Axial induction `a` not present in Operating point file, but DBEMT needs `tau1_constant`. Provide this column, or make sure your value of `tau1_const` is valid')
 
@@ -355,14 +355,11 @@ def writeLinearizationFiles(main_fst, workDir, operatingPointsFile,
             linDict['WrVTK']        = 0
         # --- Aero options
         if fst['CompAero']>0:
-            if AD['WakeMod']==2 and AD['DBEMT_Mod'] in [1,3]:
+            if AD['Wake_Mod']==1 and AD['DBEMT_Mod'] in [1,3]:
                 if 'a_bar_[-]' in OP.keys():
                     a_bar= op['a_bar_[-]']
                     linDict['AeroFile|tau1_const'] = np.around(1.1/(1-1.3*min(a_bar,0.5))*BladeLen/ws, 3)
                     print('>>> setting tau_1 to ', linDict['AeroFile|tau1_const'])
-        #    linDict['AeroFile|WakeMod']    = 1 # Needed for linearization
-        #    linDict['AeroFile|AFAeroMod']  = 1 # Needed for linearization
-        #    linDict['AeroFile|FrozenWake'] = True # Needed for linearization
         # --- Inflow options
         if fst['CompInflow']>0:
             linDict['InflowFile|WindType'] = 1
