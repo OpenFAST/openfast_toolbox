@@ -79,7 +79,7 @@ def copyTree(src, dst):
                 forceMergeFlatDir(s, d)
 
 
-def templateReplaceGeneral(PARAMS, templateDir=None, outputDir=None, main_file=None, removeAllowed=False, removeRefSubFiles=False, oneSimPerDir=False, dryRun=False):
+def templateReplaceGeneral(PARAMS, templateDir=None, outputDir=None, main_file=None, removeAllowed=False, removeRefSubFiles=False, FolderManagement=False, dryRun=False):
 
     """ Generate inputs files by replacing different parameters from a template file.
     The generated files are placed in the output directory `outputDir` 
@@ -226,8 +226,18 @@ def templateReplaceGeneral(PARAMS, templateDir=None, outputDir=None, main_file=N
     if not isinstance(PARAMS,list):
         PARAMS=[PARAMS]
 
-    if oneSimPerDir:
+    if FolderManagement == "oneSimPerDir":
         workDirS=[os.path.join(outputDir,get_strID(p)) for p in PARAMS]
+    elif type(FolderManagement) == range or type(FolderManagement) == list:
+        workDirS = []
+        for p in PARAMS:
+            temp = outputDir
+            for iterator, folder in enumerate(FolderManagement):
+                stringprep = FolderManagement[iterator][1].format(p[FolderManagement[iterator][0]]).replace(".", "p")
+                stringprep = FolderManagement[iterator][2] + stringprep
+                temp = os.path.join(temp, stringprep)
+            workDirS += [temp]
+        # workDirS = [os.path.join(outputDir, FolderManagement[1].format(p[FolderManagement[0]])) for p in PARAMS]
     else:
         workDirS=[outputDir]*len(PARAMS)
     # --- Creating outputDir - Copying template folder to outputDir if necessary
@@ -276,7 +286,7 @@ def templateReplaceGeneral(PARAMS, templateDir=None, outputDir=None, main_file=N
     # --- Remove extra files at the end
     if removeRefSubFiles:
         TemplateFiles, nCounts = np.unique(TemplateFiles, return_counts=True)
-        if not oneSimPerDir:
+        if not FolderManagement:
             # we can only detele template files that were used by ALL simulations
             TemplateFiles=[t for nc,t in zip(nCounts, TemplateFiles) if nc==len(PARAMS)]
         for tf in TemplateFiles:
@@ -289,7 +299,7 @@ def templateReplaceGeneral(PARAMS, templateDir=None, outputDir=None, main_file=N
 
 # def templateReplace(PARAMS, *args, **kwargs):
 
-def templateReplace(PARAMS, templateDir, outputDir=None, main_file=None, removeAllowed=False, removeRefSubFiles=False, oneSimPerDir=False, dryRun=False):
+def templateReplace(PARAMS, templateDir, outputDir=None, main_file=None, removeAllowed=False, removeRefSubFiles=False, FolderManagement=False, dryRun=False):
 
     """ 
 
@@ -310,8 +320,8 @@ def templateReplace(PARAMS, templateDir, outputDir=None, main_file=None, removeA
     
 #     return templateReplaceGeneral(PARAMS, *args, **kwargs)
 
-    return templateReplaceGeneral(PARAMS, templateDir, outputDir=outputDir, main_file=main_file, 
-            removeAllowed=removeAllowed, removeRefSubFiles=removeRefSubFiles, oneSimPerDir=oneSimPerDir, dryRun=dryRun)
+    return templateReplaceGeneral(PARAMS, templateDir, outputDir=outputDir, main_file=main_file,
+                                  removeAllowed=removeAllowed, removeRefSubFiles=removeRefSubFiles, FolderManagement=FolderManagement, dryRun=dryRun)
 
 
 def addToOutlist(OutList, Signals):

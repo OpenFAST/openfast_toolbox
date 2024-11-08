@@ -83,7 +83,7 @@ for i,(wsp,rpm,pitch) in enumerate(zip(WS,RPM,PITCH)): # NOTE: same length of WS
     PARAMS.append(p)
 
 # --- Generating all files in a workdir
-fastFiles=case_gen.templateReplace(PARAMS, ref_dir, outputDir=work_dir, removeRefSubFiles=True, main_file=main_file, oneSimPerDir=False)
+fastFiles=case_gen.templateReplace(PARAMS, ref_dir, outputDir=work_dir, removeRefSubFiles=True, main_file=main_file, FolderManagement=False)
 print('Main input files:')
 print(fastFiles)
 

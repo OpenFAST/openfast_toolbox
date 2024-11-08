@@ -10,6 +10,7 @@ import numpy as np
 import shutil 
 import stat
 import re
+from pathlib import Path
 
 # --- Fast libraries
 from openfast_toolbox.io.fast_input_file import FASTInputFile
@@ -83,27 +84,27 @@ def run_cmds(inputfiles, exe, parallel=True, showOutputs=True, nCores=None, show
 def run_cmd(input_file_or_arglist, exe, wait=True, showOutputs=False, showCommand=True):
     """ Run a simple command of the form `exe input_file` or `exe arg1 arg2`  """
     # TODO Better capture STDOUT
-    if not os.path.exists(exe):
-        raise Exception('Executable not found: {}'.format(exe))
+    # if not os.path.exists(exe):  # TEMPORARY: suppress because not an exe needed in Linux
+    #     raise Exception('Executable not found: {}'.format(exe))
     if isinstance(input_file_or_arglist, list):
         input_file     = ' '.join(input_file_or_arglist)
         args= [exe] + input_file_or_arglist
     else:
         input_file=input_file_or_arglist
-        args= [exe,input_file]
-    args = [a.strip() for a in args] # No surounding spaces, could cause issue
+        args= [exe, input_file]
+    args = [a.strip() for a in args]  # No surrounding spaces, could cause issue
     shell=False
     if showOutputs:
         STDOut= None
     else:
-        STDOut= open(os.devnull, 'w') 
+        STDOut= open(os.devnull, 'w')
     if showCommand:
         print('Running: '+' '.join(args))
     if wait:
         class Dummy():
             pass
         p=Dummy()
-        p.returncode=subprocess.call(args , stdout=STDOut, stderr=subprocess.STDOUT, shell=shell)
+        p.returncode=subprocess.call(args, stdout=STDOut, stderr=subprocess.STDOUT, shell=shell)
     else:
         p=subprocess.Popen(args, stdout=STDOut, stderr=subprocess.STDOUT, shell=shell)
     # Storing some info into the process
@@ -180,7 +181,7 @@ def run_fastfiles(fastfiles, fastExe=None, parallel=True, showOutputs=True, nCor
         newfiles=[]
         for f in fastfiles:
             base=os.path.splitext(f)[0]
-            if os.path.exists(base+'.outb') or os.path.exists(base+'.out'):
+            if os.path.exists(Path(base).with_suffix('.outb')) or os.path.exists(Path(base).with_suffix('.out')) or os.path.exists(Path(base).with_suffix('.bts')):
                 print('>>> Skipping existing simulation for: ',f)
                 pass
             else:
