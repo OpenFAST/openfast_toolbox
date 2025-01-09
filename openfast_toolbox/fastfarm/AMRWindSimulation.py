@@ -667,19 +667,19 @@ class AMRWindSimulation:
         zoffsets_lr_str = " ".join(str(item) for item in self.zoffsets_lr)
 
         s += f"# Low sampling grid spacing = {self.ds_lr} m\n"
-        s += f"{self.postproc_name_lr}.Low.type         = PlaneSampler\n"
-        s += f"{self.postproc_name_lr}.Low.num_points   = {self.nx_lr} {self.ny_lr}\n"
-        s += f"{self.postproc_name_lr}.Low.origin       = {self.xlow_lr:.4f} {self.ylow_lr:.4f} {self.zlow_lr:.4f}\n"  # Round the float output
-        s += f"{self.postproc_name_lr}.Low.axis1        = {self.xdist_lr:.4f} 0.0 0.0\n"  # Assume: axis1 oriented parallel to AMR-Wind x-axis
-        s += f"{self.postproc_name_lr}.Low.axis2        = 0.0 {self.ydist_lr:.4f} 0.0\n"  # Assume: axis2 oriented parallel to AMR-Wind y-axis
-        s += f"{self.postproc_name_lr}.Low.normal       = 0.0 0.0 1.0\n"
-        s += f"{self.postproc_name_lr}.Low.offsets      = {zoffsets_lr_str}\n\n\n"
+        s += f"{self.postproc_name_lr}.Low.type          = PlaneSampler\n"
+        s += f"{self.postproc_name_lr}.Low.num_points    = {self.nx_lr} {self.ny_lr}\n"
+        s += f"{self.postproc_name_lr}.Low.origin        = {self.xlow_lr:.4f} {self.ylow_lr:.4f} {self.zlow_lr:.4f}\n"  # Round the float output
+        s += f"{self.postproc_name_lr}.Low.axis1         = {self.xdist_lr:.4f} 0.0 0.0\n"  # Assume: axis1 oriented parallel to AMR-Wind x-axis
+        s += f"{self.postproc_name_lr}.Low.axis2         = 0.0 {self.ydist_lr:.4f} 0.0\n"  # Assume: axis2 oriented parallel to AMR-Wind y-axis
+        s += f"{self.postproc_name_lr}.Low.offset_vector = 0.0 0.0 1.0\n"
+        s += f"{self.postproc_name_lr}.Low.offsets       = {zoffsets_lr_str}\n\n\n"
 
         s += f"# ---- High-res sampling parameters ----\n"
-        s += f"{self.postproc_name_hr}.output_format    = netcdf\n"
-        s += f"{self.postproc_name_hr}.output_frequency = {self.output_frequency_hr}\n"
-        s += f"{self.postproc_name_hr}.fields           = velocity # temperature tke\n"
-        s += f"{self.postproc_name_hr}.labels           = {sampling_labels_hr_str}\n"
+        s += f"{self.postproc_name_hr}.output_format     = netcdf\n"
+        s += f"{self.postproc_name_hr}.output_frequency  = {self.output_frequency_hr}\n"
+        s += f"{self.postproc_name_hr}.fields            = velocity # temperature tke\n"
+        s += f"{self.postproc_name_hr}.labels            = {sampling_labels_hr_str}\n"
 
         # Write out high resolution sampling plane info
         for turbkey in self.hr_domains:
@@ -704,13 +704,13 @@ class AMRWindSimulation:
             zoffsets_hr_str = " ".join(str(item) for item in zoffsets_hr)
 
             s += f"\n# Turbine {wt_name} with base at (x,y,z) = ({wt_x:.4f}, {wt_y:.4f}, {wt_z:.4f}), with hh = {wt_h}, D = {wt_D}, grid spacing = {self.ds_hr} m\n"
-            s += f"{self.postproc_name_hr}.{sampling_name}.type         = PlaneSampler\n"
-            s += f"{self.postproc_name_hr}.{sampling_name}.num_points   = {nx_hr} {ny_hr}\n"
-            s += f"{self.postproc_name_hr}.{sampling_name}.origin       = {xlow_hr:.4f} {ylow_hr:.4f} {zlow_hr:.4f}\n"  # Round the float output
-            s += f"{self.postproc_name_hr}.{sampling_name}.axis1        = {xdist_hr:.4f} 0.0 0.0\n"  # Assume: axis1 oriented parallel to AMR-Wind x-axis
-            s += f"{self.postproc_name_hr}.{sampling_name}.axis2        = 0.0 {ydist_hr:.4f} 0.0\n"  # Assume: axis2 oriented parallel to AMR-Wind y-axis
-            s += f"{self.postproc_name_hr}.{sampling_name}.normal       = 0.0 0.0 1.0\n"
-            s += f"{self.postproc_name_hr}.{sampling_name}.offsets      = {zoffsets_hr_str}\n"
+            s += f"{self.postproc_name_hr}.{sampling_name}.type          = PlaneSampler\n"
+            s += f"{self.postproc_name_hr}.{sampling_name}.num_points    = {nx_hr} {ny_hr}\n"
+            s += f"{self.postproc_name_hr}.{sampling_name}.origin        = {xlow_hr:.4f} {ylow_hr:.4f} {zlow_hr:.4f}\n"  # Round the float output
+            s += f"{self.postproc_name_hr}.{sampling_name}.axis1         = {xdist_hr:.4f} 0.0 0.0\n"  # Assume: axis1 oriented parallel to AMR-Wind x-axis
+            s += f"{self.postproc_name_hr}.{sampling_name}.axis2         = 0.0 {ydist_hr:.4f} 0.0\n"  # Assume: axis2 oriented parallel to AMR-Wind y-axis
+            s += f"{self.postproc_name_hr}.{sampling_name}.offset_vector = 0.0 0.0 1.0\n"
+            s += f"{self.postproc_name_hr}.{sampling_name}.offsets       = {zoffsets_hr_str}\n"
 
 
         if out is None:
