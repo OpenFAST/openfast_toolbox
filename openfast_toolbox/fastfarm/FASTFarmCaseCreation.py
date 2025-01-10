@@ -1908,7 +1908,14 @@ class FFCaseCreation:
                     ff_file['dr'] = self.dr
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
                     ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low_les*Vhub_*(1-1/6)) ) )
-        
+
+                    # Ensure radii outputs are within [0, NumRadii-1]
+                    for i, r in enumerate(ff_file['OutRadii']):
+                        if r > ff_file['NumRadii']-1:
+                            ff_file['NOutRadii'] = i
+                            ff_file['OutRadii'] = ff_file['OutRadii'][:i]
+                            break
+
                     # Vizualization outputs
                     ff_file['WrDisWind'] = 'False'
                     ff_file['WrDisDT']   = ff_file['DT_Low-VTK']    # default is the same as DT_Low-VTK
