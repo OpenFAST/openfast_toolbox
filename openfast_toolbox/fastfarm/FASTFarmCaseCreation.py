@@ -1878,7 +1878,8 @@ class FFCaseCreation:
                     outputFSTF   = os.path.join(seedPath, 'FFarm_mod.fstf')
         
                     # Write the file (mostly for turbine locations here
-                    writeFastFarm(outputFSTF, templateFSTF, xWT, yWT, zWT, FFTS=None, OutListT1=self.outlistFF, noLeadingZero=True)
+                    writeFastFarm(outputFSTF, templateFSTF, xWT, yWT, zWT, FFTS=None, OutListT1=self.outlistFF,
+                                  noLeadingZero=True, turbineTemplateFullFilename=f"../{self.turbfilename}1.fst")
         
                     # Open saved file and change additional values manually or make sure we have the correct ones
                     ff_file = FASTInputFile(outputFSTF)

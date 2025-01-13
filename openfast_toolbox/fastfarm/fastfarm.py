@@ -326,13 +326,16 @@ def fastFarmBoxExtent(yBox, zBox, tBox, meanU, hubHeight, D, xWT, yWT,
     return d
 
 
-def writeFastFarm(outputFile, templateFile, xWT, yWT, zWT, FFTS=None, OutListT1=None, noLeadingZero=False):
+def writeFastFarm(outputFile, templateFile, xWT, yWT, zWT, FFTS=None, OutListT1=None, noLeadingZero=False, turbineTemplateFullFilename=None):
     """ Write FastFarm input file based on a template, a TurbSimFile and the Layout
     
     outputFile: .fstf file to be written
     templateFile: .fstf file that will be used to generate the output_file
     XWT,YWT,ZWT: positions of turbines
     FFTS: FastFarm TurbSim parameters as returned by fastFarmTurbSimExtent
+    turbineTemplateFullFilename: full (or relative) path and filename of the template
+       turbine to be used. If None, it uses the turbine name from the templateFile.
+       Example input: turbineTemplateFullFilename='../IEA15.T1.fst'
     """
     # --- Read template fast farm file
     fst=FASTInputFile(templateFile)
@@ -354,7 +357,12 @@ def writeFastFarm(outputFile, templateFile, xWT, yWT, zWT, FFTS=None, OutListT1=
         nCol= 10
     else:
         nCol = 4
-    ref_path = fst['WindTurbines'][0,3]
+    
+    if turbineTemplateFullFilename is None:
+        ref_path = fst['WindTurbines'][0,3]
+    else:
+        ref_path = f'"{turbineTemplateFullFilename}"' # add quotes
+
     WT = np.array(['']*nWT*nCol,dtype='object').reshape((nWT,nCol))
     for iWT,(x,y,z) in enumerate(zip(xWT,yWT,zWT)):
         WT[iWT,0]=x
