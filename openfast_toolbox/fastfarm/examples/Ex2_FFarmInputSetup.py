@@ -20,8 +20,8 @@ MyDir=os.path.dirname(__file__)
 
 if __name__ == '__main__':
     # --- FAST Farm input files
-    templateFSTF = os.path.join(MyDir,'SampleFiles/TestCase.fstf')     # template file used for FastFarm input file, need to exist
-    outputFSTF   = os.path.join(MyDir,'SampleFiles/_TestCase_mod.fstf')# new file that will be written
+    templateFSTF = os.path.join(MyDir,'SampleFiles', 'TestCase.fstf')     # template file used for FastFarm input file, need to exist
+    outputFSTF   = os.path.join(MyDir,'SampleFiles', '_TestCase_mod.fstf')# new file that will be written
     # --- Parameters for TurbSim Extent
     D              = 77.0                       # Turbine diameter (m)
     hubHeight      = 78.045                     # Hub Height (m)
@@ -29,7 +29,7 @@ if __name__ == '__main__':
     extent_YZ_high = 1.2                         # y-extent of high res box in diamter around turbine location
     chord_max      = 5                          # maximum blade chord (m). Turbine specific.
     Cmeander       = 1.9                        # Meandering constant (-)
-    BTSFilename    = os.path.join(MyDir,'SampleFiles/TestCase.bts') # TurbSim Box to be used in FAST.Farm simulation, need to exist.
+    BTSFilename    = os.path.join(MyDir,'SampleFiles', 'TestCase.bts') # TurbSim Box to be used in FAST.Farm simulation, need to exist.
     # --- Layout
     xWT = [0.0, 265.]  # x positions of turbines
     yWT = [0.0, 50.0]  # y postitions of turbines
