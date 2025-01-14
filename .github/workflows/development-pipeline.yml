@@ -22,14 +22,6 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            python-version: 3.7
-            python: xvfb-run python3
-            pip_arg: ""
-          - os: ubuntu-latest
-            python-version: 3.8
-            python: xvfb-run python3
-            pip_arg: ""
-          - os: ubuntu-latest
             python-version: 3.9
             python: xvfb-run python3
             pip_arg: ""
@@ -41,11 +33,11 @@ jobs:
             python-version: 3.12
             python: xvfb-run python3
             pip_arg: ""
-          - os: macos-11
-            python-version: 3.11
+          - os: macos-13
+            python-version: 3.12
             python: python3
             pip_arg: ""
-          - os: windows-2019
+          - os: windows-2022
             python-version: 3.11
             python: python
             pip_arg: --user
