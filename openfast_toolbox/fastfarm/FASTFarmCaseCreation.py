@@ -182,7 +182,7 @@ class FFCaseCreation:
                                         
                                         
         if self.verbose>0: print(f'Checking inputs...', end='\r')
-        self._checkInputs()       
+        self._checkInputs()
         if self.verbose>0: print(f'Checking inputs... Done.')
 
 
@@ -1224,32 +1224,52 @@ class FFCaseCreation:
                                     }
 
         self.wts_rot_ds = pd.DataFrame.from_dict(wts_rot, orient='index').to_xarray().rename({'level_0':'inflow_deg','level_1':'turbine'})
-  
-  
+
+    def _get_rotor_parameters(self, diameter):
+        """Retrieve rotor parameters based on turbine diameter."""
+        # Dictionary to hold rotor parameters for different turbines
+        rotor_parameters = {
+            220: {
+                'WaveHs': [1.429, 1.429],
+                'WaveTp': [7.073, 7.073],
+                'RotSpeed': [4.0, 4.0],
+                'BlPitch': [0.0, 0.0],
+                'wspd': [10, 15]
+            },
+            240: {
+                'WaveHs': [1.172, 1.323, 1.523, 1.764, 2.255],
+                'WaveTp': [7.287, 6.963, 7.115, 6.959, 7.067],
+                'RotSpeed': [4.995, 6.087, 7.557, 7.557, 7.557],
+                'BlPitch': [0.315, 0, 0.645, 7.6, 13.8],
+                'wspd': [6.6, 8.6, 10.6, 12.6, 15]
+            }
+        }
+
+        # Check if the diameter exists in the dictionary
+        if diameter not in rotor_parameters:
+            raise ValueError(f"Unknown turbine with diameter {diameter}. Add values to the rotor parameters. (the `_setRotorParameters` function.)")
+
+        return rotor_parameters[diameter]
 
     def _setRotorParameters(self):
-  
-        if self.D == 220: # 12 MW turbine
-            self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1.429, 1.429]), # 1.429 comes from Matt's hydrodyn input file
-                                    'WaveTp':      (['wspd'], [ 7.073, 7.073]), # 7.073 comes from Matt's hydrodyn input file
-                                    'RotSpeed':    (['wspd'], [ 4.0, 4.0]),     # 4 rpm comes from Matt's ED input file
-                                    'BlPitch':     (['wspd'], [ 0.0, 0.0]),     # 0 deg comes from Matt's ED input file
-                                    #'WvHiCOffD':   (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now 
-                                    #'WvLowCOffS':  (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now
-                                   },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
-            
-        elif self.D == 240: # IEA 15 MW
-            self.bins = xr.Dataset({'WaveHs':      (['wspd'], [1.172, 1.323, 1.523, 1.764, 2.255]),  # higher values on default input from the repository (4.52)
-                                    'WaveTp':      (['wspd'], [7.287, 6.963, 7.115, 6.959, 7.067]),  # higher values on default input from the repository (9.45)
-                                    'RotSpeed':    (['wspd'], [4.995, 6.087, 7.557, 7.557, 7.557]),
-                                    'BlPitch':     (['wspd'], [0.315, 0,     0.645, 7.6,   13.8 ]),
-                                    #'WvHiCOffD':   (['wspd'], [0,     0,     0,     0,     0    ]), # 2nd order wave info. Unused for now. 3.04292 from repo; 0.862 from KS
-                                    #'WvLowCOffS':  (['wspd'], [0,     0,     0,     0,     0    ]), # 2nd order wave info. Unused for now  0.314159 from repo; 0.862 from KS
-                                   },  coords={'wspd': [6.6, 8.6, 10.6, 12.6, 15]} )  # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
-            
-        else:
-            raise ValueError(f'Unknown turbine with diameter {self.D}. Add values to the `_setRotorParameters` function.')
-  
+        """Set rotor parameters dynamically."""
+        try:
+            params = self._get_rotor_parameters(self.D)
+
+            # Create the xarray Dataset from the parameters
+            self.bins = xr.Dataset(
+                {
+                    'WaveHs': (['wspd'], params['WaveHs']),
+                    'WaveTp': (['wspd'], params['WaveTp']),
+                    'RotSpeed': (['wspd'], params['RotSpeed']),
+                    'BlPitch': (['wspd'], params['BlPitch']),
+                },
+                coords={'wspd': params['wspd']}
+            )
+        except ValueError as e:
+            print(e)
+            raise
+
 
 
     
