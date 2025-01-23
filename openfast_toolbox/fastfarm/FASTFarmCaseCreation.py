@@ -1229,16 +1229,17 @@ class FFCaseCreation:
         """Retrieve rotor parameters based on turbine diameter."""
         # Dictionary to hold rotor parameters for different turbines
         rotor_parameters = {
-            220: {
-                'WaveHs': [1.429, 1.429],
-                'WaveTp': [7.073, 7.073],
-                'RotSpeed': [4.0, 4.0],
-                'BlPitch': [0.0, 0.0],
-                'wspd': [10, 15]
+            220: { # 12 MW turbine
+                'WaveHs': [1.429, 1.429], # 1.429 comes from Matt's hydrodyn input file
+                'WaveTp': [7.073, 7.073], # 7.073 comes from Matt's hydrodyn input file
+                'RotSpeed': [4.0, 4.0], # 4 rpm comes from Matt's ED input file
+                'BlPitch': [0.0, 0.0], # 0 deg comes from Matt's ED input file
+                'coords': [10, 15]
+
             },
-            240: {
-                'WaveHs': [1.172, 1.323, 1.523, 1.764, 2.255],
-                'WaveTp': [7.287, 6.963, 7.115, 6.959, 7.067],
+            240: { # IEA 15 MW
+                'WaveHs': [1.172, 1.323, 1.523, 1.764, 2.255], # higher values on default input from the repository (4.52)
+                'WaveTp': [7.287, 6.963, 7.115, 6.959, 7.067], # higher values on default input from the repository (9.45)
                 'RotSpeed': [4.995, 6.087, 7.557, 7.557, 7.557],
                 'BlPitch': [0.315, 0, 0.645, 7.6, 13.8],
                 'wspd': [6.6, 8.6, 10.6, 12.6, 15]
@@ -1263,9 +1264,13 @@ class FFCaseCreation:
                     'WaveTp': (['wspd'], params['WaveTp']),
                     'RotSpeed': (['wspd'], params['RotSpeed']),
                     'BlPitch': (['wspd'], params['BlPitch']),
+                    #'WvHiCOffD': (['wspd'], [0, 0]), # 2nd order wave info. Unused for now
+                    #'WvLowCOffS': (['wspd'], [0, 0]), # 2nd order wave info. Unused for now
                 },
-                coords={'wspd': params['wspd']}
+                coords={'wspd': params['wspd']} # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
             )
+            #'WvHiCOffD':   (['wspd'], [0,     0,     0,     0,     0    ]), # 2nd order wave info. Unused for now. 3.04292 from repo; 0.862 from KS
+            #'WvLowCOffS':  (['wspd'], [0,     0,     0,     0,     0    ]), # 2nd order wave info. Unused for now  0.314159 from repo; 0.862 from KS
         except ValueError as e:
             print(e)
             raise
