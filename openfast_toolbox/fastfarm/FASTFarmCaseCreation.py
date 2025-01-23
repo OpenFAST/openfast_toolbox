@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import os, sys, shutil
 import subprocess
 import numpy as np
@@ -83,7 +82,8 @@ class FFCaseCreation:
                  EDmodel = None,
                  nSeeds = 6,
                  seedValues = None,
-                 LESpath = None,
+                 inflowPath = None,
+                 inflowType = 'TS',
                  sweepYawMisalignment = False,
                  refTurb_rot = 0,
                  verbose = 0):
@@ -139,10 +139,13 @@ class FFCaseCreation:
             Number of seeds used for TurbSim simulations. If changing this value, give seedValues
         seedValues: list of int
             Seed value for each seed of requested TurbSim simulations if nSeeds!=6
-        LESpath: str or list of strings
+        inflowType: str
+            inflow type (LES or TS) This variable will dictate whether it is a TurbSim-driven or LES-driven case
+            Choose 'LES' or 'TS' (default is TS, TurbSim-driven)
+        inflowPath: str or list of strings
             Full path of the LES data, if driven by LES. If None, the setup will be for TurbSim inflow.
-            LESpath can be a single path, or a list of paths of the same length as the sweep in conditions.
-            For example, if TIvalue=[8,10,12], then LESpath can be 3 paths, related to each condition.
+            inflowPath can be a single path, or a list of paths of the same length as the sweep in conditions.
+            For example, if TIvalue=[8,10,12], then inflowPath can be 3 paths, related to each condition.
         sweepYawMisalignment: bool
             Whether or not to perform a sweep with and without yaw misalignment perturbations
         refTurb_rot: int
@@ -173,7 +176,8 @@ class FFCaseCreation:
         self.ADmodel     = ADmodel
         self.EDmodel     = EDmodel
         self.nSeeds      = nSeeds
-        self.LESpath     = LESpath
+        self.inflowPath  = inflowPath
+        self.inflowType  = inflowType
         self.sweepYM     = sweepYawMisalignment
         self.seedValues  = seedValues
         self.refTurb_rot = refTurb_rot
@@ -205,7 +209,7 @@ class FFCaseCreation:
         s  = f'Requested parameters:\n'
         s += f' - Case path: {self.path}\n'
         s += f' - Wake model:              {self.mod_wake} (1:Polar; 2:Curl; 3:Cartesian)\n'
-        if self.LESpath is None: 
+        if self.inflowType == 'TS':
             s += f' - Number of TurbSim seeds: {self.nSeeds}\n'
         s += f' - End time:                {self.tmax} s\n'
         s += f'Requested farm:\n'
@@ -236,16 +240,16 @@ class FFCaseCreation:
         s += f"\n\n" 
         
         
-        if self.LESpath is None:
+        if self.inflowType == 'TS':
             s += f'Turbulence boxes: TurbSim\n'
             s += f'TurbSim turbulence boxes details:\n'
         else:
             s += f'Turbulence boxes: LES\n'
             s += f'LES turbulence boxes details:\n'
-            s += f'  Path: {self.LESpath}\n'
+            s += f'  Path: {self.inflowPath}\n'
         
         
-        if self.TSlowBoxFilesCreatedBool or self.LESpath is not None:
+        if self.TSlowBoxFilesCreatedBool or self.inflowType != 'TS':
             s += f'  Low-resolution domain: \n'
             s += f'   - ds low: {self.ds_low_les} m\n'
             s += f'   - dt low: {self.dt_low_les} s\n'
@@ -255,7 +259,7 @@ class FFCaseCreation:
             s += f'Low-res boxes not created yet.\n'
         
         
-        if self.TShighBoxFilesCreatedBool or self.LESpath is not None:
+        if self.TShighBoxFilesCreatedBool or self.inflowType != 'TS':
             s += f'  High-resolution domain: \n'
             s += f'   - ds high: {self.ds_high_les} m\n'
             s += f'   - dt high: {self.dt_high_les} s\n'
@@ -416,14 +420,14 @@ class FFCaseCreation:
                              f'to the number of seeds requested.')
   
         # Check LES parameters
-        if self.LESpath is None:
+        if self.inflowType == 'TS':
             self.inflowStr = 'TurbSim'
             self.Mod_AmbWind = 3
         else:
-            if isinstance(self.LESpath,str): self.LESpath = [self.LESpath]*len(self.vhub)
+            if isinstance(self.inflowPath,str): self.inflowPath = [self.inflowPath]*len(self.vhub)
             self.inflowStr = 'LES'
             self.Mod_AmbWind = 1
-            for p in self.LESpath:
+            for p in self.inflowPath:
                 if not os.path.isdir(p):
                     raise ValueError (f'The LES path {p} does not exist')
             # LES is requested, so domain limits must be given
@@ -1811,7 +1815,7 @@ class FFCaseCreation:
         
                     # Low-res box
                     try:
-                        src = os.path.join(self.LESpath[cond], 'Low')
+                        src = os.path.join(self.inflowPath[cond], 'Low')
                         dst = os.path.join(self.path, self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', LESboxesDirName, 'Low')
                         os.symlink(src, dst)                
                     except FileExistsError:
@@ -1820,7 +1824,7 @@ class FFCaseCreation:
                     # High-res boxes
                     for t in range(self.nTurbines):
                         try:
-                            src = os.path.join(self.LESpath[cond], f"HighT{t+1}_inflow{str(self.allCases.sel(case=case).inflow_deg.values).replace('-','m')}deg")
+                            src = os.path.join(self.inflowPath[cond], f"HighT{t+1}_inflow{str(self.allCases.sel(case=case).inflow_deg.values).replace('-','m')}deg")
                             dst = os.path.join(self.path,self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', LESboxesDirName, f'HighT{t+1}')
                             os.symlink(src, dst)                
                         except FileExistsError:
