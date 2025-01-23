@@ -1640,7 +1640,7 @@ class FFCaseCreation:
         if t is not None:
             options += f'-t {t} '
         if p is not None:
-            otions += f'-p {p} '
+            options += f'-p {p} '
 
         sub_command = f"sbatch {options}{self.slurmfilename_high}"
         print(f'Calling: {sub_command}')
@@ -2193,7 +2193,7 @@ class FFCaseCreation:
                     if t is not None:
                         options += f'-t {t} '
                     if p is not None:
-                        otions += f'-p {p} '
+                        options += f'-p {p} '
 
                     sub_command = f"sbatch {options}{fname}"
                     print(f'Calling: {sub_command}')
