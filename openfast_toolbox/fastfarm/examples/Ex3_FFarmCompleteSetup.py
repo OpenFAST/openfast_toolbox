@@ -126,7 +126,7 @@ def main():
                           dt_low_les, ds_low_les, extent_low,
                           ffbin=ffbin, mod_wake=mod_wake, yaw_init=yaw_init,
                           nSeeds=nSeeds, refTurb_rot=refTurb_rot,
-                          inflowType='LES', inflowPath=inflowPath,
+                          inflowType=inflowType, inflowPath=inflowPath,
                           verbose=1)
 
     case.setTemplateFilename(templatePath, EDfilename, SEDfilename, HDfilename, SrvDfilename, ADfilename,
