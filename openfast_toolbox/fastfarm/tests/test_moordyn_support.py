@@ -8,10 +8,7 @@ class TestMoorDynSupport(unittest.TestCase):
         """
         Setup the testing environment.
         """
-        # Create a temporary directory for the test
-        self.test_dir = Path("test_moordyn_support")
-        self.test_dir.mkdir(exist_ok=True)
-
+        self.test_dir = Path("openfast_toolbox/fastfarm/examples/SampleFiles")
         # Define MoorDyn template
         self.moordyn_template = self.test_dir / "MoorDyn_template.dat"
         self.moordyn_template.write_text(
