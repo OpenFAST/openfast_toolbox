@@ -574,7 +574,7 @@ class FFCaseCreation:
     def copyTurbineFilesForEachCase(self, writeFiles=True):
 
         if not self.templateFilesCreatedBool:
-            raise SyntaxError('Template files not set. Call `setTemplateFilename` before calling this function.')
+            raise SyntaxError('Template files dict not set. Call `setTemplateFilename` before calling this function.')
 
         # Loops on all conditions/cases creating DISCON and *Dyn files
         for cond in range(self.nConditions):
@@ -817,206 +817,184 @@ class FFCaseCreation:
         return True
 
 
-                                        
-    def setTemplateFilename(self,
-                            templatePath=None,
-                            EDfilename=None,
-                            SEDfilename=None,
-                            HDfilename=None,
-                            SrvDfilename=None,
-                            ADfilename=None,
-                            ADskfilename=None,
-                            SubDfilename=None,
-                            IWfilename=None,
-                            BDfilepath=None,
-                            bladefilename=None,
-                            towerfilename=None,
-                            turbfilename=None,
-                            libdisconfilepath=None,
-                            controllerInputfilename=None,
-                            coeffTablefilename=None,
-                            turbsimLowfilepath=None,
-                            turbsimHighfilepath=None,
-                            FFfilename=None):
-        '''                             
-                                        
-        *filename: str                  
-        The filename of the current OpenFAST submodule, no complete path. Assumes it is
-        inside `templatePath`           
-        *filepath: str                  
-        Complete path of the file. May or may not be inside `templatePath`
 
-        '''
+    def setTemplateFilename(self, templatePath=None, templateFiles=None):
 
-        self.EDfilename    = "unused";  self.EDfilepath    = "unused" 
-        self.SEDfilename   = "unused";  self.SEDfilepath   = "unused" 
-        self.HDfilename    = "unused";  self.HDfilepath    = "unused" 
-        self.SrvDfilename  = "unused";  self.SrvDfilepath  = "unused" 
-        self.ADfilename    = "unused";  self.ADfilepath    = "unused" 
-        self.ADskfilename  = "unused";  self.ADskfilepath  = "unused" 
-        self.SubDfilename  = "unused";  self.SubDfilepath  = "unused" 
-        self.IWfilename    = "unused";  self.IWfilepath    = "unused" 
-        self.BDfilepath    = "unused";  self.BDfilename    = "unused" 
-        self.bladefilename = "unused";  self.bladefilepath = "unused" 
-        self.towerfilename = "unused";  self.towerfilepath = "unused" 
-        self.libdisconfilepath       = None
-        self.controllerInputfilename = None
-        self.coeffTablefilename      = None
+        """
+        *templatePath: str
+        The path of the directory where teh template files exist.
+
+        *templateFiles: dict
+        A dictionary containing the filenames and their corresponding types as keys.
+        Keys should correspond to the variable names expected in the function.
+        The values should be the filenames (strings).
+        For example:
+        templateFiles = {
+            'EDfilename': 'EDtemplate',
+            'SEDfilename': 'SEDtemplate',
+            'HDfilename': 'HDtemplate.dat',
+            'SrvDfilename': 'SrvDtemplate.T',
+            'ADfilename': 'ADtemplate.dat',
+            # Add other files as needed...
+        }
+        """
+
+        # Set default values
+        self.EDfilename = self.SEDfilename = self.HDfilename = self.SrvDfilename = "unused"
+        self.ADfilename = self.ADskfilename = self.SubDfilename = self.IWfilename = "unused"
+        self.BDfilepath = self.bladefilename = self.towerfilename = self.turbfilename = "unused"
+        self.libdisconfilepath = self.controllerInputfilename = self.coeffTablefilename = "unused"
+        self.turbsimLowfilepath = self.turbsimHighfilepath = self.FFfilename = "unused"
 
         if templatePath is None:
             print(f'--- WARNING: No template files given. Complete setup will not be possible')
             return
 
         if not os.path.isdir(templatePath):
-            raise ValueError (f'Template path {templatePath} does not seem to exist.')
+            raise ValueError(f'Template path {templatePath} does not seem to exist.')
 
         self.templatePath = templatePath
 
-
         def checkIfExists(f):
-            if os.path.basename(f) == 'unused':
+            if f == 'unused':
                 return
             if not os.path.isfile(f):
-                raise ValueError (f'File {f} does not exist.')
+                raise ValueError(f'File {f} does not exist.')
 
-        if EDfilename is not None and EDfilename != 'unused':
-            if not EDfilename.endswith('.T'):
-                raise ValueError (f'Name the template ED file "*.T.dat" and give "*.T" as `EDfilename`')
-            self.EDfilepath = os.path.join(self.templatePath,f"{EDfilename}.dat")
-            checkIfExists(self.EDfilepath)
-            self.EDfilename = EDfilename
+        # Process each file from the dictionary
+        for key, filename in (templateFiles or {}).items():
+            if filename == 'unused':
+                continue
 
-        if SEDfilename is not None and SEDfilename != 'unused':
-            if not SEDfilename.endswith('.T'):
-                raise ValueError (f'Name the template SED file "*.T.dat" and give "*.T" as `SEDfilename`')
-            self.SEDfilepath = os.path.join(self.templatePath,f"{SEDfilename}.dat")
-            checkIfExists(self.SEDfilepath)
-            self.SEDfilename = SEDfilename
+            # Map the template file types to the specific checks
+            if key.endswith('filename'):
+                if key.startswith('ED'):
+                    if not filename.endswith('.T'):
+                        raise ValueError(f'Name the template ED file "*.T.dat" and give "*.T" as `EDfilename`')
+                    self.EDfilepath = os.path.join(self.templatePath, f"{filename}.dat")
+                    checkIfExists(self.EDfilepath)
+                    self.EDfilename = filename
 
-            if HDfilename is not None and HDfilename != 'unused':
-                raise ValueError (f'Simplified ElastoDyn is not compatible with HydroDyn. Set HDfilename to None. ')
-            if SubDfilename is not None and SubDfilename != 'unused':
-                raise ValueError (f'Simplified ElastoDyn is not compatible with SubDyn. Set SubDfilename to None. ')
+                elif key.startswith('SED'):
+                    if not filename.endswith('.T'):
+                        raise ValueError(f'Name the template SED file "*.T.dat" and give "*.T" as `SEDfilename`')
+                    self.SEDfilepath = os.path.join(self.templatePath, f"{filename}.dat")
+                    checkIfExists(self.SEDfilepath)
+                    self.SEDfilename = filename
 
+                elif key.startswith('HD'):
+                    if not filename.endswith('.dat'):
+                        raise ValueError(f'The HydroDyn filename should end in `.dat`.')
+                    self.HDfilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.HDfilepath)
+                    self.HDfilename = filename
 
-        if HDfilename is not None and HDfilename != 'unused':
-            if not HDfilename.endswith('.dat'):
-                raise ValueError (f'The HydroDyn filename should end in `.dat`.')
-            self.HDfilepath = os.path.join(self.templatePath,HDfilename)
-            checkIfExists(self.HDfilepath)
-            self.HDfilename = HDfilename
+                elif key.startswith('SrvD'):
+                    if not filename.endswith('.T'):
+                        raise ValueError(f'Name the template ServoDyn file "*.T.dat" and give "*.T" as `SrvDfilename`')
+                    self.SrvDfilepath = os.path.join(self.templatePath, f"{filename}.dat")
+                    checkIfExists(self.SrvDfilepath)
+                    self.SrvDfilename = filename
 
-        if SrvDfilename is not None and SrvDfilename != 'unused':
-            if not SrvDfilename.endswith('.T'):
-                raise ValueError (f'Name the template ServoDyn file "*.T.dat" and give "*.T" as `SrvDfilename`')
-            self.SrvDfilepath = os.path.join(self.templatePath,f"{SrvDfilename}.dat")
-            checkIfExists(self.SrvDfilepath)
-            self.SrvDfilename = SrvDfilename
+                elif key.startswith('AD'):
+                    if not filename.endswith('.dat'):
+                        raise ValueError(f'The AeroDyn filename should end in `.dat`.')
+                    self.ADfilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.ADfilepath)
+                    self.ADfilename = filename
 
-        if ADfilename is not None and ADfilename != 'unused':
-            if not ADfilename.endswith('.dat'):
-                raise ValueError (f'The AeroDyn filename should end in `.dat`.')
-            self.ADfilepath = os.path.join(self.templatePath,ADfilename)
-            checkIfExists(self.ADfilepath)
-            self.ADfilename = ADfilename
+                elif key.startswith('ADsk'):
+                    if not filename.endswith('.dat'):
+                        raise ValueError(f'The AeroDisk filename should end in `.dat`.')
+                    self.ADskfilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.ADskfilepath)
+                    self.ADskfilename = filename
 
-        if ADskfilename is not None and ADskfilename != 'unused':
-            if not ADskfilename.endswith('.dat'):
-                raise ValueError (f'The AeroDisk filename should end in `.dat`.')
-            self.ADskfilepath = os.path.join(self.templatePath,ADskfilename)
-            checkIfExists(self.ADskfilepath)
-            self.ADskfilename = ADskfilename
-            self.hasController = False
+                elif key.startswith('SubD'):
+                    if not filename.endswith('.dat'):
+                        raise ValueError(f'The SubDyn filename should end in `.dat`.')
+                    self.SubDfilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.SubDfilepath)
+                    self.SubDfilename = filename
 
-            if coeffTablefilename is not None and coeffTablefilename != 'unused':
-                if not coeffTablefilename.endswith('.csv'):
-                    raise ValueError (f'The performance table `coeffTablefilename` file is needed for AeroDisk and should end in "*.csv"')
-                self.coeffTablefilepath = os.path.join(templatePath, coeffTablefilename)
-                checkIfExists(self.coeffTablefilepath)
-                self.coeffTablefilename = coeffTablefilename
+                elif key.startswith('IW'):
+                    if not filename.endswith('.dat'):
+                        raise ValueError(f'The InflowWind filename should end in `.dat`.')
+                    self.IWfilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.IWfilepath)
+                    self.IWfilename = filename
 
-        if SubDfilename is not None and SubDfilename != 'unused':
-            if not SubDfilename.endswith('.dat'):
-                raise ValueError (f'The SubDyn filename should end in `.dat`.')
-            self.SubDfilepath = os.path.join(self.templatePath,SubDfilename)
-            checkIfExists(self.SubDfilepath)
-            self.SubDfilename = SubDfilename
+                elif key.startswith('BD'):
+                    if not filename.endswith('.dat'):
+                        raise ValueError(f'The BeamDyn filename should end in `.dat`.')
+                    self.BDfilepath = filename
+                    checkIfExists(self.BDfilepath)
 
-        if IWfilename is not None and IWfilename != 'unused':
-            if not IWfilename.endswith('.dat'):
-                raise ValueError (f'The InflowWind filename should end in `.dat`.')
-            self.IWfilepath = os.path.join(self.templatePath,IWfilename)
-            checkIfExists(self.IWfilepath)
-            self.IWfilename = IWfilename
+                elif key.startswith('blade'):
+                    if not filename.endswith('.dat'):
+                        raise ValueError(f'The blade filename should end in `.dat`.')
+                    self.bladefilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.bladefilepath)
+                    self.bladefilename = filename
 
-        if BDfilepath is not None and BDfilepath != 'unused':
-            if not BDfilepath.endswith('.dat'):
-                raise ValueError (f'The BeamDyn filename should end in `.dat`.')
-            self.BDfilepath = BDfilepath
-            checkIfExists(self.BDfilepath)
+                elif key.startswith('tower'):
+                    if not filename.endswith('.dat'):
+                        raise ValueError(f'The tower filename should end in `.dat`.')
+                    self.towerfilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.towerfilepath)
+                    self.towerfilename = filename
 
-        if bladefilename is not None:
-            if not bladefilename.endswith('.dat'):
-                raise ValueError (f'The blade filename should end in `.dat`.')
-            self.bladefilepath = os.path.join(self.templatePath,bladefilename)
-            checkIfExists(self.bladefilepath)
-            self.bladefilename = bladefilename
+                elif key.startswith('turb'):
+                    if not filename.endswith('.T'):
+                        raise ValueError(f'Name the template turbine file "*.T.fst" and give "*.T" as `turbfilename`')
+                    self.turbfilepath = os.path.join(self.templatePath, f"{filename}.fst")
+                    checkIfExists(self.turbfilepath)
+                    self.turbfilename = filename
 
-        if towerfilename is not None:
-            if not towerfilename.endswith('.dat'):
-                raise ValueError (f'The tower filename should end in `.dat`.')
-            self.towerfilepath = os.path.join(self.templatePath,towerfilename)
-            checkIfExists(self.towerfilepath)
-            self.towerfilename = towerfilename
+                elif key.startswith('libdiscon'):
+                    if not filename.endswith('.so'):
+                        raise ValueError(f'The libdiscon file should end in "*.so"')
+                    self.libdisconfilepath = filename
+                    checkIfExists(self.libdisconfilepath)
+                    self._create_copy_libdiscon()
 
-        if turbfilename is not None:
-            if not turbfilename.endswith('.T'):
-                raise ValueError (f'Name the template turbine file "*.T.fst" and give "*.T" as `turbfilename`')
-            self.turbfilepath = os.path.join(self.templatePath,f"{turbfilename}.fst")
-            checkIfExists(self.turbfilepath)
-            self.turbfilename = turbfilename
+                elif key.startswith('controllerInput'):
+                    if not filename.endswith('.IN'):
+                        print(f'--- WARNING: The controller input file typically ends in "*.IN". Currently {filename}. Double check.')
+                    self.controllerInputfilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.controllerInputfilepath)
+                    self.controllerInputfilename = filename
 
-        if libdisconfilepath is not None:
-            if not libdisconfilepath.endswith('.so'):
-                raise ValueError (f'The libdiscon `libdisconfilepath` file should end in "*.so"')
-            self.libdisconfilepath = libdisconfilepath
-            checkIfExists(self.libdisconfilepath)
-            self._create_copy_libdiscon()
-            self.hasController = True
+                elif key.startswith('coeffTable'):
+                    if not filename.endswith('.csv'):
+                        raise ValueError(f'The performance table file should end in "*.csv"')
+                    self.coeffTablefilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.coeffTablefilepath)
+                    self.coeffTablefilename = filename
 
-        if controllerInputfilename is not None:
-            if not controllerInputfilename.endswith('.IN'):
-                print(f'--- WARNING: The controller input file typically ends in "*.IN". Currently {controllerInputfilename}. Double check.')
-            self.controllerInputfilepath = os.path.join(self.templatePath, controllerInputfilename)
-            checkIfExists(self.controllerInputfilepath)
-            self.controllerInputfilename = controllerInputfilename
-        else:
-            if self.hasController:
-                raise ValueError (f'libdiscon has been given but no controller input filename. Stopping.')
+                elif key.startswith('turbsimLow'):
+                    if not filename.endswith('.inp'):
+                        raise ValueError(f'TurbSim file input for low-res box should end in ".inp".')
+                    self.turbsimLowfilepath = filename
+                    checkIfExists(self.turbsimLowfilepath)
 
-        if turbsimLowfilepath is not None:
-            if not turbsimLowfilepath.endswith('.inp'):
-                raise ValueError (f'TurbSim file input for low-res box `turbsimLowfilepath` should end in ".inp".')
-            self.turbsimLowfilepath = turbsimLowfilepath
-            checkIfExists(self.turbsimLowfilepath)
-        
-        if turbsimHighfilepath is not None:
-            if not turbsimHighfilepath.endswith('.inp'):
-                raise ValueError (f'TurbSim file input for high-res box `turbsimHighfilepath` should end in ".inp".')
-            self.turbsimHighfilepath = turbsimHighfilepath
-            checkIfExists(self.turbsimHighfilepath)
-        
-        if FFfilename is not None:
-            if not FFfilename.endswith('.fstf'):
-                raise ValueError (f'FAST.Farm input file `FFfilename` should end in ".fstf".')
-            self.FFfilepath = os.path.join(self.templatePath,FFfilename)
-            checkIfExists(self.FFfilepath)
-            self.FFfilename = FFfilename
-        
+                elif key.startswith('turbsimHigh'):
+                    if not filename.endswith('.inp'):
+                        raise ValueError(f'TurbSim file input for high-res box should end in ".inp".')
+                    self.turbsimHighfilepath = filename
+                    checkIfExists(self.turbsimHighfilepath)
+
+                elif key.startswith('FF'):
+                    if not filename.endswith('.fstf'):
+                        raise ValueError(f'FAST.Farm input file should end in ".fstf".')
+                    self.FFfilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.FFfilepath)
+                    self.FFfilename = filename
+
+        # Open the template files
         self._open_template_files()
 
         self.templateFilesCreatedBool = True
-
         return
 
 
