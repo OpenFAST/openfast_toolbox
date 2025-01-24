@@ -6,7 +6,7 @@ import numpy as np
 import xarray as xr
 
 from openfast_toolbox.io import FASTInputFile, FASTOutputFile, TurbSimFile, VTKFile
-from openfast_toolbox.fastfarm import writeFastFarm, fastFarmTurbSimExtent, plotFastFarmSetup
+from openfast_toolbox.fastfarm.fastfarm import writeFastFarm, fastFarmTurbSimExtent, plotFastFarmSetup
 from openfast_toolbox.fastfarm.TurbSimCaseCreation import TSCaseCreation, writeTimeSeriesFile
 
 def cosd(t): return np.cos(np.deg2rad(t))
@@ -585,7 +585,28 @@ class FFCaseCreation:
         
                 # Recover info about the current CondXX_*/CaseYY_*
                 Vhub_ = self.allCond.sel(cond=cond)['vhub'].values
-        
+
+                # Check MoorDyn file and copy
+                if self.mDynfilepath != 'unused':
+                    moordyn_file_src = self.mDynfilepath
+                    moordyn_file_dst = os.path.join(currPath, self.mDynfilename)
+
+                    # Read the MoorDyn template content
+                    with open(moordyn_file_src, "r") as src:
+                        moordyn_content = src.readlines()
+
+                    # Rotate the mooring system if wind direction is specified
+                    if self.inflow_deg != 0.0:
+                        moordyn_content = self._rotateMooringSystem(moordyn_content, self.inflow_deg)
+
+                    # Write the updated MoorDyn file
+                    with open(moordyn_file_dst, "w") as dst:
+                        dst.writelines(moordyn_content)
+
+                    if writeFiles:
+                        shutilcopy2_untilSuccessful(moordyn_file_src, moordyn_file_dst)
+                        print(f"MoorDyn file rotated and written to {moordyn_file_dst}")
+
                 # Update parameters to be changed in the HydroDyn files
                 if self.HydroDynFile != 'unused':
                     self.HydroDynFile['WaveHs']     = self.bins.sel(wspd=Vhub_, method='nearest').WaveHs.values
@@ -835,6 +856,21 @@ class FFCaseCreation:
             'HDfilename': 'HDtemplate.dat',
             'SrvDfilename': 'SrvDtemplate.T',
             'ADfilename': 'ADtemplate.dat',
+            'EDfilename'
+            'ADskfilename'
+            'IWfilename'
+            'SubDfilename'
+            'BDfilepath'
+            'bladefilename'
+            'towerfilename'
+            'turbfilename'
+            'libdisconfilepath'
+            'controllerInputfilename'
+            'coeffTablefilename'
+            'turbsimLowfilepath'
+            'turbsimHighfilepath'
+            'FFfilename'
+            'mDynfilename'
             # Add other files as needed...
         }
         """
@@ -845,6 +881,8 @@ class FFCaseCreation:
         self.BDfilepath = self.bladefilename = self.towerfilename = self.turbfilename = "unused"
         self.libdisconfilepath = self.controllerInputfilename = self.coeffTablefilename = "unused"
         self.turbsimLowfilepath = self.turbsimHighfilepath = self.FFfilename = "unused"
+        # MoorDyn support
+        self.mDynfilename = "unused"
 
         if templatePath is None:
             print(f'--- WARNING: No template files given. Complete setup will not be possible')
@@ -971,6 +1009,13 @@ class FFCaseCreation:
                     self.coeffTablefilepath = os.path.join(self.templatePath, filename)
                     checkIfExists(self.coeffTablefilepath)
                     self.coeffTablefilename = filename
+                # MoorDyn Support
+                elif key.startswith('mDyn'):
+                    if not filename.endswith('.dat'):
+                        raise  ValueError(f'The MoorDyn filename should end in `.dat`.')
+                    self.mDynfilepath = os.path.join(self.templatePath, filename)
+                    checkIfExists(self.towerfilepath)
+                    self.mDynfilename = filename
 
                 elif key.startswith('turbsimLow'):
                     if not filename.endswith('.inp'):
@@ -1180,7 +1225,60 @@ class FFCaseCreation:
         self.allCases = ds.copy()
         self.nCases = len(self.allCases['case'])
 
+    # helper method for rotating mooring systems
+    def _rotateMooringSystem(self, moordyn_content, inflow_deg):
+        """
+        Rotate the mooring system based on the wind direction.
+        This assumes mooring nodes are specified in the template file.
 
+        :param moordyn_content: List of lines in the MoorDyn template file
+        :param inflow_deg: Wind direction angle in degrees
+        :return: List of updated lines for the MoorDyn file
+        """
+        rotated_content = []
+        rotation_matrix = self._createRotationMatrix(inflow_deg)
+
+        for line in moordyn_content:
+            # Identify node lines with XYZ coordinates
+            if line.strip().startswith("Node"):
+                parts = line.split()
+                if len(parts) >= 5:  # Ensure line has at least X, Y, Z, M, B
+                    try:
+                        # Extract original X, Y, Z coordinates
+                        x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+
+                        # Rotate coordinates
+                        rotated_coords = np.dot(rotation_matrix, np.array([x, y, z]))
+                        parts[1], parts[2], parts[3] = map(str, rotated_coords)
+
+                        # Reconstruct the line with rotated coordinates
+                        rotated_line = "    ".join(parts) + "\n"
+                        rotated_content.append(rotated_line)
+                        continue
+                    except ValueError:
+                        pass  # Skip lines that don't conform to expected format
+            rotated_content.append(line)
+
+        return rotated_content
+
+    # Helper method to create a 3D rotation matrix
+    def _createRotationMatrix(self, angle_deg):
+        """
+        Create a 3D rotation matrix for a given angle in degrees about the Z-axis.
+
+        :param angle_deg: Angle in degrees
+        :return: 3x3 numpy array representing the rotation matrix
+        """
+        angle_rad = np.radians(angle_deg)
+        cos_theta = np.cos(angle_rad)
+        sin_theta = np.sin(angle_rad)
+
+        # 3D rotation matrix about the Z-axis
+        return np.array([
+            [cos_theta, -sin_theta, 0],
+            [sin_theta, cos_theta, 0],
+            [0, 0, 1]
+        ])
 
     def _rotate_wts(self):
         # Calculate the rotated positions of the turbines wrt the reference turbine

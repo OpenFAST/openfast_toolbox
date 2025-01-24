@@ -106,7 +106,8 @@ def main():
         'FFfilename'    : 'Model_FFarm.fstf',
         'controllerInputfilename'   : 'DISCON.IN',
         'libdisconfilepath' : '/full/path/to/controller/libdiscon.so',
-
+        # MoorDyn Support
+        'mDynfilename': 'MoorDyn.dat',
         # TurbSim setups
         'turbsimLowfilepath'    : './SampleFiles/template_Low_InflowXX_SeedY.inp',
         'turbsimHighfilepath'   : './SampleFiles/template_HighT1_InflowXX_SeedY.inp'

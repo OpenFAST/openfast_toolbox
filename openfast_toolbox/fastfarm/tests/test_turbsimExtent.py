@@ -2,7 +2,7 @@ import unittest
 import os
 import numpy as np    
 
-from openfast_toolbox.fastfarm import *
+from openfast_toolbox.fastfarm.fastfarm import *
 
 MyDir=os.path.dirname(__file__)
 
