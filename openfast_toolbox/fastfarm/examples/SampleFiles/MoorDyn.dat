@@ -1,9 +1,0 @@
-MoorDyn Example File
---------------------
-LineType     Diam      MassDenInAir   EA         CB    Cdn     Cdt
-              (m)       (kg/m)       (N)       (m)   (-)    (-)
-main        0.0766      40.05e0     1.1e9      0.0   0.8    0.04
-
-Node    X     Y     Z    M     B
-         (m)   (m)   (m)  (kg)  (N)
-1       0.0   0.0  -20.0  0.0   0.0

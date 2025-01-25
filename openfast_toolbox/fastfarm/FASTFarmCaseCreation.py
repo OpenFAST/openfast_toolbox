@@ -271,7 +271,7 @@ class FFCaseCreation:
   
         # Create case path is doesn't exist
         if not os.path.exists(self.path):
-            os.makedirs(self.path)
+            os.makedirs(self.path, exist_ok=True)
 
         # Check the wind turbine dict
         if not isinstance(self.wts,dict):
@@ -903,7 +903,7 @@ class FFCaseCreation:
         for key, filename in (templateFiles or {}).items():
             if filename == 'unused':
                 continue
-
+            print(key, filename)
             # Map the template file types to the specific checks
             if key.endswith('filename'):
                 if key.startswith('ED'):
@@ -1014,7 +1014,7 @@ class FFCaseCreation:
                     if not filename.endswith('.dat'):
                         raise  ValueError(f'The MoorDyn filename should end in `.dat`.')
                     self.mDynfilepath = os.path.join(self.templatePath, filename)
-                    checkIfExists(self.towerfilepath)
+                    checkIfExists(self.mDynfilepath)
                     self.mDynfilename = filename
 
                 elif key.startswith('turbsimLow'):
