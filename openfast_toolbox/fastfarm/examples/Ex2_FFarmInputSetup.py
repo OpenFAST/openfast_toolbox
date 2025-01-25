@@ -13,7 +13,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 # Local packages
-from openfast_toolbox.fastfarm import fastFarmTurbSimExtent, writeFastFarm, plotFastFarmSetup
+from openfast_toolbox.fastfarm.fastfarm import fastFarmTurbSimExtent, writeFastFarm, plotFastFarmSetup
 from openfast_toolbox.io.fast_input_file import FASTInputFile
 
 MyDir=os.path.dirname(__file__)
