@@ -1014,6 +1014,9 @@ class FFCaseCreation:
             self.FFfilepath = os.path.join(self.templatePath,FFfilename)
             checkIfExists(self.FFfilepath)
             self.FFfilename = FFfilename
+
+        # Set output FAST.Farm filename for convenience
+        self.outputFFfilename = 'FF.fstf'
         
         self._open_template_files()
 
@@ -1790,7 +1793,6 @@ class FFCaseCreation:
         self.planes_yz = planes_yz[0:9]
         self.planes_xz = planes_xz[0:9]      
         
-
         if self.inflowStr == 'LES':
             self._FF_setup_LES(**kwargs)
 
@@ -1875,7 +1877,7 @@ class FFCaseCreation:
         
                     # --------------- FAST.Farm ----------------- #
                     templateFSTF = os.path.join(self.templatePath, self.FFfilename)
-                    outputFSTF   = os.path.join(seedPath, 'FFarm_mod.fstf')
+                    outputFSTF   = os.path.join(seedPath, self.outputFFfilename)
         
                     # Write the file (mostly for turbine locations here
                     writeFastFarm(outputFSTF, templateFSTF, xWT, yWT, zWT, FFTS=None, OutListT1=self.outlistFF,
@@ -1885,7 +1887,7 @@ class FFCaseCreation:
                     ff_file = FASTInputFile(outputFSTF)
         
                     # Open output file and change additional values manually or make sure we have the correct ones
-                    ff_file['InflowFile']  = f'"unused"'   
+                    ff_file['InflowFile']  = f'"unused"' 
                     ff_file['Mod_AmbWind'] = self.Mod_AmbWind  # LES 
                     ff_file['TMax'] = self.tmax
         
@@ -1975,7 +1977,7 @@ class FFCaseCreation:
         
                     # --------------- FAST.Farm ----------------- #
                     templateFSTF = os.path.join(self.templatePath, self.FFfilename)
-                    outputFSTF   = os.path.join(seedPath, 'FFarm_mod.fstf')
+                    outputFSTF   = os.path.join(seedPath, self.outputFFfilename)
         
                     # Open TurbSim outputs for the Low box and one High box (they are all of the same size)
                     lowbts = TurbSimFile(os.path.join(seedPath,'TurbSim', 'Low.bts'))
@@ -2205,6 +2207,9 @@ class FFCaseCreation:
                     # Write seed
                     sed_command = f"""sed -i "s|^seed.*|seed={seed}|g" {fname}"""
                     _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    # Wirte FAST.Farm filename
+                    sed_command = f"""sed -i "s/FFarm_mod.fstf/FF.fstf/g" {fname}"""
+                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
 
 
 
@@ -2236,6 +2241,9 @@ class FFCaseCreation:
                     _ = subprocess.call(sub_command, cwd=self.path, shell=True)
                     time.sleep(delay) # Sometimes the same job gets submitted twice. This gets around it.
 
+# ----------------------------------------------
+#                 HELPER FUNCTIONS
+# ---------------------------------------------
 
     def FF_check_output(self):
         '''
