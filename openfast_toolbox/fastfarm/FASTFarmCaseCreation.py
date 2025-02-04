@@ -268,6 +268,8 @@ class FFCaseCreation:
 
 
     def _checkInputs(self):
+
+        #### check if the turbine in the template FF input exists.
   
         # Create case path is doesn't exist
         if not os.path.exists(self.path):
@@ -1012,6 +1014,9 @@ class FFCaseCreation:
             self.FFfilepath = os.path.join(self.templatePath,FFfilename)
             checkIfExists(self.FFfilepath)
             self.FFfilename = FFfilename
+
+        # Set output FAST.Farm filename for convenience
+        self.outputFFfilename = 'FF.fstf'
         
         self._open_template_files()
 
@@ -1247,6 +1252,36 @@ class FFCaseCreation:
                                     #'WvLowCOffS':  (['wspd'], [0,     0,     0,     0,     0    ]), # 2nd order wave info. Unused for now  0.314159 from repo; 0.862 from KS
                                    },  coords={'wspd': [6.6, 8.6, 10.6, 12.6, 15]} )  # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
             
+
+        elif self.D == 178: # DTU 10MW W turbine
+            print(f'CHANGE THE _setRotorParameters of the DTU 10MW turbine')
+            self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1.429, 1.429]), # 1.429 comes from Matt's hydrodyn input file
+                                    'WaveTp':      (['wspd'], [ 7.073, 7.073]), # 7.073 comes from Matt's hydrodyn input file
+                                    'RotSpeed':    (['wspd'], [ 4.0, 4.0]),     # 4 rpm comes from Matt's ED input file
+                                    'BlPitch':     (['wspd'], [ 0.0, 0.0]),     # 0 deg comes from Matt's ED input file
+                                    #'WvHiCOffD':   (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now 
+                                    #'WvLowCOffS':  (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now
+                                   },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
+
+
+        elif self.D == 82: # Vestas V82, 1.5MW, 82 m diameter
+            print(f'CHANGE THE _setRotorParameters of the V82 1.5MW turbine')
+            self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1.429, 1.429]), # 1.429 comes from Matt's hydrodyn input file
+                                    'WaveTp':      (['wspd'], [ 7.073, 7.073]), # 7.073 comes from Matt's hydrodyn input file
+                                    'RotSpeed':    (['wspd'], [ 4.0, 4.0]),     # 4 rpm comes from Matt's ED input file
+                                    'BlPitch':     (['wspd'], [ 0.0, 0.0]),     # 0 deg comes from Matt's ED input file
+                                    #'WvHiCOffD':   (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now 
+                                    #'WvLowCOffS':  (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now
+                                   },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
+
+
+        elif self.D == 93: # Siemens SWT-2.3-93 2.3 MW, 93 m diameter
+            self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1, 1]),         # arbitrary since no hydrodyn is used
+                                    'WaveTp':      (['wspd'], [ 7, 7]),         # arbitrary since no hydrodyn is used
+                                    'RotSpeed':    (['wspd'], [ 5.0, 5.0]),     # from input file
+                                    'BlPitch':     (['wspd'], [ -1, -1]),       # from input file
+                                   },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
+
         else:
             raise ValueError(f'Unknown turbine with diameter {self.D}. Add values to the `_setRotorParameters` function.')
   
@@ -1758,7 +1793,6 @@ class FFCaseCreation:
         self.planes_yz = planes_yz[0:9]
         self.planes_xz = planes_xz[0:9]      
         
-
         if self.inflowStr == 'LES':
             self._FF_setup_LES(**kwargs)
 
@@ -1843,16 +1877,17 @@ class FFCaseCreation:
         
                     # --------------- FAST.Farm ----------------- #
                     templateFSTF = os.path.join(self.templatePath, self.FFfilename)
-                    outputFSTF   = os.path.join(seedPath, 'FFarm_mod.fstf')
+                    outputFSTF   = os.path.join(seedPath, self.outputFFfilename)
         
                     # Write the file (mostly for turbine locations here
-                    writeFastFarm(outputFSTF, templateFSTF, xWT, yWT, zWT, FFTS=None, OutListT1=self.outlistFF, noLeadingZero=True)
+                    writeFastFarm(outputFSTF, templateFSTF, xWT, yWT, zWT, FFTS=None, OutListT1=self.outlistFF,
+                                  noLeadingZero=True, turbineTemplateFullFilename=f"../{self.turbfilename}1.fst")
         
                     # Open saved file and change additional values manually or make sure we have the correct ones
                     ff_file = FASTInputFile(outputFSTF)
         
                     # Open output file and change additional values manually or make sure we have the correct ones
-                    ff_file['InflowFile']  = f'"unused"'   
+                    ff_file['InflowFile']  = f'"unused"' 
                     ff_file['Mod_AmbWind'] = self.Mod_AmbWind  # LES 
                     ff_file['TMax'] = self.tmax
         
@@ -1876,7 +1911,14 @@ class FFCaseCreation:
                     ff_file['dr'] = self.dr
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
                     ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low_les*Vhub_*(1-1/6)) ) )
-        
+
+                    # Ensure radii outputs are within [0, NumRadii-1]
+                    for i, r in enumerate(ff_file['OutRadii']):
+                        if r > ff_file['NumRadii']-1:
+                            ff_file['NOutRadii'] = i
+                            ff_file['OutRadii'] = ff_file['OutRadii'][:i]
+                            break
+
                     # Vizualization outputs
                     ff_file['WrDisWind'] = 'False'
                     ff_file['WrDisDT']   = ff_file['DT_Low-VTK']    # default is the same as DT_Low-VTK
@@ -1935,7 +1977,7 @@ class FFCaseCreation:
         
                     # --------------- FAST.Farm ----------------- #
                     templateFSTF = os.path.join(self.templatePath, self.FFfilename)
-                    outputFSTF   = os.path.join(seedPath, 'FFarm_mod.fstf')
+                    outputFSTF   = os.path.join(seedPath, self.outputFFfilename)
         
                     # Open TurbSim outputs for the Low box and one High box (they are all of the same size)
                     lowbts = TurbSimFile(os.path.join(seedPath,'TurbSim', 'Low.bts'))
@@ -2165,6 +2207,9 @@ class FFCaseCreation:
                     # Write seed
                     sed_command = f"""sed -i "s|^seed.*|seed={seed}|g" {fname}"""
                     _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    # Wirte FAST.Farm filename
+                    sed_command = f"""sed -i "s/FFarm_mod.fstf/FF.fstf/g" {fname}"""
+                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
 
 
 
@@ -2196,6 +2241,9 @@ class FFCaseCreation:
                     _ = subprocess.call(sub_command, cwd=self.path, shell=True)
                     time.sleep(delay) # Sometimes the same job gets submitted twice. This gets around it.
 
+# ----------------------------------------------
+#                 HELPER FUNCTIONS
+# ---------------------------------------------
 
     def FF_check_output(self):
         '''
@@ -2228,7 +2276,7 @@ class FFCaseCreation:
 
 
 
-    def plot(self, figsize=(14,7), fontsize=13, saveFig=True, returnFig=False, figFormat='png', showTurbNumber=False):
+    def plot(self, figsize=(14,7), fontsize=13, saveFig=True, returnFig=False, figFormat='png', showTurbNumber=False, showLegend=True):
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(figsize=figsize)
@@ -2297,7 +2345,8 @@ class FFCaseCreation:
         # Remove duplicate entries from legend
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        plt.legend(by_label.values(), by_label.keys(), loc='upper left', bbox_to_anchor=(1.02,1.015), fontsize=fontsize, ncols=int(self.nTurbines/25))
+        if showLegend:
+            plt.legend(by_label.values(), by_label.keys(), loc='upper left', bbox_to_anchor=(1.02,1.015), fontsize=fontsize, ncols=int(self.nTurbines/25))
 
         ax.set_xlabel("x [m]", fontsize=fontsize)
         ax.set_ylabel("y [m]", fontsize=fontsize)
