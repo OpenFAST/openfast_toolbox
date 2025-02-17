@@ -816,7 +816,7 @@ class FFCaseCreation:
         for cond in range(self.nConditions):
             for case in range(self.nCases):
                 currPath = os.path.join(self.path, self.condDirList[cond], self.caseDirList[case])
-                if self.HDFileCase=='individual':
+                if self.HDFileCase=='holistic':
                     _ = checkIfExists(os.path.join(currPath, self.HDfilename))
                     if not _: return False
                 else:
