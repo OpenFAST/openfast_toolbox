@@ -292,10 +292,9 @@ class FFCaseCreation:
             t_x        = self.wts[t]['x']
             t_y        = self.wts[t]['y']
             t_z        = self.wts[t]['z']
-            if self.ptfm_rot:
-                t_phi      = (90 - self.wts[t]['phi']) % 360    # Converting FAD's rotational convention (0deg N, +ve CW) into FF's rotational convention (0deg E, +ve CCW)
-            else:
-                t_phi      = 0.0
+            if not self.ptfm_rot:
+                self.wts[t]['phi']      = 0.0   # zeroing out platform rotations when ptfm_rot is False.
+            t_phi      = self.wts[t]['phi'] # Conversion is taken care of in FAM
             t_D        = self.wts[t]['D']
             t_zhub     = self.wts[t]['zhub']
             t_cmax     = self.wts[t]['cmax']
@@ -1386,13 +1385,15 @@ class FFCaseCreation:
                 # and it is convenient to have the same time step. Let's do that change here
                 Lowinp['TimeStep']  = 1/(2*self.fmax)
                 if writeFiles:
-                    Lowinp.write( os.path.join(seedPath, 'Low.inp') )
-                
+                    lowFileName = os.path.join(seedPath, 'Low.inp') 
+                    Lowinp.write(lowFileName)
+
                 # Let's remove the original file
                 os.remove(os.path.join(seedPath, 'Low_stillToBeModified.inp'))
 
         self.TSlowBoxFilesCreatedBool = True
-
+        if writeFiles:
+            return lowFileName
 
     def TS_low_slurm_prepare(self, slurmfilepath):
 
@@ -1623,6 +1624,7 @@ class FFCaseCreation:
 
         # Loop on all conditions/cases/seeds setting up the High boxes
         boxType='highres'
+        highFilesName = []
         for cond in range(self.nConditions):
             for case in range(self.nHighBoxCases):
                 # Get actual case number given the high-box that need to be saved
@@ -1667,12 +1669,15 @@ class FFCaseCreation:
                         #Highinp['latitude']  = latitude # Not used when IECKAI model is selected.
                         Highinp['InCDec1']   = Highinp['InCDec2'] = Highinp['InCDec3'] = f'"{a} {b/(8.1*Lambda1):.8f}"'
                         if writeFiles:
-                            Highinp.write( os.path.join(seedPath, f'HighT{t+1}.inp') )
+                            highFilesName.append( os.path.join(seedPath, f'HighT{t+1}.inp') )
+                            Highinp.write(highFilesName[-1])
                 
                         # Let's remove the original file
                         os.remove(os.path.join(seedPath, f'HighT{t+1}_stillToBeModified.inp'))
 
         self.TShighBoxFilesCreatedBool = True
+        if writeFiles:
+            return highFilesName
         
 
     def TS_high_slurm_prepare(self, slurmfilepath):
