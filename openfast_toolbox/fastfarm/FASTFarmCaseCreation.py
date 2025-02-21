@@ -350,7 +350,7 @@ class FFCaseCreation:
             if t<1:  raise ValueError(f'TI should be given in percentage (e.g. "10" for a 10% TI). Received {t}.')
         
         # Set domain extents defaults if needed
-        default_extent_low  = [3,6,3,3,2]
+        default_extent_low  = [1.2, 1.2, 1.2, 1.2, 1.2] # [3,6,3,3,2]
         default_extent_high = 1.2          # total extent, half of that to each side.
         if self.extent_low is None:
             self.extent_low = default_extent_low
@@ -613,7 +613,15 @@ class FFCaseCreation:
                             for t in range(self.nTurbines):
                                 self.HydroDynFile['PtfmRefY'] = self.allCases.sel(case=case, turbine=t)['phi'].values
                                 self.HydroDynFile.write(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
-
+                    
+                    # copy hydroDyn Data folder
+                    srcF = os.path.join(self.templatePath, self.hydroDataFolder)
+                    dstF = os.path.join(currPath, self.hydroDataFolder)
+                    os.makedirs(dstF, exist_ok=True)
+                    for file in os.listdir(srcF):
+                        src = os.path.join(srcF, file)
+                        dst = os.path.join(dstF, file)
+                        shutil.copy2(src, dst)
                 # MoorDyn
                 if self.MoorDynFile != 'unused':
                     if writeFiles:
@@ -654,7 +662,7 @@ class FFCaseCreation:
                 self.InflowWindFile['WindVxiList'] = 0  # Sampling relative to the local reference frame
                 self.InflowWindFile['WindVyiList'] = 0
                 self.InflowWindFile['WindVziList'] = self.allCases.sel(case=case, turbine=0)['zhub'].values
-
+                # self.InflowWindFile['RotorApexOffsetPos'] = [0.0, 0.0, 0.0]  # not sure if that would work
                 if writeFiles:
                     self.InflowWindFile.write( os.path.join(currPath,self.IWfilename))
                     if self.Mod_AmbWind == 3:  # only for TS-driven cases
@@ -691,7 +699,7 @@ class FFCaseCreation:
                         self.ElastoDynFile['BlPitch(2)'] = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
                         self.ElastoDynFile['BlPitch(3)'] = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
         
-                        self.ElastoDynFile['NacYaw']   = yaw_deg_ + yaw_mis_deg_ + phi
+                        self.ElastoDynFile['NacYaw']   = yaw_deg_ + yaw_mis_deg_
                         self.ElastoDynFile['PtfmYaw']  = phi
                         self.ElastoDynFile['BldFile1'] = self.ElastoDynFile['BldFile2'] = self.ElastoDynFile['BldFile3'] = f'"{self.bladefilename}"'
                         self.ElastoDynFile['TwrFile']  = f'"{self.towerfilename}"'
@@ -708,13 +716,13 @@ class FFCaseCreation:
 
                         self.SElastoDynFile['BlPitch']  = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
                         self.SElastoDynFile['RotSpeed'] = self.bins.sel(wspd=Vhub_, method='nearest').RotSpeed.values
-                        self.SElastoDynFile['NacYaw']   = yaw_deg_ + yaw_mis_deg_ + phi
+                        self.SElastoDynFile['NacYaw']   = yaw_deg_ + yaw_mis_deg_
                         if writeFiles:
                             self.SElastoDynFile.write(os.path.join(currPath,f'{self.SEDfilename}{t+1}_mod.dat'))
         
                     # Update each turbine's ServoDyn
                     if self.ServoDynFile != 'unused':
-                        self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_ + phi
+                        self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_
                         if self.hasController:
                             self.ServoDynFile['VSContrl']     = 5
                             self.ServoDynFile['DLL_FileName'] = f'"{self.DLLfilepath}{t+1}.so"'
@@ -775,12 +783,12 @@ class FFCaseCreation:
                             if t==0: shutilcopy2_untilSuccessful(self.coeffTablefilepath, os.path.join(currPath,self.coeffTablefilename))
                     self.turbineFile['ServoFile']    = f'"{self.SrvDfilename}{t+1}_mod.dat"'
                     if self.HDFileCase=='individual':
-                        self.turbineFile['HydroFile']    = f'"{self.HDfilename}"'
-                    else:
                         self.turbineFile['HydroFile']    = f'"{self.HDfilename}{t+1}_mod.dat"'
+                    else:
+                        self.turbineFile['HydroFile']    = f'"{self.HDfilename}"'
                     self.turbineFile['SubFile']      = f'"{self.SubDfilepath}"'
                     if self.MDFileCase=='individual':
-                        self.turbineFile['MooringFile']  = f'"{self.MDfilename}'
+                        self.turbineFile['MooringFile']  = f'"{self.MDfilename}{t+1}_mod.dat'
                     else: # should be in .fstf and not in .fst (updated later when ff file is written).
                         self.turbineFile['MooringFile']  = f'"unused"' 
                     self.turbineFile['IceFile']      = f'"unused"'
@@ -823,7 +831,7 @@ class FFCaseCreation:
                     for t in range(self.nTurbines):
                         _ = checkIfExists(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
                         if not _: return False
-                if self.MDFileCase=='individual':
+                if self.MDFileCase=='holistic':
                     _ = checkIfExists(os.path.join(currPath, self.MDfilename))
                     if not _: return False
                 else:
@@ -855,9 +863,10 @@ class FFCaseCreation:
                     elif EDmodel_ == 'SED':
                         _ = checkIfExists(os.path.join(currPath,f'{self.SEDfilename}{t+1}_mod.dat'))
                         if not _: return False
-        
-                    _ = checkIfExists(os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
-                    if not _: return False
+
+                    if self.ServoDynFile != 'unused':
+                        _ = checkIfExists(os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
+                        if not _: return False
         
                     if ADmodel_ == 'ADsk':
                         _ = checkIfExists(os.path.join(currPath,self.coeffTablefilename))
@@ -892,7 +901,8 @@ class FFCaseCreation:
                             coeffTablefilename=None,
                             turbsimLowfilepath=None,
                             turbsimHighfilepath=None,
-                            FFfilename=None):
+                            FFfilename=None,
+                            hydroDataFolder=None):
         '''                             
                                         
         *filename: str                  
@@ -988,7 +998,8 @@ class FFCaseCreation:
                 self.HDfilename = HDfilename                
             else:
                 raise ValueError(f'The HydroDyn filename extension is not supported. Use .T for individual and .dat for holisitic HydroDyn file')
-
+            
+            self.hydroDataFolder = hydroDataFolder
         if SrvDfilename is not None and SrvDfilename != 'unused':
             if not SrvDfilename.endswith('.T'):
                 raise ValueError (f'Name the template ServoDyn file "*.T.dat" and give "*.T" as `SrvDfilename`')
@@ -1374,7 +1385,6 @@ class FFCaseCreation:
                 if runOnce:
                     return
                 currentTS.writeTSFile(self.turbsimLowfilepath, currentTSLowFile, tmax=self.tmax, verbose=self.verbose)
-                
                 # Modify some values and save file (some have already been set in the call above)
                 Lowinp = FASTInputFile(currentTSLowFile)
                 Lowinp['RandSeed1'] = self.seedValues[seed]
@@ -1392,8 +1402,6 @@ class FFCaseCreation:
                 os.remove(os.path.join(seedPath, 'Low_stillToBeModified.inp'))
 
         self.TSlowBoxFilesCreatedBool = True
-        if writeFiles:
-            return lowFileName
 
     def TS_low_slurm_prepare(self, slurmfilepath):
 
@@ -1676,8 +1684,6 @@ class FFCaseCreation:
                         os.remove(os.path.join(seedPath, f'HighT{t+1}_stillToBeModified.inp'))
 
         self.TShighBoxFilesCreatedBool = True
-        if writeFiles:
-            return highFilesName
         
 
     def TS_high_slurm_prepare(self, slurmfilepath):
@@ -2061,7 +2067,7 @@ class FFCaseCreation:
                     # Shared mooring system
                     if self.MDFileCase=='holistic':
                         ff_file['Mod_SharedMooring'] = 3  # {0: None, 3=MoorDyn}
-                        ff_file['SharedMoorFile'] = f'"{self.MDfilename}'
+                        ff_file['SharedMoorFile'] = f'"./{self.MDfilename}"'
 
                     # Wake dynamics
                     ff_file['Mod_Wake'] = self.mod_wake
