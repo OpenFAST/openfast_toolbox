@@ -77,12 +77,12 @@ def main():
     
     # ----------- Execution parameters
     ffbin = '/full/path/to/your/binary/.../bin/FAST.Farm'
-    
-    # ----------- LES parameters. This variable will dictate whether it is a TurbSim-driven or LES-driven case
-    LESpath = '/full/path/to/the/LES/case'
-    #LESpath = None # set as None if TurbSim-driven is desired
-    
-    
+
+    # ----------- Inflow type (LES or TS)
+    inflowType = 'TS'  # Choose 'LES' or 'TS'
+    # If LES, then set the inflowPath below
+    # inflowPath = '/full/path/to/LES/case'
+
     # -----------------------------------------------------------------------------
     # ----------- Template files
     templatePath            = '/full/path/where/template/files/are'
@@ -126,8 +126,10 @@ def main():
                           dt_high_les, ds_high_les, extent_high,
                           dt_low_les, ds_low_les, extent_low,
                           ffbin=ffbin, mod_wake=mod_wake, yaw_init=yaw_init,
-                          nSeeds=nSeeds, LESpath=LESpath, refTurb_rot=refTurb_rot,
-                          verbose=1)
+                          nSeeds=nSeeds,
+                          inflowType=inflowType,
+                          #inflowPath=inflowPath, # if LES, uncomment this line
+                          refTurb_rot=refTurb_rot, verbose=1)
 
     case.setTemplateFilename(templatePath, EDfilename, SEDfilename, HDfilename, SrvDfilename, ADfilename,
                              ADskfilename, SubDfilename, IWfilename, BDfilepath, bladefilename, towerfilename,
@@ -141,7 +143,7 @@ def main():
     case.copyTurbineFilesForEachCase()
 
     # TurbSim setup
-    if LESpath is None:
+    if inflowType == 'TS':
         case.TS_low_setup()
         case.TS_low_slurm_prepare(slurm_TS_low)
         #case.TS_low_slurm_submit()
