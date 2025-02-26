@@ -83,7 +83,7 @@ class FFCaseCreation:
                  nSeeds = 6,
                  seedValues = None,
                  inflowPath = None,
-                 inflowType = 'TS',
+                 inflowType = None,
                  sweepYawMisalignment = False,
                  refTurb_rot = 0,
                  verbose = 0):
@@ -140,8 +140,8 @@ class FFCaseCreation:
         seedValues: list of int
             Seed value for each seed of requested TurbSim simulations if nSeeds!=6
         inflowType: str
-            inflow type (LES or TS) This variable will dictate whether it is a TurbSim-driven or LES-driven case
-            Choose 'LES' or 'TS' (default is TS, TurbSim-driven)
+            Inflow type (LES or TS) This variable will dictate whether it is a TurbSim-driven or LES-driven case
+            Choose 'LES' or 'TS' (no default is set)
         inflowPath: str or list of strings
             Full path of the LES data, if driven by LES. If None, the setup will be for TurbSim inflow.
             inflowPath can be a single path, or a list of paths of the same length as the sweep in conditions.
@@ -249,7 +249,7 @@ class FFCaseCreation:
             s += f'  Path: {self.inflowPath}\n'
         
         
-        if self.TSlowBoxFilesCreatedBool or self.inflowType != 'TS':
+        if self.TSlowBoxFilesCreatedBool or self.inflowType == 'LES':
             s += f'  Low-resolution domain: \n'
             s += f'   - ds low: {self.ds_low_les} m\n'
             s += f'   - dt low: {self.dt_low_les} s\n'
@@ -259,7 +259,7 @@ class FFCaseCreation:
             s += f'Low-res boxes not created yet.\n'
         
         
-        if self.TShighBoxFilesCreatedBool or self.inflowType != 'TS':
+        if self.TShighBoxFilesCreatedBool or self.inflowType == 'LES':
             s += f'  High-resolution domain: \n'
             s += f'   - ds high: {self.ds_high_les} m\n'
             s += f'   - dt high: {self.dt_high_les} s\n'
@@ -423,7 +423,7 @@ class FFCaseCreation:
         if self.inflowType == 'TS':
             self.inflowStr = 'TurbSim'
             self.Mod_AmbWind = 3
-        else:
+        elif self.inflowType == 'LES':
             if isinstance(self.inflowPath,str): self.inflowPath = [self.inflowPath]*len(self.vhub)
             self.inflowStr = 'LES'
             self.Mod_AmbWind = 1
@@ -434,6 +434,8 @@ class FFCaseCreation:
             if None in (self.dt_high_les, self.ds_high_les, self.dt_low_les, self.ds_low_les):
                 raise ValueError (f'An LES-driven case was requested, but one or more grid parameters were not given. '\
                                    'Set `dt_high_les`, `ds_high_les`, `dt_low_les`, and `ds_low_les` based on your LES boxes.')
+        else:
+            raise ValueError (f"Inflow type `inflowType` should be 'TS' or 'LES'. Received {self.inflowType}.")
             
 
         # Check the wake model (1:Polar; 2:Curl; 3:Cartesian)
