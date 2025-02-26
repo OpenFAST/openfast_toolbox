@@ -619,12 +619,15 @@ class FFCaseCreation:
                             pass
                     os.chdir(notepath)
         
-                # Write InflowWind files. For FAST.FARM with TS, the IW file needs to be inside the Seed* directories. If running standalone openfast
-                # or Mod_AmbWind==1 (VTK), it needs to be on the same level as the fst file. Here, we copy to both places so that the workflow is general
+                # Write InflowWind files. For FAST.Farm, each OpenFAST instance needs to have an IW file. For LES-driven cases (Mod_AmbWind=1),
+                # it is still needed, even though WindType is not used. For TS-driven, it is also needed and WindType should be 3. Here we use
+                # WindType=3 to be general across LES- and TS-driven cases. The path specified here will be written to the fst file, so the
+                # path should be set relative to it.
                 self.InflowWindFile['WindType']       = 3
                 self.InflowWindFile['PropagationDir'] = 0
                 self.InflowWindFile['Filename_BTS']   = '"./TurbSim"'
                 self.InflowWindFile['NWindVel'] = 1
+                # Add sampling at all turbine hub locations
                 self.InflowWindFile['WindVxiList'] = 0  # Sampling relative to the local reference frame
                 self.InflowWindFile['WindVyiList'] = 0
                 self.InflowWindFile['WindVziList'] = self.allCases.sel(case=case, turbine=0)['zhub'].values
@@ -721,8 +724,8 @@ class FFCaseCreation:
                         self.turbineFile['EDFile']       = f'"./{self.EDfilename}{t+1}_mod.dat"'
                     elif EDmodel_ == 'SED':
                         self.turbineFile['CompElast']    = 3  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
-                        #self.turbineFile['CompSub']      = 0  # need to be disabled with SED
-                        #self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
+                        self.turbineFile['CompSub']      = 0  # need to be disabled with SED
+                        self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
                         self.turbineFile['IntMethod']    = 3
                         self.turbineFile['EDFile']       = f'"./{self.SEDfilename}{t+1}_mod.dat"'
                     self.turbineFile['BDBldFile(1)'] = f'"{self.BDfilepath}"'
@@ -786,9 +789,10 @@ class FFCaseCreation:
                 _ = checkIfExists( os.path.join(currPath,self.IWfilename))
                 if not _: return False
 
-                for seed in range(self.nSeeds):
-                    _ = checkIfExists(os.path.join(currPath,f'Seed_{seed}',self.IWfilename))
-                    if not _: return False
+                if self.Mod_AmbWind == 3:  # only for TS-driven cases
+                    for seed in range(self.nSeeds):
+                        _ = checkIfExists(os.path.join(currPath,f'Seed_{seed}',self.IWfilename))
+                        if not _: return False
 
                 for t in range(self.nTurbines):
                     ADmodel_     = self.allCases.sel(case=case, turbine=t)['ADmodel'].values
@@ -1441,7 +1445,7 @@ class FFCaseCreation:
             allHighBoxCases.append(firstCaseWithInflow_i)
         self.allHighBoxCases = xr.concat(allHighBoxCases, dim='case')
         # But, before I change the algorithm, I want to time-test it, so let's compare both ways
-        if not allHighBoxCases_old.identical(self.allHighBoxCases):
+        if not self.allHighBoxCases['inflow_deg'].identical(allHighBoxCases_old['inflow_deg']):
             self.allHighBoxCases_old = allHighBoxCases_old
             print(f'!!!!!! WARNING !!!!!!!!!')
             print(f'The new method for computing all the high-box cases is not producing the same set of cases as the old algorithm.')
