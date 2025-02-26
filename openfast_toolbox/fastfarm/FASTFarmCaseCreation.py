@@ -1911,7 +1911,7 @@ class FFCaseCreation:
                     if self.mod_wake == 1: # Polar model
                         self.dr = self.cmax
                     else: # Curled; Cartesian
-                        self.dr = round(self.D/10)
+                        self.dr = round(self.D/15)
                     ff_file['dr'] = self.dr
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
                     ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low_les*Vhub_*(1-1/6)) ) )
@@ -2277,6 +2277,55 @@ class FFCaseCreation:
             raise ValueError(f'Not all FAST.Farm runs were successful')
         else:
             print(f'All cases finished successfully.')
+
+
+    def set_wake_model_params(self, C_HWkDfl_OY=None, C_HWkDfl_xY=None, k_VortexDecay=None, k_vCurl=None):
+        '''
+        Set the model model parameters for all turbines
+        Inputs: C_HWkDfl_OY and C_HWkDfl_xY for polar wake model
+                k_VortexDecay and k_vCurl for curled wake model
+        '''
+
+        # User is passing C_HWkDfl_OY and C_HWkDfl_xY, thus polar wake. Check others.
+        if k_VortexDecay is None and k_vCurl is None:
+            if self.mod_wake != 1:
+                raise ValueError(f'Passed C_HWkDfl_OY and C_HWkDfl_xY but the wake model requested is not polar.')
+            if not isinstance(C_HWkDfl_OY, (int, float)):
+                raise ValueError(f'C_HWkDfl_OY should be a scalar. Received {C_HWkDfl_OY}.')
+            if not isinstance(C_HWkDfl_xY, (int, float)):
+                raise ValueError(f'C_HWkDfl_xY should be a scalar. Received {C_HWkDfl_xY}.')
+            k_VortexDecay = 'DEFAULT'
+            k_vCurl       = 'DEFAULT'
+
+        # User is passing k_VortexDecay and k_vCurl, thus curled wake. Check others.
+        if C_HWkDfl_OY is None and C_HWkDfl_xY is None:
+            if self.mod_wake != 2:
+                raise ValueError(f'Passed k_VortexDecay and k_vCurl but the wake model requested is not curl.')
+            if not isinstance(k_VortexDecay, (int, float)):
+                raise ValueError(f'k_VortexDecay should be a scalar. Received {k_VortexDecay}.')
+            if not isinstance(k_vCurl, (int, float)):
+                raise ValueError(f'k_vCurl should be a scalar. Received {k_vCurl}.')
+            C_HWkDfl_OY = 'DEFAULT'
+            C_HWkDfl_xY = 'DEFAULT'
+
+        self.loop_through_all_and_modify_file('FF.fstf', 'C_HWkDfl_OY',   C_HWkDfl_OY)
+        self.loop_through_all_and_modify_file('FF.fstf', 'C_HWkDfl_xY',   C_HWkDfl_xY)
+        self.loop_through_all_and_modify_file('FF.fstf', 'k_VortexDecay', k_VortexDecay)
+        self.loop_through_all_and_modify_file('FF.fstf', 'k_vCurl',       k_vCurl)
+
+    
+    def loop_through_all_and_modify_file(self, file_to_modify, property_to_modify, value):
+
+        if not isinstance(property_to_modify, str):
+            raise ValueError(f'property_to_modify should be an string') 
+
+        for cond in range(self.nConditions):
+            for case in range(self.nCases):
+                for seed in range(self.nSeeds):
+                    ff_file = os.path.join(self.path, self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', file_to_modify)
+                    if not os.path.exists(ff_file):
+                        raise ValueError(f'Method only applies to files inside seed directories. File {ff_file} not found.')
+                    modifyProperty(ff_file, property_to_modify, value)
 
 
 
