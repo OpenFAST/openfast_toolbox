@@ -625,10 +625,11 @@ class FFCaseCreation:
                 # MoorDyn
                 if self.MoorDynFile != 'unused':
                     if writeFiles:
-                        if self.MDFileCase=='holistic':
-                            self.MoorDynFile.write(os.path.join(currPath, self.MDfilename))
-                        else:
-                            for t in range(self.nTurbines):
+                        for t in range(self.nTurbines):
+                            if self.MDFileCase=='holistic':
+                                if t==0:shutilcopy2_untilSuccessful(os.path.join(self.templatePath,self.MDfilename), 
+                                                                    os.path.join(currPath, self.MDfilename))
+                            else:
                                 self.MoorDynFile.write(os.path.join(currPath,f'{self.MDfilename}{t+1}_mod.dat'))
                 
                 # Write updated DISCON
@@ -662,7 +663,7 @@ class FFCaseCreation:
                 self.InflowWindFile['WindVxiList'] = 0  # Sampling relative to the local reference frame
                 self.InflowWindFile['WindVyiList'] = 0
                 self.InflowWindFile['WindVziList'] = self.allCases.sel(case=case, turbine=0)['zhub'].values
-                # self.InflowWindFile['RotorApexOffsetPos'] = [0.0, 0.0, 0.0]  # not sure if that would work
+                self.InflowWindFile['RotorApexOffsetPos'] = [0.0, 0.0, 0.0]  # not sure if that would work
                 if writeFiles:
                     self.InflowWindFile.write( os.path.join(currPath,self.IWfilename))
                     if self.Mod_AmbWind == 3:  # only for TS-driven cases
@@ -1138,8 +1139,7 @@ class FFCaseCreation:
                 return 'unused'
             else:
                 return FASTInputFile(f)
-
-        self.MoorDynFile     = _check_and_open(self.MDfilepath)  
+        self.MoorDynFile     = _check_and_open(self.MDfilepath)
         self.SeaStateFile    = _check_and_open(self.SSfilepath)
         self.ElastoDynFile   = _check_and_open(self.EDfilepath)
         self.SElastoDynFile  = _check_and_open(self.SEDfilepath)
@@ -2067,7 +2067,7 @@ class FFCaseCreation:
                     # Shared mooring system
                     if self.MDFileCase=='holistic':
                         ff_file['Mod_SharedMooring'] = 3  # {0: None, 3=MoorDyn}
-                        ff_file['SharedMoorFile'] = f'"./{self.MDfilename}"'
+                        ff_file['SharedMoorFile'] = f'"../{self.MDfilename}"'
 
                     # Wake dynamics
                     ff_file['Mod_Wake'] = self.mod_wake
