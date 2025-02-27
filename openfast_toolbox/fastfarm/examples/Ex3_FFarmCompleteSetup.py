@@ -89,26 +89,28 @@ def main():
     
     # Put None on any input that is not applicable to your case
     # Files should be in templatePath
-    EDfilename              = 'ElastoDyn.T'
-    SEDfilename             = 'SimplifiedElastoDyn.T'
-    HDfilename              = 'HydroDyn.dat'
-    SrvDfilename            = 'ServoDyn.T'
-    ADfilename              = 'AeroDyn.dat'
-    ADskfilename            = 'AeroDisk.dat'
-    SubDfilename            = 'SubDyn.dat'
-    IWfilename              = 'InflowWind.dat'
-    BDfilepath              = None
-    bladefilename           = 'Blade.dat'
-    towerfilename           = 'Tower.dat'
-    turbfilename            = 'Model.T'
-    libdisconfilepath       = '/full/path/to/controller/libdiscon.so'
-    controllerInputfilename = 'DISCON.IN'
-    coeffTablefilename      = 'CpCtCq.csv'
-    FFfilename              = 'Model_FFarm.fstf'
-    
-    # TurbSim setups
-    turbsimLowfilepath      = './SampleFiles/template_Low_InflowXX_SeedY.inp'
-    turbsimHighfilepath     = './SampleFiles/template_HighT1_InflowXX_SeedY.inp'
+    templateFiles = {
+        "EDfilename"              : 'ElastoDyn.T',
+        'SEDfilename'             : None,  #'SimplifiedElastoDyn.T',
+        'HDfilename'              : 'HydroDyn.dat',
+        'SrvDfilename'            : 'ServoDyn.T',
+        'ADfilename'              : 'AeroDyn.dat',
+        'ADskfilename'            : 'AeroDisk.dat',
+        'SubDfilename'            : 'SubDyn.dat',
+        'IWfilename'              : 'InflowWind.dat',
+        'BDfilepath'              : None,
+        'bladefilename'           : 'Blade.dat',
+        'towerfilename'           : 'Tower.dat',
+        'turbfilename'            : 'Model.T',
+        'libdisconfilepath'       : '/full/path/to/controller/libdiscon.so',
+        'controllerInputfilename' : 'DISCON.IN',
+        'coeffTablefilename'      : 'CpCtCq.csv',
+        'FFfilename'              : 'Model_FFarm.fstf',
+
+        # TurbSim setups
+        'turbsimLowfilepath'      : './SampleFiles/template_Low_InflowXX_SeedY.inp',
+        'turbsimHighfilepath'     : './SampleFiles/template_HighT1_InflowXX_SeedY.inp'
+    }
     
     # SLURM scripts
     slurm_TS_high           = './SampleFiles/runAllHighBox.sh'
@@ -131,10 +133,7 @@ def main():
                           #inflowPath=inflowPath, # if LES, uncomment this line
                           refTurb_rot=refTurb_rot, verbose=1)
 
-    case.setTemplateFilename(templatePath, EDfilename, SEDfilename, HDfilename, SrvDfilename, ADfilename,
-                             ADskfilename, SubDfilename, IWfilename, BDfilepath, bladefilename, towerfilename,
-                             turbfilename, libdisconfilepath, controllerInputfilename, coeffTablefilename,
-                             turbsimLowfilepath, turbsimHighfilepath, FFfilename)
+    case.setTemplateFilename(templatePath, templateFiles)
 
     # Get domain paramters
     case.getDomainParameters()
