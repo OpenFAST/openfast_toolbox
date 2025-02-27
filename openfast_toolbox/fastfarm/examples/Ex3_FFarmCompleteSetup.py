@@ -87,29 +87,29 @@ def main():
     # ----------- Template files
     templatePath            = '/full/path/where/template/files/are'
     
-    # remove from dict or put None on any input that is not applicable to your case
+    # Put None on any input that is not applicable to your case
     # Files should be in templatePath
     templateFiles = {
-        "EDfilename"    : 'ElastoDyn.T',
-        'SEDfilename'   : 'SimplifiedElastoDyn.T',
-        'HDfilename'    : 'HydroDyn.dat',
-        'SrvDfilename'  : 'ServoDyn.T',
-        'ADfilename'    : 'AeroDyn.dat',
-        'ADskfilename'  : 'AeroDisk.dat',
-        'SubDfilename'  : 'SubDyn.dat',
-        'IWfilename'    : 'InflowWind.dat',
-        'BDfilepath'    : None,
-        'bladefilename' : 'Blade.dat',
-        'towerfilename' : 'Tower.dat',
-        'turbfilename'  : 'Model.T',
-        'coeffTablefilename'    : 'CpCtCq.csv',
-        'FFfilename'    : 'Model_FFarm.fstf',
-        'controllerInputfilename'   : 'DISCON.IN',
-        'libdisconfilepath' : '/full/path/to/controller/libdiscon.so',
+        "EDfilename"              : 'ElastoDyn.T',
+        'SEDfilename'             : None,  #'SimplifiedElastoDyn.T',
+        'HDfilename'              : 'HydroDyn.dat',
+        'SrvDfilename'            : 'ServoDyn.T',
+        'ADfilename'              : 'AeroDyn.dat',
+        'ADskfilename'            : 'AeroDisk.dat',
+        'SubDfilename'            : 'SubDyn.dat',
+        'IWfilename'              : 'InflowWind.dat',
+        'BDfilepath'              : None,
+        'bladefilename'           : 'Blade.dat',
+        'towerfilename'           : 'Tower.dat',
+        'turbfilename'            : 'Model.T',
+        'libdisconfilepath'       : '/full/path/to/controller/libdiscon.so',
+        'controllerInputfilename' : 'DISCON.IN',
+        'coeffTablefilename'      : 'CpCtCq.csv',
+        'FFfilename'              : 'Model_FFarm.fstf',
 
         # TurbSim setups
-        'turbsimLowfilepath'    : './SampleFiles/template_Low_InflowXX_SeedY.inp',
-        'turbsimHighfilepath'   : './SampleFiles/template_HighT1_InflowXX_SeedY.inp'
+        'turbsimLowfilepath'      : './SampleFiles/template_Low_InflowXX_SeedY.inp',
+        'turbsimHighfilepath'     : './SampleFiles/template_HighT1_InflowXX_SeedY.inp'
     }
     
     # SLURM scripts
