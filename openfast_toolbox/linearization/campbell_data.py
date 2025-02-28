@@ -84,7 +84,7 @@ def campbell_diagram_data_oneOP(mbc_data, BladeLen=None, TowerLen=None):
         PhaseIndx = CData['PhaseDiff'] > 180;
         CData['PhaseDiff'][PhaseIndx] = CData['PhaseDiff'][PhaseIndx] - 360;   # move to range (-180, 180]
     
-        if ~usePercent:
+        if not usePercent:
             PhaseIndx = CData['PhaseDiff'] > 90;
             CData['MagnitudePhase'][PhaseIndx] = -1*CData['MagnitudePhase'][PhaseIndx];
             CData['PhaseDiff'][PhaseIndx] = CData['PhaseDiff'][PhaseIndx] - 180;
