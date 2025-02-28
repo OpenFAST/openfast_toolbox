@@ -693,16 +693,13 @@ class FFCaseCreation:
                             self.SElastoDynFile.write(os.path.join(currPath,f'{self.SEDfilename}{t+1}_mod.dat'))
         
                     # Update each turbine's ServoDyn
-                    self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_
                     if self.hasController:
+                        self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_
                         self.ServoDynFile['VSContrl']     = 5
                         self.ServoDynFile['DLL_FileName'] = f'"{self.DLLfilepath}{t+1}.so"'
                         self.ServoDynFile['DLL_InFile']   = f'"{self.controllerInputfilename}"'
-                    else:
-                        self.ServoDynFile['DLL_FileName'] = f'"unused"'
-                        self.ServoDynFile['DLL_InFile']   = f'"unused"'
-                    if writeFiles:
-                        self.ServoDynFile.write( os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
+                        if writeFiles:
+                            self.ServoDynFile.write( os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
         
                     # Update each turbine's OpenFAST input
                     self.turbineFile['TMax']         = self.tmax
@@ -747,7 +744,14 @@ class FFCaseCreation:
                         self.turbineFile['AeroFile']     = f'"{self.ADskfilepath}"'
                         if writeFiles:
                             if t==0: shutilcopy2_untilSuccessful(self.coeffTablefilepath, os.path.join(currPath,self.coeffTablefilename))
-                    self.turbineFile['ServoFile']    = f'"{self.SrvDfilename}{t+1}_mod.dat"'
+
+                    if self.hasController:
+                        self.turbineFile['ServoFile']    = f'"{self.SrvDfilename}{t+1}_mod.dat"'
+                        self.turbineFile['CompServo']    = 1
+                    else:
+                        self.turbineFile['ServoFile']    = f'"unused"'
+                        self.turbineFile['CompServo']    = 0
+
                     self.turbineFile['HydroFile']    = f'"{self.HDfilename}"'
                     self.turbineFile['SubFile']      = f'"{self.SubDfilepath}"'
                     self.turbineFile['MooringFile']  = f'"unused"'
@@ -815,8 +819,9 @@ class FFCaseCreation:
                         _ = checkIfExists(os.path.join(currPath,f'{self.SEDfilename}{t+1}_mod.dat'))
                         if not _: return False
         
-                    _ = checkIfExists(os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
-                    if not _: return False
+                    if self.hasController
+                        _ = checkIfExists(os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
+                        if not _: return False
         
                     if ADmodel_ == 'ADsk':
                         _ = checkIfExists(os.path.join(currPath,self.coeffTablefilename))
@@ -957,6 +962,7 @@ class FFCaseCreation:
                 self.SrvDfilepath = os.path.join(self.templatePath, f"{value}.dat")
                 checkIfExists(self.SrvDfilepath)
                 self.SrvDfilename = value
+                self.hasController = True
 
             elif key == 'ADfilename':
                 if not value.endswith('.dat'):
