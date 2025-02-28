@@ -272,6 +272,8 @@ class FFCaseCreation:
 
 
     def _checkInputs(self):
+
+        #### check if the turbine in the template FF input exists.
   
         # Create case path is doesn't exist
         if not os.path.exists(self.path):
@@ -623,12 +625,15 @@ class FFCaseCreation:
                             pass
                     os.chdir(notepath)
         
-                # Write InflowWind files. For FAST.FARM with TS, the IW file needs to be inside the Seed* directories. If running standalone openfast
-                # or Mod_AmbWind==1 (VTK), it needs to be on the same level as the fst file. Here, we copy to both places so that the workflow is general
+                # Write InflowWind files. For FAST.Farm, each OpenFAST instance needs to have an IW file. For LES-driven cases (Mod_AmbWind=1),
+                # it is still needed, even though WindType is not used. For TS-driven, it is also needed and WindType should be 3. Here we use
+                # WindType=3 to be general across LES- and TS-driven cases. The path specified here will be written to the fst file, so the
+                # path should be set relative to it.
                 self.InflowWindFile['WindType']       = 3
                 self.InflowWindFile['PropagationDir'] = 0
                 self.InflowWindFile['Filename_BTS']   = '"./TurbSim"'
                 self.InflowWindFile['NWindVel'] = 1
+                # Add sampling at all turbine hub locations
                 self.InflowWindFile['WindVxiList'] = 0  # Sampling relative to the local reference frame
                 self.InflowWindFile['WindVyiList'] = 0
                 self.InflowWindFile['WindVziList'] = self.allCases.sel(case=case, turbine=0)['zhub'].values
@@ -688,16 +693,13 @@ class FFCaseCreation:
                             self.SElastoDynFile.write(os.path.join(currPath,f'{self.SEDfilename}{t+1}_mod.dat'))
         
                     # Update each turbine's ServoDyn
-                    self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_
                     if self.hasController:
+                        self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_
                         self.ServoDynFile['VSContrl']     = 5
                         self.ServoDynFile['DLL_FileName'] = f'"{self.DLLfilepath}{t+1}.so"'
                         self.ServoDynFile['DLL_InFile']   = f'"{self.controllerInputfilename}"'
-                    else:
-                        self.ServoDynFile['DLL_FileName'] = f'"unused"'
-                        self.ServoDynFile['DLL_InFile']   = f'"unused"'
-                    if writeFiles:
-                        self.ServoDynFile.write( os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
+                        if writeFiles:
+                            self.ServoDynFile.write( os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
         
                     # Update each turbine's OpenFAST input
                     self.turbineFile['TMax']         = self.tmax
@@ -725,8 +727,8 @@ class FFCaseCreation:
                         self.turbineFile['EDFile']       = f'"./{self.EDfilename}{t+1}_mod.dat"'
                     elif EDmodel_ == 'SED':
                         self.turbineFile['CompElast']    = 3  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
-                        #self.turbineFile['CompSub']      = 0  # need to be disabled with SED
-                        #self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
+                        self.turbineFile['CompSub']      = 0  # need to be disabled with SED
+                        self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
                         self.turbineFile['IntMethod']    = 3
                         self.turbineFile['EDFile']       = f'"./{self.SEDfilename}{t+1}_mod.dat"'
                     self.turbineFile['BDBldFile(1)'] = f'"{self.BDfilepath}"'
@@ -742,7 +744,14 @@ class FFCaseCreation:
                         self.turbineFile['AeroFile']     = f'"{self.ADskfilepath}"'
                         if writeFiles:
                             if t==0: shutilcopy2_untilSuccessful(self.coeffTablefilepath, os.path.join(currPath,self.coeffTablefilename))
-                    self.turbineFile['ServoFile']    = f'"{self.SrvDfilename}{t+1}_mod.dat"'
+
+                    if self.hasController:
+                        self.turbineFile['ServoFile']    = f'"{self.SrvDfilename}{t+1}_mod.dat"'
+                        self.turbineFile['CompServo']    = 1
+                    else:
+                        self.turbineFile['ServoFile']    = f'"unused"'
+                        self.turbineFile['CompServo']    = 0
+
                     self.turbineFile['HydroFile']    = f'"{self.HDfilename}"'
                     self.turbineFile['SubFile']      = f'"{self.SubDfilepath}"'
                     self.turbineFile['MooringFile']  = f'"unused"'
@@ -790,9 +799,10 @@ class FFCaseCreation:
                 _ = checkIfExists( os.path.join(currPath,self.IWfilename))
                 if not _: return False
 
-                for seed in range(self.nSeeds):
-                    _ = checkIfExists(os.path.join(currPath,f'Seed_{seed}',self.IWfilename))
-                    if not _: return False
+                if self.Mod_AmbWind == 3:  # only for TS-driven cases
+                    for seed in range(self.nSeeds):
+                        _ = checkIfExists(os.path.join(currPath,f'Seed_{seed}',self.IWfilename))
+                        if not _: return False
 
                 for t in range(self.nTurbines):
                     ADmodel_     = self.allCases.sel(case=case, turbine=t)['ADmodel'].values
@@ -809,8 +819,9 @@ class FFCaseCreation:
                         _ = checkIfExists(os.path.join(currPath,f'{self.SEDfilename}{t+1}_mod.dat'))
                         if not _: return False
         
-                    _ = checkIfExists(os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
-                    if not _: return False
+                    if self.hasController
+                        _ = checkIfExists(os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
+                        if not _: return False
         
                     if ADmodel_ == 'ADsk':
                         _ = checkIfExists(os.path.join(currPath,self.coeffTablefilename))
@@ -951,6 +962,7 @@ class FFCaseCreation:
                 self.SrvDfilepath = os.path.join(self.templatePath, f"{value}.dat")
                 checkIfExists(self.SrvDfilepath)
                 self.SrvDfilename = value
+                self.hasController = True
 
             elif key == 'ADfilename':
                 if not value.endswith('.dat'):
@@ -1060,7 +1072,9 @@ class FFCaseCreation:
         if self.ADskfilename != 'unused' and self.coeffTablefilename == 'unused':
             raise ValueError (f'The performance table `coeffTablefilename` file is needed for AeroDisk.')
 
-
+        # Set output FAST.Farm filename for convenience
+        self.outputFFfilename = 'FF.fstf'
+        
         # Open the template files
         self._open_template_files()
 
@@ -1296,6 +1310,36 @@ class FFCaseCreation:
                                     #'WvLowCOffS':  (['wspd'], [0,     0,     0,     0,     0    ]), # 2nd order wave info. Unused for now  0.314159 from repo; 0.862 from KS
                                    },  coords={'wspd': [6.6, 8.6, 10.6, 12.6, 15]} )  # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
             
+
+        elif self.D == 178: # DTU 10MW W turbine
+            print(f'CHANGE THE _setRotorParameters of the DTU 10MW turbine')
+            self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1.429, 1.429]), # 1.429 comes from Matt's hydrodyn input file
+                                    'WaveTp':      (['wspd'], [ 7.073, 7.073]), # 7.073 comes from Matt's hydrodyn input file
+                                    'RotSpeed':    (['wspd'], [ 4.0, 4.0]),     # 4 rpm comes from Matt's ED input file
+                                    'BlPitch':     (['wspd'], [ 0.0, 0.0]),     # 0 deg comes from Matt's ED input file
+                                    #'WvHiCOffD':   (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now 
+                                    #'WvLowCOffS':  (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now
+                                   },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
+
+
+        elif self.D == 82: # Vestas V82, 1.5MW, 82 m diameter
+            print(f'CHANGE THE _setRotorParameters of the V82 1.5MW turbine')
+            self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1.429, 1.429]), # 1.429 comes from Matt's hydrodyn input file
+                                    'WaveTp':      (['wspd'], [ 7.073, 7.073]), # 7.073 comes from Matt's hydrodyn input file
+                                    'RotSpeed':    (['wspd'], [ 4.0, 4.0]),     # 4 rpm comes from Matt's ED input file
+                                    'BlPitch':     (['wspd'], [ 0.0, 0.0]),     # 0 deg comes from Matt's ED input file
+                                    #'WvHiCOffD':   (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now 
+                                    #'WvLowCOffS':  (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now
+                                   },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
+
+
+        elif self.D == 93: # Siemens SWT-2.3-93 2.3 MW, 93 m diameter
+            self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1, 1]),         # arbitrary since no hydrodyn is used
+                                    'WaveTp':      (['wspd'], [ 7, 7]),         # arbitrary since no hydrodyn is used
+                                    'RotSpeed':    (['wspd'], [ 5.0, 5.0]),     # from input file
+                                    'BlPitch':     (['wspd'], [ -1, -1]),       # from input file
+                                   },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
+
         else:
             raise ValueError(f'Unknown turbine with diameter {self.D}. Add values to the `_setRotorParameters` function.')
   
@@ -1455,7 +1499,7 @@ class FFCaseCreation:
             allHighBoxCases.append(firstCaseWithInflow_i)
         self.allHighBoxCases = xr.concat(allHighBoxCases, dim='case')
         # But, before I change the algorithm, I want to time-test it, so let's compare both ways
-        if not allHighBoxCases_old.identical(self.allHighBoxCases):
+        if not self.allHighBoxCases['inflow_deg'].identical(allHighBoxCases_old['inflow_deg']):
             self.allHighBoxCases_old = allHighBoxCases_old
             print(f'!!!!!! WARNING !!!!!!!!!')
             print(f'The new method for computing all the high-box cases is not producing the same set of cases as the old algorithm.')
@@ -1807,7 +1851,6 @@ class FFCaseCreation:
         self.planes_yz = planes_yz[0:9]
         self.planes_xz = planes_xz[0:9]      
         
-
         if self.inflowStr == 'LES':
             self._FF_setup_LES(**kwargs)
 
@@ -1892,16 +1935,17 @@ class FFCaseCreation:
         
                     # --------------- FAST.Farm ----------------- #
                     templateFSTF = os.path.join(self.templatePath, self.FFfilename)
-                    outputFSTF   = os.path.join(seedPath, 'FFarm_mod.fstf')
+                    outputFSTF   = os.path.join(seedPath, self.outputFFfilename)
         
                     # Write the file (mostly for turbine locations here
-                    writeFastFarm(outputFSTF, templateFSTF, xWT, yWT, zWT, FFTS=None, OutListT1=self.outlistFF, noLeadingZero=True)
+                    writeFastFarm(outputFSTF, templateFSTF, xWT, yWT, zWT, FFTS=None, OutListT1=self.outlistFF,
+                                  noLeadingZero=True, turbineTemplateFullFilename=f"../{self.turbfilename}1.fst")
         
                     # Open saved file and change additional values manually or make sure we have the correct ones
                     ff_file = FASTInputFile(outputFSTF)
         
                     # Open output file and change additional values manually or make sure we have the correct ones
-                    ff_file['InflowFile']  = f'"unused"'   
+                    ff_file['InflowFile']  = f'"unused"' 
                     ff_file['Mod_AmbWind'] = self.Mod_AmbWind  # LES 
                     ff_file['TMax'] = self.tmax
         
@@ -1921,11 +1965,18 @@ class FFCaseCreation:
                     if self.mod_wake == 1: # Polar model
                         self.dr = self.cmax
                     else: # Curled; Cartesian
-                        self.dr = round(self.D/10)
+                        self.dr = round(self.D/15)
                     ff_file['dr'] = self.dr
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
                     ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low_les*Vhub_*(1-1/6)) ) )
-        
+
+                    # Ensure radii outputs are within [0, NumRadii-1]
+                    for i, r in enumerate(ff_file['OutRadii']):
+                        if r > ff_file['NumRadii']-1:
+                            ff_file['NOutRadii'] = i
+                            ff_file['OutRadii'] = ff_file['OutRadii'][:i]
+                            break
+
                     # Vizualization outputs
                     ff_file['WrDisWind'] = 'False'
                     ff_file['WrDisDT']   = ff_file['DT_Low-VTK']    # default is the same as DT_Low-VTK
@@ -1984,7 +2035,7 @@ class FFCaseCreation:
         
                     # --------------- FAST.Farm ----------------- #
                     templateFSTF = os.path.join(self.templatePath, self.FFfilename)
-                    outputFSTF   = os.path.join(seedPath, 'FFarm_mod.fstf')
+                    outputFSTF   = os.path.join(seedPath, self.outputFFfilename)
         
                     # Open TurbSim outputs for the Low box and one High box (they are all of the same size)
                     lowbts = TurbSimFile(os.path.join(seedPath,'TurbSim', 'Low.bts'))
@@ -2214,6 +2265,9 @@ class FFCaseCreation:
                     # Write seed
                     sed_command = f"""sed -i "s|^seed.*|seed={seed}|g" {fname}"""
                     _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    # Wirte FAST.Farm filename
+                    sed_command = f"""sed -i "s/FFarm_mod.fstf/FF.fstf/g" {fname}"""
+                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
 
 
 
@@ -2245,6 +2299,9 @@ class FFCaseCreation:
                     _ = subprocess.call(sub_command, cwd=self.path, shell=True)
                     time.sleep(delay) # Sometimes the same job gets submitted twice. This gets around it.
 
+# ----------------------------------------------
+#                 HELPER FUNCTIONS
+# ---------------------------------------------
 
     def FF_check_output(self):
         '''
@@ -2276,8 +2333,57 @@ class FFCaseCreation:
             print(f'All cases finished successfully.')
 
 
+    def set_wake_model_params(self, C_HWkDfl_OY=None, C_HWkDfl_xY=None, k_VortexDecay=None, k_vCurl=None):
+        '''
+        Set the model model parameters for all turbines
+        Inputs: C_HWkDfl_OY and C_HWkDfl_xY for polar wake model
+                k_VortexDecay and k_vCurl for curled wake model
+        '''
 
-    def plot(self, figsize=(14,7), fontsize=13, saveFig=True, returnFig=False, figFormat='png', showTurbNumber=False):
+        # User is passing C_HWkDfl_OY and C_HWkDfl_xY, thus polar wake. Check others.
+        if k_VortexDecay is None and k_vCurl is None:
+            if self.mod_wake != 1:
+                raise ValueError(f'Passed C_HWkDfl_OY and C_HWkDfl_xY but the wake model requested is not polar.')
+            if not isinstance(C_HWkDfl_OY, (int, float)):
+                raise ValueError(f'C_HWkDfl_OY should be a scalar. Received {C_HWkDfl_OY}.')
+            if not isinstance(C_HWkDfl_xY, (int, float)):
+                raise ValueError(f'C_HWkDfl_xY should be a scalar. Received {C_HWkDfl_xY}.')
+            k_VortexDecay = 'DEFAULT'
+            k_vCurl       = 'DEFAULT'
+
+        # User is passing k_VortexDecay and k_vCurl, thus curled wake. Check others.
+        if C_HWkDfl_OY is None and C_HWkDfl_xY is None:
+            if self.mod_wake != 2:
+                raise ValueError(f'Passed k_VortexDecay and k_vCurl but the wake model requested is not curl.')
+            if not isinstance(k_VortexDecay, (int, float)):
+                raise ValueError(f'k_VortexDecay should be a scalar. Received {k_VortexDecay}.')
+            if not isinstance(k_vCurl, (int, float)):
+                raise ValueError(f'k_vCurl should be a scalar. Received {k_vCurl}.')
+            C_HWkDfl_OY = 'DEFAULT'
+            C_HWkDfl_xY = 'DEFAULT'
+
+        self.loop_through_all_and_modify_file('FF.fstf', 'C_HWkDfl_OY',   C_HWkDfl_OY)
+        self.loop_through_all_and_modify_file('FF.fstf', 'C_HWkDfl_xY',   C_HWkDfl_xY)
+        self.loop_through_all_and_modify_file('FF.fstf', 'k_VortexDecay', k_VortexDecay)
+        self.loop_through_all_and_modify_file('FF.fstf', 'k_vCurl',       k_vCurl)
+
+    
+    def loop_through_all_and_modify_file(self, file_to_modify, property_to_modify, value):
+
+        if not isinstance(property_to_modify, str):
+            raise ValueError(f'property_to_modify should be an string') 
+
+        for cond in range(self.nConditions):
+            for case in range(self.nCases):
+                for seed in range(self.nSeeds):
+                    ff_file = os.path.join(self.path, self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', file_to_modify)
+                    if not os.path.exists(ff_file):
+                        raise ValueError(f'Method only applies to files inside seed directories. File {ff_file} not found.')
+                    modifyProperty(ff_file, property_to_modify, value)
+
+
+
+    def plot(self, figsize=(14,7), fontsize=13, saveFig=True, returnFig=False, figFormat='png', showTurbNumber=False, showLegend=True):
         import matplotlib.pyplot as plt
 
         fig, ax = plt.subplots(figsize=figsize)
@@ -2346,7 +2452,8 @@ class FFCaseCreation:
         # Remove duplicate entries from legend
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
-        plt.legend(by_label.values(), by_label.keys(), loc='upper left', bbox_to_anchor=(1.02,1.015), fontsize=fontsize, ncols=int(self.nTurbines/25))
+        if showLegend:
+            plt.legend(by_label.values(), by_label.keys(), loc='upper left', bbox_to_anchor=(1.02,1.015), fontsize=fontsize, ncols=int(self.nTurbines/25))
 
         ax.set_xlabel("x [m]", fontsize=fontsize)
         ax.set_ylabel("y [m]", fontsize=fontsize)
