@@ -294,7 +294,7 @@ class FFCaseCreation:
             t_z        = self.wts[t]['z']
             if not self.ptfm_rot:
                 self.wts[t]['phi']      = 0.0   # zeroing out platform rotations when ptfm_rot is False.
-            t_phi      = self.wts[t]['phi'] # Conversion is taken care of in FAM
+            t_phi      = self.wts[t]['phi']
             t_D        = self.wts[t]['D']
             t_zhub     = self.wts[t]['zhub']
             t_cmax     = self.wts[t]['cmax']
@@ -350,7 +350,7 @@ class FFCaseCreation:
             if t<1:  raise ValueError(f'TI should be given in percentage (e.g. "10" for a 10% TI). Received {t}.')
         
         # Set domain extents defaults if needed
-        default_extent_low  = [1.2, 1.2, 1.2, 1.2, 1.2] # [3,6,3,3,2]
+        default_extent_low  = [3,6,3,3,2]
         default_extent_high = 1.2          # total extent, half of that to each side.
         if self.extent_low is None:
             self.extent_low = default_extent_low
@@ -607,7 +607,7 @@ class FFCaseCreation:
                 # HydroDyn
                 if self.HydroDynFile != 'unused':
                     if writeFiles:
-                        if self.HDFileCase=='holistic':
+                        if not self.multi_HD:
                             self.HydroDynFile.write(os.path.join(currPath, self.HDfilename))
                         else:
                             for t in range(self.nTurbines):
@@ -626,7 +626,7 @@ class FFCaseCreation:
                 if self.MoorDynFile != 'unused':
                     if writeFiles:
                         for t in range(self.nTurbines):
-                            if self.MDFileCase=='holistic':
+                            if not self.multi_MD:
                                 if t==0:shutilcopy2_untilSuccessful(os.path.join(self.templatePath,self.MDfilename), 
                                                                     os.path.join(currPath, self.MDfilename))
                             else:
@@ -755,7 +755,7 @@ class FFCaseCreation:
 
                     if self.MDfilename == 'unused':
                        self.turbineFile['CompMooring'] = 0
-                    elif self.MDFileCase=='individual':
+                    elif self.multi_MD:
                        self.turbineFile['CompMooring'] = 3  # {0=None; 1=MAP++; 2=FEAMooring; 3=MoorDyn; 4=OrcaFlex}
 
                     if EDmodel_ == 'FED':
@@ -783,12 +783,12 @@ class FFCaseCreation:
                         if writeFiles:
                             if t==0: shutilcopy2_untilSuccessful(self.coeffTablefilepath, os.path.join(currPath,self.coeffTablefilename))
                     self.turbineFile['ServoFile']    = f'"{self.SrvDfilename}{t+1}_mod.dat"'
-                    if self.HDFileCase=='individual':
+                    if self.multi_HD:
                         self.turbineFile['HydroFile']    = f'"{self.HDfilename}{t+1}_mod.dat"'
                     else:
                         self.turbineFile['HydroFile']    = f'"{self.HDfilename}"'
                     self.turbineFile['SubFile']      = f'"{self.SubDfilepath}"'
-                    if self.MDFileCase=='individual':
+                    if self.multi_MD:
                         self.turbineFile['MooringFile']  = f'"{self.MDfilename}{t+1}_mod.dat'
                     else: # should be in .fstf and not in .fst (updated later when ff file is written).
                         self.turbineFile['MooringFile']  = f'"unused"' 
@@ -825,14 +825,14 @@ class FFCaseCreation:
         for cond in range(self.nConditions):
             for case in range(self.nCases):
                 currPath = os.path.join(self.path, self.condDirList[cond], self.caseDirList[case])
-                if self.HDFileCase=='holistic':
+                if not self.multi_HD:
                     _ = checkIfExists(os.path.join(currPath, self.HDfilename))
                     if not _: return False
                 else:
                     for t in range(self.nTurbines):
                         _ = checkIfExists(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
                         if not _: return False
-                if self.MDFileCase=='holistic':
+                if not self.multi_MD:
                     _ = checkIfExists(os.path.join(currPath, self.MDfilename))
                     if not _: return False
                 else:
@@ -903,7 +903,9 @@ class FFCaseCreation:
                             turbsimLowfilepath=None,
                             turbsimHighfilepath=None,
                             FFfilename=None,
-                            hydroDataFolder=None):
+                            hydroDataFolder=None,
+                            multi_HD=False,
+                            multi_MD=False):
         '''                             
                                         
         *filename: str                  
@@ -929,7 +931,8 @@ class FFCaseCreation:
         self.libdisconfilepath       = None
         self.controllerInputfilename = None
         self.coeffTablefilename      = None
-
+        self.multi_HD                = multi_HD
+        self.multi_MD                = multi_MD
         if templatePath is None:
             print(f'--- WARNING: No template files given. Complete setup will not be possible')
             return
@@ -947,18 +950,18 @@ class FFCaseCreation:
                 raise ValueError (f'File {f} does not exist.')
 
         if MDfilename is not None and MDfilename != 'unused':
-            if MDfilename.endswith('.T'):  # individual MD files
-                self.MDFileCase = 'individual'
+            if self.multi_MD:  # individual MD files
+                if not MDfilename.endswith('.T'):
+                    raise ValueError (f'Name the template MD file "*.T.dat" and give "*.T" as `MDfilename`')                
                 self.MDfilepath = os.path.join(self.templatePath, f"{MDfilename}.dat")
                 checkIfExists(self.MDfilepath)
                 self.MDfilename = MDfilename
-            elif MDfilename.endswith('.dat'):  # a single holistic MD file
-                self.MDFileCase = 'holistic'
+            else:              # a single holistic MD file
+                if not MDfilename.endswith('.dat'):
+                    raise ValueError (f'The MoorDyn filename should end in `.dat`.')                
                 self.MDfilepath = os.path.join(self.templatePath, MDfilename)
                 checkIfExists(self.MDfilepath)
                 self.MDfilename = MDfilename                
-            else:
-                raise ValueError(f'The MoorDyn filename extension is not supported. Use .T for individual and .dat for holisitic MoorDyn file')
             
         if SSfilename is not None and SSfilename != 'unused':
             if not SSfilename.endswith('.dat'):
@@ -987,18 +990,18 @@ class FFCaseCreation:
                 raise ValueError (f'Simplified ElastoDyn is not compatible with SubDyn. Set SubDfilename to None. ')
 
         if HDfilename is not None and HDfilename != 'unused':
-            if HDfilename.endswith('.T'):  # individual HD files
-                self.HDFileCase = 'individual'
+            if self.multi_HD:
+                if not HDfilename.endswith('.T'):
+                    raise ValueError (f'Name the template HD file "*.T.dat" and give "*.T" as `HDfilename`')
                 self.HDfilepath = os.path.join(self.templatePath, f"{HDfilename}.dat")
                 checkIfExists(self.HDfilepath)
                 self.HDfilename = HDfilename
-            elif HDfilename.endswith('.dat'):  # a single holistic HD file (usually when platforms all face the same direction)
-                self.HDFileCase = 'holistic'
+            else:  # a single holistic HD file (usually when platforms all face the same direction)
+                if not HDfilename.endswith('.dat'):
+                    raise ValueError (f'The HydroDyn filename should end in `.dat`.')                  
                 self.HDfilepath = os.path.join(self.templatePath, HDfilename)
                 checkIfExists(self.HDfilepath)
                 self.HDfilename = HDfilename                
-            else:
-                raise ValueError(f'The HydroDyn filename extension is not supported. Use .T for individual and .dat for holisitic HydroDyn file')
             
             self.hydroDataFolder = hydroDataFolder
         if SrvDfilename is not None and SrvDfilename != 'unused':
@@ -1968,7 +1971,7 @@ class FFCaseCreation:
                     ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
 
                     # Shared mooring system
-                    if self.MDFileCase=='holistic':
+                    if not self.multi_MD:
                         ff_file['Mod_SharedMooring'] = 3  # {0: None, 3=MoorDyn}
                         ff_file['SharedMoorFile'] = f'"{self.MDfilename}'
 
@@ -2065,7 +2068,7 @@ class FFCaseCreation:
                     ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
                     
                     # Shared mooring system
-                    if self.MDFileCase=='holistic':
+                    if not self.multi_MD:
                         ff_file['Mod_SharedMooring'] = 3  # {0: None, 3=MoorDyn}
                         ff_file['SharedMoorFile'] = f'"../{self.MDfilename}"'
 
