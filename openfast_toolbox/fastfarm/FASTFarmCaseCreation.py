@@ -86,7 +86,7 @@ class FFCaseCreation:
                  inflowType = None,
                  sweepYawMisalignment = False,
                  refTurb_rot = 0,
-                 ptfm_rot    = False,
+                 #ptfm_rot    = False,
                  verbose = 0):
         '''
         Full setup of a FAST.Farm simulations, can create setups for LES- or TurbSim-driven scenarios.
@@ -184,7 +184,7 @@ class FFCaseCreation:
         self.sweepYM     = sweepYawMisalignment
         self.seedValues  = seedValues
         self.refTurb_rot = refTurb_rot
-        self.ptfm_rot    = ptfm_rot
+        #self.ptfm_rot    = ptfm_rot
         self.verbose     = verbose
         self.attempt     = 1
                                         
@@ -285,27 +285,33 @@ class FFCaseCreation:
 
         # Check the wind turbine dict
         if not isinstance(self.wts,dict):
-            raise ValueError (f'`wts` needs to be a dictionary with the following entries for each turbine: x, y, z, D, zhub, cmax, fmax, Cmeander.')
+            raise ValueError (f'`wts` needs to be a dictionary with the following entries for each turbine: x, y, ',
+                              f'z, D, zhub, cmax, fmax, Cmeander, phi_deg. The only optional entry is phi_deg.')
         self.nTurbines = len(self.wts)
         self.D         = self.wts[0]['D']
         self.zhub      = self.wts[0]['zhub']
         self.cmax      = self.wts[0]['cmax']
         self.fmax      = self.wts[0]['fmax']
         self.Cmeander  = self.wts[0]['Cmeander']
+        # Check the platform heading and initialize as zero if needed
+        if 'phi_deg' in self.wts:
+            self.plfm_rot = True
+            self.phi_deg      = self.wts[0]['phi_deg']
+        else:
+            for key in self.wts:
+                self.wts['phi_deg'] = 0.0
 
         # Check values of each turbine
         for t in range(self.nTurbines):
             t_x        = self.wts[t]['x']
             t_y        = self.wts[t]['y']
             t_z        = self.wts[t]['z']
-            if not self.ptfm_rot:
-                self.wts[t]['phi']      = 0.0   # zeroing out platform rotations when ptfm_rot is False.
-            t_phi      = self.wts[t]['phi']
             t_D        = self.wts[t]['D']
             t_zhub     = self.wts[t]['zhub']
             t_cmax     = self.wts[t]['cmax']
             t_fmax     = self.wts[t]['fmax']
             t_Cmeander = self.wts[t]['Cmeander']
+            t_phi      = self.wts[t]['phi_deg']
             if t_D != self.D:
                 raise ValueError(f'Different turbines are not currently supported. Turbine {t+1} has a different diamenter.')
             if t_zhub != self.zhub:
@@ -323,12 +329,12 @@ class FFCaseCreation:
                 raise ValueError (f'The `y` value for the turbine {t+1} should be an integer or float. Received {t_y}.')
             if not isinstance(t_z,(float,int)):
                 raise ValueError (f'The `z` value for the turbine {t+1} should be an integer or float. Received {t_z}.')
-            if not isinstance(t_phi,(float,int)):
-                raise ValueError (f'The `phi` value for the turbine {t+1} should be an integer or float. Received {t_phi}.')            
             if not isinstance(t_D,(float,int)):
                 raise ValueError (f'The `D` value for the turbine {t+1} should be an integer or float. Received {t_D}.')
             if not isinstance(t_zhub,(float,int)):
                 raise ValueError (f'The `zhub` value for the turbine {t+1} should be an integer or float. Received {t_zhub}.')
+            if not isinstance(t_phi,(float,int)):
+                raise ValueError (f'The `phi_deg` value for the turbine {t+1} should be an integer or float. Received {t_phi}.')
   
         # Check general variables
         if self.cmax     <= 0: raise ValueError('cmax cannot be negative')
@@ -336,6 +342,7 @@ class FFCaseCreation:
         if self.Cmeander <= 0: raise ValueError('Cmeander cannot be negative')
         if self.tmax     <= 0: raise ValueError('A positive tmax should be requested')
         if self.zbot     <= 0: raise ValueError('zbot should be greater than 0 (recommended 1)')
+        if self.phi_deg  <  0: raise ValueError('phi_deg should be given in the interval [0, 360)')
   
         # Ensure quantities are list
         self.vhub       = [self.vhub]       if isinstance(self.vhub,(float,int))       else self.vhub
@@ -482,6 +489,7 @@ class FFCaseCreation:
         self.hasController             = False
         self.multi_HD                  = False
         self.multi_MD                  = False
+        self.plfm_rot                  = False
 
 
 
@@ -624,14 +632,15 @@ class FFCaseCreation:
                                 self.HydroDynFile['PtfmRefY'] = self.allCases.sel(case=case, turbine=t)['phi'].values
                                 self.HydroDynFile.write(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
                     
-                    # copy hydroDyn Data folder
-                    srcF = os.path.join(self.templatePath, self.hydroDataFolder)
-                    dstF = os.path.join(currPath, self.hydroDataFolder)
+                    # Copy HydroDyn Data directory
+                    srcF = os.path.join(self.templatePath, self.hydroDatapath)
+                    dstF = os.path.join(currPath, self.hydroDatapath)
                     os.makedirs(dstF, exist_ok=True)
                     for file in os.listdir(srcF):
                         src = os.path.join(srcF, file)
                         dst = os.path.join(dstF, file)
                         shutil.copy2(src, dst)
+
                 # MoorDyn
                 if self.MoorDynFile != 'unused':
                     if writeFiles:
@@ -696,7 +705,7 @@ class FFCaseCreation:
                     # Recover info about the current turbine in CondXX_*/CaseYY_
                     yaw_deg_     = self.allCases.sel(case=case, turbine=t)['yaw'].values
                     yaw_mis_deg_ = self.allCases.sel(case=case, turbine=t)['yawmis'].values
-                    phi          = self.allCases.sel(case=case, turbine=t)['phi'].values
+                    phi_deg_     = self.allCases.sel(case=case, turbine=t)['phi'].values
                     ADmodel_     = self.allCases.sel(case=case, turbine=t)['ADmodel'].values
                     EDmodel_     = self.allCases.sel(case=case, turbine=t)['EDmodel'].values
         
@@ -714,7 +723,7 @@ class FFCaseCreation:
                         self.ElastoDynFile['BlPitch(3)'] = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
         
                         self.ElastoDynFile['NacYaw']   = yaw_deg_ + yaw_mis_deg_
-                        self.ElastoDynFile['PtfmYaw']  = phi
+                        self.ElastoDynFile['PtfmYaw']  = phi_deg_
                         self.ElastoDynFile['BldFile1'] = self.ElastoDynFile['BldFile2'] = self.ElastoDynFile['BldFile3'] = f'"{self.bladefilename}"'
                         self.ElastoDynFile['TwrFile']  = f'"{self.towerfilename}"'
                         self.ElastoDynFile['Azimuth']  = round(np.random.uniform(low=0, high=360)) # start at a random value
@@ -799,17 +808,19 @@ class FFCaseCreation:
                         self.turbineFile['ServoFile']    = f'"unused"'
                         self.turbineFile['CompServo']    = 0
 
-                    #self.turbineFile['HydroFile']    = f'"{self.HDfilename}"'
                     if self.multi_HD:
                         self.turbineFile['HydroFile']    = f'"{self.HDfilename}{t+1}_mod.dat"'
                     else:
                         self.turbineFile['HydroFile']    = f'"{self.HDfilename}"'
 
                     self.turbineFile['SubFile']      = f'"{self.SubDfilepath}"'
+
                     if self.multi_MD:
                         self.turbineFile['MooringFile']  = f'"{self.MDfilename}{t+1}_mod.dat'
-                    else: # should be in .fstf and not in .fst (updated later when ff file is written).
+                    else:
+                        # Should be in .fstf and not in .fst (updated later when ff file is written).
                         self.turbineFile['MooringFile']  = f'"unused"' 
+
                     self.turbineFile['IceFile']      = f'"unused"'
                     self.turbineFile['TStart']       = 0 # start saving openfast output from time 0 (to see transient)
                     self.turbineFile['OutFileFmt']   = 3 # 1: .out; 2: .outb; 3: both
@@ -884,7 +895,7 @@ class FFCaseCreation:
                         _ = checkIfExists(os.path.join(currPath,f'{self.SEDfilename}{t+1}_mod.dat'))
                         if not _: return False
 
-                    if self.hasController
+                    if self.hasController:
                         _ = checkIfExists(os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
                         if not _: return False
         
@@ -1380,11 +1391,11 @@ class FFCaseCreation:
   
                 xori = self.wts[i]['x']
                 yori = self.wts[i]['y']
-                x = ref['x'] + (xori - ref['x']) * cosd(inflow) - (yori - ref['y']) * sind(inflow)
-                y = ref['y'] + (xori - ref['x']) * sind(inflow) + (yori - ref['y']) * cosd(inflow)
-                z = turb['z']
-                phi = turb['phi'] + inflow
-                D = turb['D']
+                x    = ref['x'] + (xori - ref['x']) * cosd(inflow) - (yori - ref['y']) * sind(inflow)
+                y    = ref['y'] + (xori - ref['x']) * sind(inflow) + (yori - ref['y']) * cosd(inflow)
+                z    = turb['z']
+                phi  = turb['phi_deg'] + inflow
+                D    = turb['D']
                 zhub = turb['zhub']
   
                 wts_rot[inflow,i] = {'x':x, 'y':y, 'z':z, 'phi': phi,
