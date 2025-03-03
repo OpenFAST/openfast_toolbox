@@ -620,7 +620,7 @@ class FFCaseCreation:
                 Vhub_ = self.allCond.sel(cond=cond)['vhub'].values
         
                 # Update parameters to be changed in the SeaState files
-                if self.hasSS
+                if self.hasSS:
                     self.SeaStateFile['WaveHs']     = self.bins.sel(wspd=Vhub_, method='nearest').WaveHs.values
                     self.SeaStateFile['WaveTp']     = self.bins.sel(wspd=Vhub_, method='nearest').WaveTp.values
                     self.SeaStateFile['WvHiCOffD']  = 2.0*np.pi/self.SeaStateFile['WaveTp']
@@ -780,14 +780,14 @@ class FFCaseCreation:
                     else:
                         self.turbineFile['CompSeaState'] = 0
 
-                   if self.hasMD:
-                       if self.multi_MD:
-                           self.turbineFile['CompMooring'] = 3  # {0=None; 1=MAP++; 2=FEAMooring; 3=MoorDyn; 4=OrcaFlex}
-                           self.turbineFile['MooringFile']  = f'"{self.MDfilename}{t+1}_mod.dat'
-                       else:
-                           # Should be in .fstf and not in .fst (updated later when ff file is written).
-                           pass
-                   else:
+                    if self.hasMD:
+                        if self.multi_MD:
+                            self.turbineFile['CompMooring'] = 3  # {0=None; 1=MAP++; 2=FEAMooring; 3=MoorDyn; 4=OrcaFlex}
+                            self.turbineFile['MooringFile']  = f'"{self.MDfilename}{t+1}_mod.dat'
+                        else:
+                            # Should be in .fstf and not in .fst (updated later when ff file is written).
+                            pass
+                    else:
                        self.turbineFile['CompMooring'] = 0
                        self.turbineFile['MooringFile']  = f'"unused"' 
 
@@ -867,7 +867,7 @@ class FFCaseCreation:
                 if self.hasHD and not self.multi_HD:
                     _ = checkIfExists(os.path.join(currPath, self.HDfilename))
                     if not _: return False
-                elif self.hasHD and self.multi_HD::
+                elif self.hasHD and self.multi_HD:
                     for t in range(self.nTurbines):
                         _ = checkIfExists(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
                         if not _: return False
