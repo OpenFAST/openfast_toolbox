@@ -342,7 +342,7 @@ class FFCaseCreation:
         if self.Cmeander <= 0: raise ValueError('Cmeander cannot be negative')
         if self.tmax     <= 0: raise ValueError('A positive tmax should be requested')
         if self.zbot     <= 0: raise ValueError('zbot should be greater than 0 (recommended 1)')
-        if self.phi_deg  <  0: raise ValueError('phi_deg should be given in the interval [0, 360)')
+        if self.phi_deg  <-180 or self.phi_deg>180: raise ValueError('phi_deg should be given in the interval [-180, 180]')
   
         # Ensure quantities are list
         self.vhub       = [self.vhub]       if isinstance(self.vhub,(float,int))       else self.vhub
