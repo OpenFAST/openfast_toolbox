@@ -293,10 +293,9 @@ class FFCaseCreation:
         self.cmax      = self.wts[0]['cmax']
         self.fmax      = self.wts[0]['fmax']
         self.Cmeander  = self.wts[0]['Cmeander']
+
         # Check the platform heading and initialize as zero if needed
-        if 'phi_deg' in self.wts[0]:  # check key for first turbine
-            self.phi_deg      = self.wts[0]['phi_deg']
-        else:
+        if 'phi_deg' not in self.wts[0]:  # check key for first turbine
             for i in self.wts:
                 self.wts[i]['phi_deg'] = 0.0
 
@@ -334,6 +333,8 @@ class FFCaseCreation:
                 raise ValueError (f'The `zhub` value for the turbine {t+1} should be an integer or float. Received {t_zhub}.')
             if not isinstance(t_phi,(float,int)):
                 raise ValueError (f'The `phi_deg` value for the turbine {t+1} should be an integer or float. Received {t_phi}.')
+            if self.t_phi <-180 or self.t_phi >180:
+                raise ValueError('The `phi_deg` value for turbine {t+1} should be given in the interval [-180, 180].')
   
         # Check general variables
         if self.cmax     <= 0: raise ValueError('cmax cannot be negative')
@@ -341,7 +342,6 @@ class FFCaseCreation:
         if self.Cmeander <= 0: raise ValueError('Cmeander cannot be negative')
         if self.tmax     <= 0: raise ValueError('A positive tmax should be requested')
         if self.zbot     <= 0: raise ValueError('zbot should be greater than 0 (recommended 1)')
-        if self.phi_deg  <-180 or self.phi_deg>180: raise ValueError('phi_deg should be given in the interval [-180, 180]')
   
         # Ensure quantities are list
         self.vhub       = [self.vhub]       if isinstance(self.vhub,(float,int))       else self.vhub
