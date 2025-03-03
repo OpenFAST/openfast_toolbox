@@ -294,12 +294,11 @@ class FFCaseCreation:
         self.fmax      = self.wts[0]['fmax']
         self.Cmeander  = self.wts[0]['Cmeander']
         # Check the platform heading and initialize as zero if needed
-        if 'phi_deg' in self.wts:
-            self.plfm_rot = True
+        if 'phi_deg' in self.wts[0]:  # check key for first turbine
             self.phi_deg      = self.wts[0]['phi_deg']
         else:
-            for key in self.wts:
-                self.wts['phi_deg'] = 0.0
+            for i in self.wts:
+                self.wts[i]['phi_deg'] = 0.0
 
         # Check values of each turbine
         for t in range(self.nTurbines):
@@ -495,7 +494,6 @@ class FFCaseCreation:
         self.hasBD                     = False
         self.multi_HD                  = False
         self.multi_MD                  = False
-        self.plfm_rot                  = False
 
 
 
@@ -1020,10 +1018,10 @@ class FFCaseCreation:
         self.templatePath = templatePath
 
         # Check and set the templateFiles
-        req_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'SrvDfilename', 'ADfilename',
-                    'ADskfilename', 'SubDfilename', 'IWfilename', 'BDfilepath', 'bladefilename',
-                    'towerfilename', 'turbfilename', 'libdisconfilepath', 'controllerInputfilename',
-                    'coeffTablefilename', 'turbsimLowfilepath', 'turbsimHighfilepath', 'FFfilename'}
+        req_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'SSfilename',
+                    'SrvDfilename', 'ADfilename', 'ADskfilename', 'SubDfilename', 'IWfilename', 
+                    'BDfilepath', 'bladefilename', 'towerfilename', 'turbfilename', 'libdisconfilepath',
+                    'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath', 'FFfilename', 'turbsimLowfilepath', 'turbsimHighfilepath'}
         if not isinstance(templateFiles, dict):
             raise ValueError(f'templateFiles should be a dictionary with the following entries: {req_keys}')
         if not req_keys <= set(templateFiles.keys()):
@@ -1093,8 +1091,8 @@ class FFCaseCreation:
                 self.SSfilepath = os.path.join(self.templatePath, value)
                 checkIfExists(self.SSfilepath)
                 self.SSfilename = value
-                hasSS = True
-
+                self.hasSS = True
+            
             elif key == 'SrvDfilename':
                 if not value.endswith('.T'):
                     raise ValueError(f'Name the template ServoDyn file "*.T.dat" and give "*.T" as `SrvDfilename`')
@@ -1185,7 +1183,8 @@ class FFCaseCreation:
                 self.coeffTablefilename = value
 
             elif key == 'hydroDatapath':
-                if not os.path.isdir(key):
+                self.hydrodatafilepath = os.path.join(self.templatePath, value)
+                if not os.path.isdir(self.hydrodatafilepath):
                     raise ValueError(f'The hydroData directory hydroDatapath should be a directory. Received {value}.')
                 self.hydroDatapath = value
 
@@ -1218,7 +1217,8 @@ class FFCaseCreation:
             raise ValueError (f'libdiscon has been given but no controller input filename. Stopping.')
         if self.ADskfilename != 'unused' and self.coeffTablefilename == 'unused':
             raise ValueError (f'The performance table `coeffTablefilename` file is needed for AeroDisk.')
-
+        if self.hasHD and not self.hasSS:
+            raise ValueError("SeaState must be used when HydroDyn is used.")
         # Set output FAST.Farm filename for convenience
         self.outputFFfilename = 'FF.fstf'
         
