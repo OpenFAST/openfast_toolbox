@@ -333,7 +333,7 @@ class FFCaseCreation:
                 raise ValueError (f'The `zhub` value for the turbine {t+1} should be an integer or float. Received {t_zhub}.')
             if not isinstance(t_phi,(float,int)):
                 raise ValueError (f'The `phi_deg` value for the turbine {t+1} should be an integer or float. Received {t_phi}.')
-            if self.t_phi <-180 or self.t_phi >180:
+            if t_phi <-180 or t_phi >180:
                 raise ValueError('The `phi_deg` value for turbine {t+1} should be given in the interval [-180, 180].')
   
         # Check general variables
