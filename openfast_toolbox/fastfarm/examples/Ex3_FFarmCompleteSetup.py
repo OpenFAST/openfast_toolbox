@@ -28,6 +28,10 @@ def main():
     Cmeander = 1.9    # Meandering constant (-)
 
     # ----------- Wind farm
+    # The wts dictionary holds information of each wind turbine. The allowed entries
+    # are: x, y, z, D, zhub, cmax, fmax, Cmeander, and phi_deg. The phi_deg is the
+    # only entry that is optional and is related to floating platform heading angle,
+    # given in degrees. The angle phi_deg is not illustrated on the example below.
     D = 240
     zhub = 150
     wts  = {
@@ -92,7 +96,9 @@ def main():
     templateFiles = {
         "EDfilename"              : 'ElastoDyn.T',
         'SEDfilename'             : None,  #'SimplifiedElastoDyn.T',
-        'HDfilename'              : 'HydroDyn.dat',
+        'HDfilename'              : None,  # 'HydroDyn.dat', # ending with .T for per-turbine HD, .dat for holisitc
+        'MDfilename'              : None,  # 'MoorDyn.T',    # ending with .T for per-turbine MD, .dat for holistic
+        'SSfilename'              : None,  # 'SeaState.dat',
         'SrvDfilename'            : 'ServoDyn.T',
         'ADfilename'              : 'AeroDyn.dat',
         'ADskfilename'            : 'AeroDisk.dat',
@@ -105,6 +111,7 @@ def main():
         'libdisconfilepath'       : '/full/path/to/controller/libdiscon.so',
         'controllerInputfilename' : 'DISCON.IN',
         'coeffTablefilename'      : 'CpCtCq.csv',
+        'hydroDatapath'           : None,  # '/full/path/to/hydroData',
         'FFfilename'              : 'Model_FFarm.fstf',
 
         # TurbSim setups
