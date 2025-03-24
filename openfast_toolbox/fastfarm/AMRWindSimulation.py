@@ -176,8 +176,9 @@ class AMRWindSimulation:
         # check that level_hr is <=self.max_level
 
         # For convenience, the turbines should not be zero-indexed
-        if self.wts[0]['name'] != 'T1':
-            print(f"--- WARNING: Recommended turbine numbering should start at 1. Currently it is zero-indexed.")
+        if 'name' in self.wts[0]:
+            if self.wts[0]['name'] != 'T1':
+                print(f"--- WARNING: Recommended turbine numbering should start at 1. Currently it is zero-indexed.")
 
 
         # Flags of given/calculated spatial resolution for warning/error printing purposes
