@@ -56,6 +56,30 @@ def modifyProperty(fullfilename, entry, value):
     f.write(fullfilename)
     return
 
+def load(fullpath, dill_filename='ffcase_obj.dill'):
+    '''
+    Function to load dill objects saved with self.save()
+
+    Assumes only one file with extension .dill exists, and it was
+    saved by the `save` method below. If more than one exists, or
+    a different name was given, use the dill_filename parameter
+
+    Example call
+    ------------
+    path = /full/path/to/ff/case
+    from openfast_toolbox.fastfarm.FASTFarmCaseCreation import load
+    case = load(path)
+
+    '''
+    import dill
+
+    fulldillfilename = os.path.join(fullpath, dill_filename)
+
+    if not os.path.exists(fulldillfilename):
+        raise ValueError(f'File {fulldillfilename} does not exist.')
+
+    obj = dill.load(file = open(fulldillfilename, 'rb'))
+    return obj
 
 
 class FFCaseCreation:
@@ -1018,18 +1042,19 @@ class FFCaseCreation:
         self.templatePath = templatePath
 
         # Check and set the templateFiles
-        req_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'SSfilename',
-                    'SrvDfilename', 'ADfilename', 'ADskfilename', 'SubDfilename', 'IWfilename', 
-                    'BDfilepath', 'bladefilename', 'towerfilename', 'turbfilename', 'libdisconfilepath',
-                    'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath', 'FFfilename', 'turbsimLowfilepath', 'turbsimHighfilepath'}
+        valid_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'SSfilename',
+                      'SrvDfilename', 'ADfilename', 'ADskfilename', 'SubDfilename', 'IWfilename', 
+                      'BDfilepath', 'bladefilename', 'towerfilename', 'turbfilename', 'libdisconfilepath',
+                      'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath',
+                      'FFfilename', 'turbsimLowfilepath', 'turbsimHighfilepath'}
         if not isinstance(templateFiles, dict):
-            raise ValueError(f'templateFiles should be a dictionary with the following entries: {req_keys}')
-        if not req_keys <= set(templateFiles.keys()):
-            raise ValueError(f'Not all required entries are present in the dictionary. '\
-                             f'Missing keys: {list(req_keys - set(templateFiles.keys()))}.')
-        if not req_keys >= set(templateFiles.keys()):
+            raise ValueError(f'templateFiles should be a dictionary with the following valid entries: {valid_keys}')
+        #if not valid_keys <= set(templateFiles.keys()):
+        #    raise ValueError(f'Not all required entries are present in the dictionary. '\
+        #                     f'Missing keys: {list(valid_keys - set(templateFiles.keys()))}. ')
+        if not valid_keys >= set(templateFiles.keys()):
             raise ValueError(f'Extra entries are present in the dictionary. '\
-                             f'Extra keys: {list(set(templateFiles.keys()) - req_keys)}.')
+                             f'Extra keys: {list(set(templateFiles.keys()) - valid_keys)}.')
 
         def checkIfExists(f):
             if os.path.basename(f) == 'unused':
@@ -2542,6 +2567,16 @@ class FFCaseCreation:
                     if not os.path.exists(ff_file):
                         raise ValueError(f'Method only applies to files inside seed directories. File {ff_file} not found.')
                     modifyProperty(ff_file, property_to_modify, value)
+
+    def save(self, dill_filename='ffcase_obj.dill'):
+        '''
+        Save object to disk
+        '''
+
+        import dill
+
+        objpath = os.path.join(self.path, dill_filename)
+        dill.dump(self, file=open(objpath, 'wb'))
 
 
 
