@@ -798,9 +798,12 @@ class FFCaseCreation:
                         self.turbineFile['CompHydro'] = 0
 
                     if self.hasSS:
-                        self.turbineFile['CompSeaState'] = 1
+                        self.turbineFile['CompSeaSt'] = 1
                     else:
-                        self.turbineFile['CompSeaState'] = 0
+                        # This might be a v.3.x file without the CompSeaSt entry
+                        if 'CompSeaSt' in self.turbineFile.keys():
+                            self.turbineFile['CompSeaSt'] = 0
+
 
                     if self.hasMD:
                         if self.multi_MD:
