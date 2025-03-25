@@ -271,7 +271,7 @@ class FASTInputFileBase(File):
             d = self.data[i]
             if d['label'].lower()==label.lower():
                 I.append(i)
-        if len(I)<0:
+        if len(I)==0:
             raise KeyError('Variable `'+ label+'` not found in FAST file:'+self.filename)
         else:
             return I
