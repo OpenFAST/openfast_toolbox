@@ -2,9 +2,9 @@
 #SBATCH --job-name=runFF
 #SBATCH --output log.fastfarm_c0_c0_seed0
 #SBATCH --nodes=1
-#SBATCH --ntasks-per-node=36
+#SBATCH --ntasks-per-node=104
 #SBATCH --time=10-00
-#SBATCH --account=mmc
+#SBATCH --account=total
 
 source $HOME/.bash_profile
 
@@ -20,17 +20,18 @@ nodelist=($nodelist)
 echo "Formatted list of nodes is: $nodelist"
 
 module purge
-module use /nopt/nrel/apps/modules/centos77/modulefiles
-module load mkl/2020.1.217
-module load comp-intel/2020.1.217
+module load PrgEnv-intel/8.5.0
+module load intel-oneapi-mkl/2024.0.0-intel
+module load intel-oneapi
+module load binutils
+module load hdf5/1.14.3-intel-oneapi-mpi-intel
 
 # ********************************** USER INPUT ********************************** #
-fastfarmbin='/home/rthedin/local/local_openfast_intelCompilers_3.1.0_openmpPrints/bin/FAST.Farm'
-basepath='/projects/shellwind/rthedin/Task2_2regis'
+fastfarmbin='/full/path/to/your/binary/.../bin/FAST.Farm'
+basepath='/full/path/to/your/case/dir'
 
-cond='Cond00_v08.6_PL0.2_TI10'
-case='Case00_wdirp00_WSfalse_YMfalse_12fED_12ADyn'
-
+cond='Cond00_v08.6_TI10'
+case='Case00_wdirp00'
 seed=0
 # ******************************************************************************** #
 

@@ -56,6 +56,30 @@ def modifyProperty(fullfilename, entry, value):
     f.write(fullfilename)
     return
 
+def load(fullpath, dill_filename='ffcase_obj.dill'):
+    '''
+    Function to load dill objects saved with self.save()
+
+    Assumes only one file with extension .dill exists, and it was
+    saved by the `save` method below. If more than one exists, or
+    a different name was given, use the dill_filename parameter
+
+    Example call
+    ------------
+    path = /full/path/to/ff/case
+    from openfast_toolbox.fastfarm.FASTFarmCaseCreation import load
+    case = load(path)
+
+    '''
+    import dill
+
+    fulldillfilename = os.path.join(fullpath, dill_filename)
+
+    if not os.path.exists(fulldillfilename):
+        raise ValueError(f'File {fulldillfilename} does not exist.')
+
+    obj = dill.load(file = open(fulldillfilename, 'rb'))
+    return obj
 
 
 class FFCaseCreation:
@@ -741,13 +765,13 @@ class FFCaseCreation:
                         if writeFiles:
                             self.ServoDynFile.write( os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
         
-                    # HydroDyn (per-turbine)
+                    # Update each turbine's HydroDyn
                     if self.hasHD:
                         self.HydroDynFile['PtfmRefY'] = self.allCases.sel(case=case, turbine=t)['phi'].values
                         if writeFiles:
                             self.HydroDynFile.write(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
 
-                    # MoorDyn
+                    # Update each turbine's MoorDyn
                     if writeFiles and self.hasMD:
                         if self.multi_MD:
                             self.MoorDynFile.write(os.path.join(currPath,f'{self.MDfilename}{t+1}_mod.dat'))
@@ -774,9 +798,13 @@ class FFCaseCreation:
                         self.turbineFile['CompHydro'] = 0
 
                     if self.hasSS:
-                        self.turbineFile['CompSeaState'] = 1
+                        self.turbineFile['CompSeaSt'] = 1
+                        self.turbineFile['SeaStFile'] = self.SSfilename
                     else:
-                        self.turbineFile['CompSeaState'] = 0
+                        # This might be a v.3.x file without the CompSeaSt entry
+                        if 'CompSeaSt' in self.turbineFile.keys():
+                            self.turbineFile['CompSeaSt'] = 0
+                            self.turbineFile['SeaStFile'] = f'"unused"'
 
                     if self.hasMD:
                         if self.multi_MD:
@@ -795,7 +823,6 @@ class FFCaseCreation:
                         self.turbineFile['CompSub']      = 0
                     self.turbineFile['SubFile']      = f'"{self.SubDfilepath}"'
 
-
                     if EDmodel_ == 'FED':
                         self.turbineFile['CompElast']    = 1  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
                         self.turbineFile['EDFile']       = f'"./{self.EDfilename}{t+1}_mod.dat"'
@@ -805,10 +832,12 @@ class FFCaseCreation:
                         self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
                         self.turbineFile['IntMethod']    = 3
                         self.turbineFile['EDFile']       = f'"./{self.SEDfilename}{t+1}_mod.dat"'
+
                     self.turbineFile['BDBldFile(1)'] = f'"{self.BDfilepath}"'
                     self.turbineFile['BDBldFile(2)'] = f'"{self.BDfilepath}"'
                     self.turbineFile['BDBldFile(3)'] = f'"{self.BDfilepath}"'
                     self.turbineFile['InflowFile']   = f'"./{self.IWfilename}"'
+
                     if ADmodel_ == 'ADyn':
                         self.turbineFile['CompAero']     = 2  # 1: AeroDyn v14;    2: AeroDyn v15;   3: AeroDisk
                         self.turbineFile['AeroFile']     = f'"{self.ADfilepath}"'
@@ -1018,18 +1047,19 @@ class FFCaseCreation:
         self.templatePath = templatePath
 
         # Check and set the templateFiles
-        req_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'SSfilename',
-                    'SrvDfilename', 'ADfilename', 'ADskfilename', 'SubDfilename', 'IWfilename', 
-                    'BDfilepath', 'bladefilename', 'towerfilename', 'turbfilename', 'libdisconfilepath',
-                    'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath', 'FFfilename', 'turbsimLowfilepath', 'turbsimHighfilepath'}
+        valid_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'SSfilename',
+                      'SrvDfilename', 'ADfilename', 'ADskfilename', 'SubDfilename', 'IWfilename', 
+                      'BDfilepath', 'bladefilename', 'towerfilename', 'turbfilename', 'libdisconfilepath',
+                      'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath',
+                      'FFfilename', 'turbsimLowfilepath', 'turbsimHighfilepath'}
         if not isinstance(templateFiles, dict):
-            raise ValueError(f'templateFiles should be a dictionary with the following entries: {req_keys}')
-        if not req_keys <= set(templateFiles.keys()):
-            raise ValueError(f'Not all required entries are present in the dictionary. '\
-                             f'Missing keys: {list(req_keys - set(templateFiles.keys()))}.')
-        if not req_keys >= set(templateFiles.keys()):
+            raise ValueError(f'templateFiles should be a dictionary with the following valid entries: {valid_keys}')
+        #if not valid_keys <= set(templateFiles.keys()):
+        #    raise ValueError(f'Not all required entries are present in the dictionary. '\
+        #                     f'Missing keys: {list(valid_keys - set(templateFiles.keys()))}. ')
+        if not valid_keys >= set(templateFiles.keys()):
             raise ValueError(f'Extra entries are present in the dictionary. '\
-                             f'Extra keys: {list(set(templateFiles.keys()) - req_keys)}.')
+                             f'Extra keys: {list(set(templateFiles.keys()) - valid_keys)}.')
 
         def checkIfExists(f):
             if os.path.basename(f) == 'unused':
@@ -2119,6 +2149,8 @@ class FFCaseCreation:
 
                     # Wake dynamics
                     ff_file['Mod_Wake'] = self.mod_wake
+                    if 'RotorDiamRef' in ff_file.keys():
+                        ff_file['RotorDiamRef'] = self.D
                     if self.mod_wake == 1: # Polar model
                         self.dr = self.cmax
                     else: # Curled; Cartesian
@@ -2223,6 +2255,8 @@ class FFCaseCreation:
 
                     # Wake dynamics
                     ff_file['Mod_Wake'] = self.mod_wake
+                    if 'RotorDiamRef' in ff_file.keys():
+                        ff_file['RotorDiamRef'] = self.D
                     if self.mod_wake == 1: # Polar model
                         self.dr = self.cmax
                     else: # Curled; Cartesian
@@ -2542,6 +2576,16 @@ class FFCaseCreation:
                     if not os.path.exists(ff_file):
                         raise ValueError(f'Method only applies to files inside seed directories. File {ff_file} not found.')
                     modifyProperty(ff_file, property_to_modify, value)
+
+    def save(self, dill_filename='ffcase_obj.dill'):
+        '''
+        Save object to disk
+        '''
+
+        import dill
+
+        objpath = os.path.join(self.path, dill_filename)
+        dill.dump(self, file=open(objpath, 'wb'))
 
 
 

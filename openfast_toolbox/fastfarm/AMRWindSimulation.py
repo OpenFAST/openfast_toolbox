@@ -635,7 +635,7 @@ class AMRWindSimulation:
 
 
 
-    def write_sampling_params(self, out=None, overwrite=False):
+    def write_sampling_params(self, out=None, format='netcdf', overwrite=False):
         '''
         Write out text that can be used for the sampling planes in an 
           AMR-Wind input file
@@ -647,6 +647,8 @@ class AMRWindSimulation:
             If saving to a file, whether or not to overwrite potentially
             existing file
         '''
+        if format not in ['netcdf','native']:
+            raise ValueError(f'format should be either native or netcdf')
 
         # Write time step information for consistenty with sampling frequency
         s = f"time.fixed_dt    = {self.dt}\n\n"
@@ -663,7 +665,7 @@ class AMRWindSimulation:
         s += f"incflo.post_processing                = {self.postproc_name_lr} {self.postproc_name_hr} # averaging\n\n\n"
 
         s += f"# ---- Low-res sampling parameters ----\n"
-        s += f"{self.postproc_name_lr}.output_format    = netcdf\n"
+        s += f"{self.postproc_name_lr}.output_format    = {format}\n"
         s += f"{self.postproc_name_lr}.output_frequency = {self.output_frequency_lr}\n"
         s += f"{self.postproc_name_lr}.fields           = velocity # temperature tke\n"
         s += f"{self.postproc_name_lr}.labels           = {sampling_labels_lr_str}\n\n"
@@ -681,7 +683,7 @@ class AMRWindSimulation:
         s += f"{self.postproc_name_lr}.Low.offsets       = {zoffsets_lr_str}\n\n\n"
 
         s += f"# ---- High-res sampling parameters ----\n"
-        s += f"{self.postproc_name_hr}.output_format     = netcdf\n"
+        s += f"{self.postproc_name_hr}.output_format     = {format}\n"
         s += f"{self.postproc_name_hr}.output_frequency  = {self.output_frequency_hr}\n"
         s += f"{self.postproc_name_hr}.fields            = velocity # temperature tke\n"
         s += f"{self.postproc_name_hr}.labels            = {sampling_labels_hr_str}\n"
