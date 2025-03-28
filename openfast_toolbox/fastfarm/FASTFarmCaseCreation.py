@@ -765,13 +765,13 @@ class FFCaseCreation:
                         if writeFiles:
                             self.ServoDynFile.write( os.path.join(currPath,f'{self.SrvDfilename}{t+1}_mod.dat'))
         
-                    # HydroDyn (per-turbine)
+                    # Update each turbine's HydroDyn
                     if self.hasHD:
                         self.HydroDynFile['PtfmRefY'] = self.allCases.sel(case=case, turbine=t)['phi'].values
                         if writeFiles:
                             self.HydroDynFile.write(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
 
-                    # MoorDyn
+                    # Update each turbine's MoorDyn
                     if writeFiles and self.hasMD:
                         if self.multi_MD:
                             self.MoorDynFile.write(os.path.join(currPath,f'{self.MDfilename}{t+1}_mod.dat'))
@@ -799,11 +799,12 @@ class FFCaseCreation:
 
                     if self.hasSS:
                         self.turbineFile['CompSeaSt'] = 1
+                        self.turbineFile['SeaStFile'] = self.SSfilename
                     else:
                         # This might be a v.3.x file without the CompSeaSt entry
                         if 'CompSeaSt' in self.turbineFile.keys():
                             self.turbineFile['CompSeaSt'] = 0
-
+                            self.turbineFile['SeaStFile'] = f'"unused"'
 
                     if self.hasMD:
                         if self.multi_MD:
@@ -822,7 +823,6 @@ class FFCaseCreation:
                         self.turbineFile['CompSub']      = 0
                     self.turbineFile['SubFile']      = f'"{self.SubDfilepath}"'
 
-
                     if EDmodel_ == 'FED':
                         self.turbineFile['CompElast']    = 1  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
                         self.turbineFile['EDFile']       = f'"./{self.EDfilename}{t+1}_mod.dat"'
@@ -832,10 +832,12 @@ class FFCaseCreation:
                         self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
                         self.turbineFile['IntMethod']    = 3
                         self.turbineFile['EDFile']       = f'"./{self.SEDfilename}{t+1}_mod.dat"'
+
                     self.turbineFile['BDBldFile(1)'] = f'"{self.BDfilepath}"'
                     self.turbineFile['BDBldFile(2)'] = f'"{self.BDfilepath}"'
                     self.turbineFile['BDBldFile(3)'] = f'"{self.BDfilepath}"'
                     self.turbineFile['InflowFile']   = f'"./{self.IWfilename}"'
+
                     if ADmodel_ == 'ADyn':
                         self.turbineFile['CompAero']     = 2  # 1: AeroDyn v14;    2: AeroDyn v15;   3: AeroDisk
                         self.turbineFile['AeroFile']     = f'"{self.ADfilepath}"'
@@ -2147,6 +2149,8 @@ class FFCaseCreation:
 
                     # Wake dynamics
                     ff_file['Mod_Wake'] = self.mod_wake
+                    if 'RotorDiamRef' in ff_file.keys():
+                        ff_file['RotorDiamRef'] = self.D
                     if self.mod_wake == 1: # Polar model
                         self.dr = self.cmax
                     else: # Curled; Cartesian
@@ -2251,6 +2255,8 @@ class FFCaseCreation:
 
                     # Wake dynamics
                     ff_file['Mod_Wake'] = self.mod_wake
+                    if 'RotorDiamRef' in ff_file.keys():
+                        ff_file['RotorDiamRef'] = self.D
                     if self.mod_wake == 1: # Polar model
                         self.dr = self.cmax
                     else: # Curled; Cartesian
