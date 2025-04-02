@@ -5,6 +5,7 @@ import numpy as np
 import xarray as xr
 
 from openfast_toolbox.io import FASTInputFile, FASTOutputFile, TurbSimFile, VTKFile
+from openfast_toolbox.io.rosco_discon_file import ROSCODISCONFile
 from openfast_toolbox.fastfarm import writeFastFarm, fastFarmTurbSimExtent, plotFastFarmSetup
 from openfast_toolbox.fastfarm.TurbSimCaseCreation import TSCaseCreation, writeTimeSeriesFile
 
@@ -212,7 +213,8 @@ class FFCaseCreation:
         self.verbose     = verbose
         self.attempt     = 1
                                         
-                                        
+        if self.verbose is False: self.verbose = 0
+
         if self.verbose>0: print(f'Checking inputs...', end='\r')
         self._checkInputs()       
         if self.verbose>0: print(f'Checking inputs... Done.')
@@ -654,7 +656,6 @@ class FFCaseCreation:
                 if self.hasHD and writeFiles:
                     if not self.multi_HD:
                         self.HydroDynFile.write(os.path.join(currPath, self.HDfilename))
-
                     # Copy HydroDyn Data directory
                     srcF = os.path.join(self.templatePath, self.hydroDatapath)
                     dstF = os.path.join(currPath, self.hydroDatapath)
@@ -664,10 +665,19 @@ class FFCaseCreation:
                         dst = os.path.join(dstF, file)
                         shutil.copy2(src, dst)
 
+                # BeamDyn
+                if self.hasBD and writeFiles:
+                    shutilcopy2_untilSuccessful(self.BDfilepath,      os.path.join(currPath,self.BDfilename)) 
+                    shutilcopy2_untilSuccessful(self.BDbladefilepath, os.path.join(currPath,self.BDbladefilename)) 
+
                 # Write updated DISCON
                 if writeFiles and self.hasController:
-                    shutilcopy2_untilSuccessful(os.path.join(self.templatePath,self.controllerInputfilename),
-                                                os.path.join(currPath,self.controllerInputfilename))
+                    if not hasattr(self, 'cpctcqfilepath'):
+                        self.cpctcqfilepath = self.DISCONFile['PerfFileName']
+                    self.cpctcqfilename = os.path.basename(self.cpctcqfilepath)  # Typically Cp_Ct_Cq.<turbine>.txt
+                    shutilcopy2_untilSuccessful(self.cpctcqfilepath, os.path.join(currPath,self.cpctcqfilename))
+                    self.DISCONFile['PerfFileName'] = f'{self.cpctcqfilename}'
+                    self.DISCONFile.write(os.path.join(currPath, self.controllerInputfilename))
 
                 # Depending on the controller, the controller input file might need to be in the same level as the .fstf input file.
                 # The ideal solution would be to give the full path to the controller input file, but we may not have control over
@@ -728,8 +738,8 @@ class FFCaseCreation:
                     else:
                         assert yaw_mis_deg_ == 0
         
+                    # Update each turbine's elastic model
                     if EDmodel_ == 'FED':
-                        # Update each turbine's ElastoDyn
                         self.ElastoDynFile['RotSpeed']   = self.bins.sel(wspd=Vhub_, method='nearest').RotSpeed.values
                         self.ElastoDynFile['BlPitch(1)'] = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
                         self.ElastoDynFile['BlPitch(2)'] = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
@@ -737,16 +747,14 @@ class FFCaseCreation:
         
                         self.ElastoDynFile['NacYaw']   = yaw_deg_ + yaw_mis_deg_
                         self.ElastoDynFile['PtfmYaw']  = phi_deg_
-                        self.ElastoDynFile['BldFile1'] = self.ElastoDynFile['BldFile2'] = self.ElastoDynFile['BldFile3'] = f'"{self.bladefilename}"'
-                        self.ElastoDynFile['TwrFile']  = f'"{self.towerfilename}"'
+                        self.ElastoDynFile['BldFile1'] = self.ElastoDynFile['BldFile2'] = self.ElastoDynFile['BldFile3'] = f'"{self.EDbladefilename}"'
+                        self.ElastoDynFile['TwrFile']  = f'"{self.EDtowerfilename}"'
                         self.ElastoDynFile['Azimuth']  = round(np.random.uniform(low=0, high=360)) # start at a random value
                         if writeFiles:
-                            if t==0: shutilcopy2_untilSuccessful(os.path.join(self.templatePath,self.bladefilename), os.path.join(currPath,self.bladefilename))
-                            if t==0: shutilcopy2_untilSuccessful(os.path.join(self.templatePath,self.towerfilename), os.path.join(currPath,self.towerfilename))
+                            if t==0: shutilcopy2_untilSuccessful(self.EDbladefilepath, os.path.join(currPath,self.EDbladefilename))
+                            if t==0: shutilcopy2_untilSuccessful(self.EDtowerfilepath, os.path.join(currPath,self.EDtowerfilename))
                             self.ElastoDynFile.write(os.path.join(currPath,f'{self.EDfilename}{t+1}_mod.dat'))
-        
                     elif EDmodel_ == 'SED':
-                        # Update each turbine's Simplified ElastoDyn
                         self.SElastoDynFile['RotSpeed']  = self.bins.sel(wspd=Vhub_, method='nearest').RotSpeed.values
                         self.SElastoDynFile['BlPitch']   = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
 
@@ -829,22 +837,24 @@ class FFCaseCreation:
                     elif EDmodel_ == 'SED':
                         self.turbineFile['CompElast']    = 3  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
                         self.turbineFile['CompSub']      = 0  # need to be disabled with SED
+                        self.turbineFile['SubFile']      = f'"unused"'
                         self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
+                        self.turbineFile['HydroFile']    = f'"unused"'
                         self.turbineFile['IntMethod']    = 3
                         self.turbineFile['EDFile']       = f'"./{self.SEDfilename}{t+1}_mod.dat"'
 
-                    self.turbineFile['BDBldFile(1)'] = f'"{self.BDfilepath}"'
-                    self.turbineFile['BDBldFile(2)'] = f'"{self.BDfilepath}"'
-                    self.turbineFile['BDBldFile(3)'] = f'"{self.BDfilepath}"'
+                    self.turbineFile['BDBldFile(1)'] = f'"{self.BDbladefilename}"'
+                    self.turbineFile['BDBldFile(2)'] = f'"{self.BDbladefilename}"'
+                    self.turbineFile['BDBldFile(3)'] = f'"{self.BDbladefilename}"'
                     self.turbineFile['InflowFile']   = f'"./{self.IWfilename}"'
 
                     if ADmodel_ == 'ADyn':
                         self.turbineFile['CompAero']     = 2  # 1: AeroDyn v14;    2: AeroDyn v15;   3: AeroDisk
-                        self.turbineFile['AeroFile']     = f'"{self.ADfilepath}"'
+                        self.turbineFile['AeroFile']     = f'"{self.ADfilename}"'
                     elif ADmodel_ == 'ADsk':
                         # If you use AeroDisk with ElastoDyn, set the blade DOFs to false.
                         self.turbineFile['CompAero']     = 3  # 1: AeroDyn v14;    2: AeroDyn v15;   3: AeroDisk
-                        self.turbineFile['AeroFile']     = f'"{self.ADskfilepath}"'
+                        self.turbineFile['AeroFile']     = f'"{self.ADskfilename}"'
                         if writeFiles:
                             if t==0: shutilcopy2_untilSuccessful(self.coeffTablefilepath, os.path.join(currPath,self.coeffTablefilename))
 
@@ -922,6 +932,8 @@ class FFCaseCreation:
                 if self.hasBD:
                     _ = checkIfExists(os.path.join(currPath,self.BDfilename))
                     if not _: return False
+                    _ = checkIfExists(os.path.join(currPath,self.BDbladefilename))
+                    if not _: return False
 
                 # Check controller
                 if self.hasController:
@@ -940,13 +952,12 @@ class FFCaseCreation:
                     ADmodel_     = self.allCases.sel(case=case, turbine=t)['ADmodel'].values
                     EDmodel_     = self.allCases.sel(case=case, turbine=t)['EDmodel'].values
                     if EDmodel_ == 'FED':
-                        _ = checkIfExists(os.path.join(currPath,self.bladefilename))
+                        _ = checkIfExists(os.path.join(currPath,self.EDbladefilename))
                         if not _: return False
-                        _ = checkIfExists(os.path.join(currPath,self.towerfilename))
+                        _ = checkIfExists(os.path.join(currPath,self.EDtowerfilename))
                         if not _: return False
                         _ = checkIfExists(os.path.join(currPath,f'{self.EDfilename}{t+1}_mod.dat'))
                         if not _: return False
-        
                     elif EDmodel_ == 'SED':
                         _ = checkIfExists(os.path.join(currPath,f'{self.SEDfilename}{t+1}_mod.dat'))
                         if not _: return False
@@ -957,6 +968,11 @@ class FFCaseCreation:
         
                     if ADmodel_ == 'ADsk':
                         _ = checkIfExists(os.path.join(currPath,self.coeffTablefilename))
+                        if not _: return False
+                    elif ADmodel_ == 'ADyn':
+                        _ = checkIfExists(os.path.join(currPath,self.ADfilename))
+                        if not _: return False
+                        _ = checkIfExists(os.path.join(currPath,self.ADbladefilename))
                         if not _: return False
 
                     _ = checkIfExists(os.path.join(currPath,f'{self.turbfilename}{t+1}.fst'))
@@ -994,14 +1010,16 @@ class FFCaseCreation:
             'HDfilename'              : 'HydroDyn.dat', # ending with .T for per-turbine HD, .dat for holisitc
             'MDfilename'              : 'MoorDyn.T',    # ending with .T for per-turbine MD, .dat for holistic
             'SSfilename'              : 'SeaState.dat',
-            'SrvDfilename'            : 'ServoDyn.T,
-            'ADfilename'              : 'AeroDyn.dat.,
+            'SrvDfilename'            : 'ServoDyn.T',
+            'ADfilename'              : 'AeroDyn.dat',
             'ADskfilename'            : None,
             'SubDfilename'            : None,
             'IWfilename'              : 'InflowWind.dat',
-            'BDfilepath'              : None,
-            'bladefilename'           : 'Blade.dat',
-            'towerfilename'           : 'Tower.dat',
+            'BDfilename'              : None,
+            'BDbladefilename'         : None,
+            'EDbladefilename'         : 'ElastoDyn_Blade.dat',
+            'EDtowerfilename'         : 'ElastoDyn_Tower.dat',
+            'ADbladefilename'         : 'AeroDyn_Blade.dat',
             'turbfilename'            : 'Model.T',
             'libdisconfilepath'       : '/full/path/to/controller/libdiscon.so',
             'controllerInputfilename' : 'DISCON',
@@ -1016,20 +1034,22 @@ class FFCaseCreation:
         """
 
         # Set default values
-        self.EDfilename    = "unused";  self.EDfilepath    = "unused"
-        self.SEDfilename   = "unused";  self.SEDfilepath   = "unused"
-        self.HDfilename    = "unused";  self.HDfilepath    = "unused"
-        self.MDfilename    = "unused";  self.MDfilepath    = "unused"
-        self.SSfilename    = "unused";  self.SSfilepath    = "unused"
-        self.SrvDfilename  = "unused";  self.SrvDfilepath  = "unused"
-        self.ADfilename    = "unused";  self.ADfilepath    = "unused"
-        self.ADskfilename  = "unused";  self.ADskfilepath  = "unused"
-        self.SubDfilename  = "unused";  self.SubDfilepath  = "unused"
-        self.IWfilename    = "unused";  self.IWfilepath    = "unused"
-        self.BDfilepath    = "unused";  self.BDfilename    = "unused"
-        self.bladefilename = "unused";  self.bladefilepath = "unused"
-        self.towerfilename = "unused";  self.towerfilepath = "unused"
-        self.turbfilename  = "unused";  self.turbfilepath  = "unused"
+        self.EDfilename      = "unused";  self.EDfilepath      = "unused"
+        self.SEDfilename     = "unused";  self.SEDfilepath     = "unused"
+        self.HDfilename      = "unused";  self.HDfilepath      = "unused"
+        self.MDfilename      = "unused";  self.MDfilepath      = "unused"
+        self.SSfilename      = "unused";  self.SSfilepath      = "unused"
+        self.SrvDfilename    = "unused";  self.SrvDfilepath    = "unused"
+        self.ADfilename      = "unused";  self.ADfilepath      = "unused"
+        self.ADskfilename    = "unused";  self.ADskfilepath    = "unused"
+        self.SubDfilename    = "unused";  self.SubDfilepath    = "unused"
+        self.IWfilename      = "unused";  self.IWfilepath      = "unused"
+        self.BDfilename      = "unused";  self.BDfilepath      = "unused"
+        self.BDbladefilename = "unused";  self.BDbladefilepath = "unused"
+        self.EDbladefilename = "unused";  self.EDbladefilepath = "unused"
+        self.EDtowerfilename = "unused";  self.EDtowerfilepath = "unused"
+        self.ADbladefilename = "unused";  self.ADbladefilepath = "unused"
+        self.turbfilename    = "unused";  self.turbfilepath  = "unused"
         self.libdisconfilepath       = "unused"
         self.controllerInputfilename = "unused"
         self.coeffTablefilename      = "unused"
@@ -1048,15 +1068,13 @@ class FFCaseCreation:
 
         # Check and set the templateFiles
         valid_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'SSfilename',
-                      'SrvDfilename', 'ADfilename', 'ADskfilename', 'SubDfilename', 'IWfilename', 
-                      'BDfilepath', 'bladefilename', 'towerfilename', 'turbfilename', 'libdisconfilepath',
-                      'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath',
+                      'SrvDfilename', 'ADfilename', 'ADskfilename', 'SubDfilename', 'IWfilename', 'BDfilename',
+                      'BDbladefilename', 'EDbladefilename', 'EDtowerfilename', 'ADbladefilename', 'turbfilename',
+                      'libdisconfilepath', 'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath',
                       'FFfilename', 'turbsimLowfilepath', 'turbsimHighfilepath'}
         if not isinstance(templateFiles, dict):
             raise ValueError(f'templateFiles should be a dictionary with the following valid entries: {valid_keys}')
-        #if not valid_keys <= set(templateFiles.keys()):
-        #    raise ValueError(f'Not all required entries are present in the dictionary. '\
-        #                     f'Missing keys: {list(valid_keys - set(templateFiles.keys()))}. ')
+
         if not valid_keys >= set(templateFiles.keys()):
             raise ValueError(f'Extra entries are present in the dictionary. '\
                              f'Extra keys: {list(set(templateFiles.keys()) - valid_keys)}.')
@@ -1162,26 +1180,41 @@ class FFCaseCreation:
                 checkIfExists(self.IWfilepath)
                 self.IWfilename = value
 
-            elif key == 'BDfilepath':
+            elif key == 'BDfilename':
                 if not value.endswith('.dat'):
                     raise ValueError(f'The BeamDyn filename should end in `.dat`.')
-                self.BDfilepath = value
+                self.BDfilepath = os.path.join(self.templatePath, value)
                 checkIfExists(self.BDfilepath)
+                self.BDfilename = value
                 self.hasBD = True
 
-            elif key == 'bladefilename':
+            elif key == 'BDbladefilename':
                 if not value.endswith('.dat'):
-                    raise ValueError(f'The blade filename should end in `.dat`.')
-                self.bladefilepath = os.path.join(self.templatePath, value)
-                checkIfExists(self.bladefilepath)
-                self.bladefilename = value
+                    raise ValueError(f'The BeamDyn blade filename should end in `.dat`.')
+                self.BDbladefilepath = os.path.join(self.templatePath, value)
+                checkIfExists(self.BDbladefilepath)
+                self.BDbladefile = value
 
-            elif key == 'towerfilename':
+            elif key == 'EDbladefilename':
                 if not value.endswith('.dat'):
-                    raise ValueError(f'The tower filename should end in `.dat`.')
-                self.towerfilepath = os.path.join(self.templatePath, value)
-                checkIfExists(self.towerfilepath)
-                self.towerfilename = value
+                    raise ValueError(f'The ElastoDyn blade filename should end in `.dat`.')
+                self.EDbladefilepath = os.path.join(self.templatePath, value)
+                checkIfExists(self.EDbladefilepath)
+                self.EDbladefilename = value
+
+            elif key == 'EDtowerfilename':
+                if not value.endswith('.dat'):
+                    raise ValueError(f'The ElastoDyn tower filename should end in `.dat`.')
+                self.EDtowerfilepath = os.path.join(self.templatePath, value)
+                checkIfExists(self.EDtowerfilepath)
+                self.EDtowerfilename = value
+
+            elif key == 'ADbladefilename':
+                if not value.endswith('.dat'):
+                    raise ValueError(f'The AeroDyn blade filename should end in `.dat`.')
+                self.ADbladefilepath = os.path.join(self.templatePath, value)
+                checkIfExists(self.ADbladefilepath)
+                self.ADbladefilename = value
 
             elif key == 'turbfilename':
                 if not value.endswith('.T'):
@@ -1239,6 +1272,8 @@ class FFCaseCreation:
 
 
         # Perform some checks
+        if self.ADfilename != 'unused' and self.ADbladefilename == 'unused':
+            raise ValueError(f'AeroDyn requested; AeroDyn blade file should be given as `ADbladefilename`.')
         if self.SEDfilename != 'unused' and self.HDfilename != 'unused':
             raise ValueError (f'Simplified ElastoDyn is not compatible with HydroDyn. Set HDfilename to None. ')
         if self.SEDfilename != 'unused' and self.SubDfilename != 'unused':
@@ -1247,8 +1282,12 @@ class FFCaseCreation:
             raise ValueError (f'libdiscon has been given but no controller input filename. Stopping.')
         if self.ADskfilename != 'unused' and self.coeffTablefilename == 'unused':
             raise ValueError (f'The performance table `coeffTablefilename` file is needed for AeroDisk.')
+        if self.ADskfilename == 'unused' and self.coeffTablefilename != 'unused':
+            raise ValueError (f'The performance table `coeffTablefilename` file is only used with AeroDisk.')
         if self.hasHD and not self.hasSS:
             raise ValueError("SeaState must be used when HydroDyn is used.")
+        if self.hasBD:
+            raise ValueError(f'ElastoDyn+BeamDyn for CompElast is currently not supported. Remove BeamDyn.')
         # Set output FAST.Farm filename for convenience
         self.outputFFfilename = 'FF.fstf'
         
@@ -1282,6 +1321,8 @@ class FFCaseCreation:
         def _check_and_open(f):
             if os.path.basename(f) == 'unused':
                 return 'unused'
+            elif os.path.basename(f) == self.controllerInputfilename:
+                return ROSCODISCONFile(f)
             else:
                 return FASTInputFile(f)
         self.ElastoDynFile   = _check_and_open(self.EDfilepath)
@@ -1291,9 +1332,11 @@ class FFCaseCreation:
         self.SeaStateFile    = _check_and_open(self.SSfilepath)
         self.ServoDynFile    = _check_and_open(self.SrvDfilepath)
         self.AeroDiskFile    = _check_and_open(self.ADskfilepath)
+        self.AeroDynFile     = _check_and_open(self.ADfilepath)
         self.turbineFile     = _check_and_open(self.turbfilepath)
         self.InflowWindFile  = _check_and_open(self.IWfilepath)  
-        
+        self.DISCONFile      = _check_and_open(self.controllerInputfilepath)
+
 
     def print_template_files(self):
         raise NotImplementedError (f'Placeholder. Not implemented.')
