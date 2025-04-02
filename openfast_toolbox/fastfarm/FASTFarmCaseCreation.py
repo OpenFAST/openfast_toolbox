@@ -472,7 +472,7 @@ class FFCaseCreation:
             self.Mod_AmbWind = 1
             for p in self.inflowPath:
                 if not os.path.isdir(p):
-                    raise ValueError (f'The LES path {p} does not exist')
+                    print(f'WARNING: The LES path {p} does not exist')
             # LES is requested, so domain limits must be given
             if None in (self.dt_high_les, self.ds_high_les, self.dt_low_les, self.ds_low_les):
                 raise ValueError (f'An LES-driven case was requested, but one or more grid parameters were not given. '\
@@ -764,6 +764,20 @@ class FFCaseCreation:
                         if writeFiles:
                             self.SElastoDynFile.write(os.path.join(currPath,f'{self.SEDfilename}{t+1}_mod.dat'))
         
+                    # Update common-to-all-turbines aerodynamic module
+                    if ADmodel_ == 'ADyn':
+                        self.AeroDynFile['ADBlFile(1)'] = self.AeroDynFile['ADBlFile(2)'] = self.AeroDynFile['ADBlFile(3)'] = f'"{self.ADbladefilename}"'
+                        self.AeroDynFile['Wake_Mod'] = 1  # seagreen files have no Wake_Mod, but rather WakeMod
+                        # self.AeroDynFile['UA_Mod'] = 0
+                        # Adjust the Airfoil path to point to the templatePath (1:-1 to remove quotes)
+                        self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePath, i[1:-1])}"' for i in self.AeroDynFile['AFNames']]
+                        if writeFiles:
+                            if t==0: shutilcopy2_untilSuccessful(self.ADbladefilepath, os.path.join(currPath,self.ADbladefilename))
+                            if t==0: self.AeroDynFile.write(os.path.join(currPath,f'{self.ADfilename}'))
+                    elif ADmodel_ == 'ADsk':
+                        if writeFiles:
+                            if t==0: shutilcopy2_untilSuccessful(self.ADskfilepath, os.path.join(currPath,self.ADskfilename))
+
                     # Update each turbine's ServoDyn
                     if self.hasSrvD:
                         self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_
@@ -784,26 +798,21 @@ class FFCaseCreation:
                         if self.multi_MD:
                             self.MoorDynFile.write(os.path.join(currPath,f'{self.MDfilename}{t+1}_mod.dat'))
                         else:
-                            if t==0: shutilcopy2_untilSuccessful(os.path.join(self.templatePath, self.MDfilename), 
-                                                                os.path.join(currPath, self.MDfilename))
+                            if t==0: shutilcopy2_untilSuccessful(self.MDfilepath, os.path.join(currPath, self.MDfilename))
 
                     # Update each turbine's OpenFAST input
                     self.turbineFile['TMax']         = self.tmax
                     self.turbineFile['CompInflow']   = 1  # 1: InflowWind;     2: OpenFoam (fully coupled; not VTK input to FF)
 
-                    if self.hasSubD:
-                        self.turbineFile['CompSub'] = 1
-                    else:
-                        self.turbineFile['CompSub'] = 0
-
                     if self.hasHD:
                         self.turbineFile['CompHydro'] = 1
                         if self.multi_HD:
-                            self.turbineFile['HydroFile']    = f'"{self.HDfilename}{t+1}_mod.dat"'
+                            self.turbineFile['HydroFile'] = f'"{self.HDfilename}{t+1}_mod.dat"'
                         else:
-                            self.turbineFile['HydroFile']    = f'"{self.HDfilename}"'
+                            self.turbineFile['HydroFile'] = f'"{self.HDfilename}"'
                     else:
                         self.turbineFile['CompHydro'] = 0
+                        self.turbineFile['HydroFile'] = f'"unused"'
 
                     if self.hasSS:
                         self.turbineFile['CompSeaSt'] = 1
@@ -829,7 +838,7 @@ class FFCaseCreation:
                         self.turbineFile['CompSub']      = 1
                     else:
                         self.turbineFile['CompSub']      = 0
-                    self.turbineFile['SubFile']      = f'"{self.SubDfilepath}"'
+                    self.turbineFile['SubFile']      = f'"{self.SubDfilename}"'
 
                     if EDmodel_ == 'FED':
                         self.turbineFile['CompElast']    = 1  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
