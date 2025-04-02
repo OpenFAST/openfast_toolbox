@@ -767,10 +767,11 @@ class FFCaseCreation:
                     # Update common-to-all-turbines aerodynamic module
                     if ADmodel_ == 'ADyn':
                         self.AeroDynFile['ADBlFile(1)'] = self.AeroDynFile['ADBlFile(2)'] = self.AeroDynFile['ADBlFile(3)'] = f'"{self.ADbladefilename}"'
-                        self.AeroDynFile['Wake_Mod'] = 1  # seagreen files have no Wake_Mod, but rather WakeMod
+                        self.AeroDynFile['Wake_Mod'] = 1 
                         # self.AeroDynFile['UA_Mod'] = 0
                         # Adjust the Airfoil path to point to the templatePath (1:-1 to remove quotes)
-                        self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePath, i[1:-1])}"' for i in self.AeroDynFile['AFNames']]
+                        self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, "Airfoils", i[1:-1].split("Airfoils/", 1)[-1])}"' 
+                                        for i in self.AeroDynFile['AFNames'] ]
                         if writeFiles:
                             if t==0: shutilcopy2_untilSuccessful(self.ADbladefilepath, os.path.join(currPath,self.ADbladefilename))
                             if t==0: self.AeroDynFile.write(os.path.join(currPath,f'{self.ADfilename}'))
@@ -1074,6 +1075,7 @@ class FFCaseCreation:
         if not os.path.isdir(templatePath):
             raise ValueError(f'Template path {templatePath} does not seem to exist.')
         self.templatePath = templatePath
+        self.templatePathabs = os.path.abspath(self.templatePath)
 
         # Check and set the templateFiles
         valid_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'SSfilename',
@@ -1235,7 +1237,10 @@ class FFCaseCreation:
             elif key == 'libdisconfilepath':
                 if not value.endswith('.so'):
                     raise ValueError(f'The libdiscon file should end in "*.so"')
-                self.libdisconfilepath = value
+                if os.path.isabs(value):
+                    self.libdisconfilepath = value
+                else:
+                    self.libdisconfilepath = os.path.abspath(value)
                 checkIfExists(self.libdisconfilepath)
                 self._create_copy_libdiscon()
                 self.hasController = True
