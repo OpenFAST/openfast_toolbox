@@ -271,7 +271,7 @@ class FASTInputFileBase(File):
             d = self.data[i]
             if d['label'].lower()==label.lower():
                 I.append(i)
-        if len(I)<0:
+        if len(I)==0:
             raise KeyError('Variable `'+ label+'` not found in FAST file:'+self.filename)
         else:
             return I
@@ -1427,8 +1427,8 @@ def parseFASTNumTable(filename,lines,n,iStart,nHeaders=2,tableType='num',nOffset
                 if l.startswith('---'):
                     raise BrokenFormatError('Error reading line {} while reading table. Is the variable `{}` set correctly?'.format(iStart+i+1, varNumLines))
                 if len(v) != nCols:
-                    # Discarding SubDyn special cases
-                    if ColNames[-1].lower() not in ['cosmid', 'ssifile']:
+                    # Discarding SubDyn special cases. Also discarding Mod_AmbWind=1 where position of turbines do not need to be specified
+                    if ColNames[-1].lower() not in ['cosmid', 'ssifile', 'dz_high']:
                         print('[WARN] {}: Line {}: Number of data is different than number of column names. Column Names: {}'.format(filename,iStart+1+i, ColNames))
                 if i==nHeaders+nOffset:
                     if len(v)>nCols:
