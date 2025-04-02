@@ -412,7 +412,7 @@ class FFCaseCreation:
             self.ffbin = shutil.which('FAST.Farm')
             if not self.ffbin:
                 raise ValueError(f'No FAST.Farm binary was given and none could be found in $PATH.')
-            if self.verbose>1:
+            if self.verbose>0:
                 print('WARNING: No FAST.Farm binary has been given. Using {self.ffbin}')
         elif not os.path.isfile(self.ffbin):
             raise ValueError (f'The FAST.Farm binary given does not exist.')
@@ -635,9 +635,9 @@ class FFCaseCreation:
 
         # Loops on all conditions/cases creating DISCON and *Dyn files
         for cond in range(self.nConditions):
-            print(f'Processing condition {self.condDirList[cond]}')
+            if self.verbose>0: print(f'Processing condition {self.condDirList[cond]}')
             for case in range(self.nCases):
-                print(f'    Processing case {self.caseDirList[case]}', end='\r')
+                if self.verbose>0: print(f'    Processing case {self.caseDirList[case]}', end='\r')
                 currPath = os.path.join(self.path, self.condDirList[cond], self.caseDirList[case])
         
                 # Recover info about the current CondXX_*/CaseYY_*
@@ -882,7 +882,7 @@ class FFCaseCreation:
                     if writeFiles:
                         self.turbineFile.write( os.path.join(currPath,f'{self.turbfilename}{t+1}.fst'))
 
-            print(f'Done processing condition {self.condDirList[cond]}                                              ')
+            if self.verbose>0: print(f'Done processing condition {self.condDirList[cond]}                                              ')
 
         # Some files, for some reason, do not get copied properly. This leads to a case crashing due to missing file.
         # Let's check if all files have been indded properly copied. If not, the copyTurbineFilesForEachCase will be
@@ -897,7 +897,7 @@ class FFCaseCreation:
                 print(f"         Check them manually. This shouldn't occur. Consider finding ")
                 print(f"         and fixing the bug and submitting a PR.")
             else:
-                print(f'Passed check: all files were copied successfully.')
+                if self.verbose>0: print(f'Passed check: all files were copied successfully.')
 
 
     def _were_all_turbine_files_copied(self):
@@ -2252,9 +2252,9 @@ class FFCaseCreation:
         
         # Loops on all conditions/cases and cases for FAST.Farm
         for cond in range(self.nConditions):
-            print(f'Processing condition {self.condDirList[cond]}')
+            if self.verbose>0: print(f'Processing condition {self.condDirList[cond]}')
             for case in range(self.nCases):
-                print(f'    Processing all {self.nSeeds} seeds of case {self.caseDirList[case]}', end='\r')
+                if self.verbose>0: print(f'    Processing all {self.nSeeds} seeds of case {self.caseDirList[case]}', end='\r')
                 for seed in range(self.nSeeds):
                     seedPath = os.path.join(self.path, self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}')
         
@@ -2337,7 +2337,7 @@ class FFCaseCreation:
                     ff_file['WindVelZ'] = ', '.join(map(str, zWT[:9]+self.zhub))
         
                     ff_file.write(outputFSTF)
-            print(f'Done processing condition {self.condDirList[cond]}                                              ')
+            if self.verbose>0: print(f'Done processing condition {self.condDirList[cond]}                                              ')
 
         return
 
@@ -2610,10 +2610,10 @@ class FFCaseCreation:
             C_HWkDfl_OY = 'DEFAULT'
             C_HWkDfl_xY = 'DEFAULT'
 
-        self.loop_through_all_and_modify_file('FF.fstf', 'C_HWkDfl_OY',   C_HWkDfl_OY)
-        self.loop_through_all_and_modify_file('FF.fstf', 'C_HWkDfl_xY',   C_HWkDfl_xY)
-        self.loop_through_all_and_modify_file('FF.fstf', 'k_VortexDecay', k_VortexDecay)
-        self.loop_through_all_and_modify_file('FF.fstf', 'k_vCurl',       k_vCurl)
+        self.loop_through_all_and_modify_file(self.outputFFfilename, 'C_HWkDfl_OY',   C_HWkDfl_OY)
+        self.loop_through_all_and_modify_file(self.outputFFfilename, 'C_HWkDfl_xY',   C_HWkDfl_xY)
+        self.loop_through_all_and_modify_file(self.outputFFfilename, 'k_VortexDecay', k_VortexDecay)
+        self.loop_through_all_and_modify_file(self.outputFFfilename, 'k_vCurl',       k_vCurl)
 
     
     def loop_through_all_and_modify_file(self, file_to_modify, property_to_modify, value):
