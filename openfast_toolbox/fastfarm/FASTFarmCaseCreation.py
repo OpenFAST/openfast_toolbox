@@ -673,8 +673,16 @@ class FFCaseCreation:
                 # Write updated DISCON
                 if writeFiles and self.hasController:
                     if not hasattr(self, 'cpctcqfilepath'):
+                        # Only do this once (allows re-running of the setup)
                         self.cpctcqfilepath = self.DISCONFile['PerfFileName']
-                    self.cpctcqfilename = os.path.basename(self.cpctcqfilepath)  # Typically Cp_Ct_Cq.<turbine>.txt
+                        self.cpctcqfilename = os.path.basename(self.cpctcqfilepath)  # Typically Cp_Ct_Cq.<turbine>.txt
+                        # Adjust the full path if needed
+                        self.cpctcqfilepath = os.path.join(self.templatePathabs, self.cpctcqfilename)
+                        if not os.path.isfile(self.cpctcqfilepath):
+                            raise ValueError(f'The coefficient file {self.cpctcqfilename} given in {self.controllerInputfilepath} '\
+                                             f'should exist in the template directory {self.templatePath}. Its full path as given '\
+                                             f'in {self.controllerInputfilename} is {self.cpctcqfilepath}')
+
                     shutilcopy2_untilSuccessful(self.cpctcqfilepath, os.path.join(currPath,self.cpctcqfilename))
                     self.DISCONFile['PerfFileName'] = f'{self.cpctcqfilename}'
                     self.DISCONFile.write(os.path.join(currPath, self.controllerInputfilename))
