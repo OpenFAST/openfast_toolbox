@@ -245,7 +245,7 @@ def readTurbineOutput(caseobj, dt_openfast, dt_processing=1, saveOutput=True, ou
 
 
 
-def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondition=0, fCondition=-1, iCase=0, fCase=-1, iSeed=0, fSeed=-1, itime=0, ftime=-1, skiptime=1, nCores=36):
+def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondition=0, fCondition=-1, iCase=0, fCase=-1, iSeed=0, fSeed=-1, itime=0, ftime=-1, skiptime=1, nCores=36, outputformat='zarr'):
 
     if fCondition==-1:
         fCondition = caseobj.nConditions
@@ -338,7 +338,8 @@ def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondi
                                       repeat(fSeed),            # fSeed
                                       repeat(itime),            # itime
                                       repeat(ftime),            # ftime
-                                      repeat(skiptime)          # skiptime
+                                      repeat(skiptime),         # skiptime
+                                      repeat(outputformat)      # outputformat
                                      )
                                   )
 
