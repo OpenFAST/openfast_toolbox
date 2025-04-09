@@ -15,10 +15,6 @@ echo "Job took the following nodes (SLURM_NODELIST)" $SLURM_NODELIST
 echo "Submit time is" $(squeue -u $USER -o '%30j %20V' | grep -e $SLURM_JOB_NAME | awk '{print $2}')
 echo "Starting job at: " $(date)
 
-nodelist=`scontrol show hostname $SLURM_NODELIST`
-nodelist=($nodelist)
-echo "Formatted list of nodes is: $nodelist"
-
 module purge
 module load PrgEnv-intel/8.5.0
 module load intel-oneapi-mkl/2024.0.0-intel
