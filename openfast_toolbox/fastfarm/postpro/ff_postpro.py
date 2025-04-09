@@ -482,7 +482,7 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
                         nOutputTimes = int(np.floor(tmax/WrDisDT))
 
                         # Determine number of output digits for reading
-                        ndigitsplane = max(len(str(max(NOutDisWindXY,NOutDisWindXZ,NOutDisWindYZ))), 2)
+                        ndigitsplane = max(len(str(max(NOutDisWindXY,NOutDisWindXZ,NOutDisWindYZ))), 3)
                         ndigitstime = len(str(nOutputTimes)) + 1  # this +1 is experimental. I had 1800 planes and got 5 digits.
                         # If this breaks again and I need to come here to fix, I need to ask Andy how the amount of digits is determined.
 
