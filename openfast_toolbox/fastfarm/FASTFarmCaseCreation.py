@@ -101,6 +101,7 @@ class FFCaseCreation:
                  ds_low_les  = None,
                  extent_low  = None,
                  ffbin = None,
+                 tsbin = None,
                  mod_wake = 1,
                  yaw_init = None,
                  ADmodel = None,
@@ -148,8 +149,11 @@ class FFCaseCreation:
             Grid resolution of the desired low-resolution box. If LES boxes given, should
             match LES box; otherwise desired TurbSim boxes. Default values as given in the
             modeling guidances are used if none is given
-        ff_bin: str
+        ffbin: str
             Full path of the FAST.Farm binary to be used. If not specified, the one available
+            in the $PATH will be used
+        tsbin: str
+            Full path of the TurbSim binary to be used. If not specified, the one available
             in the $PATH will be used
         mod_wake: int
             Wake model to be used on the computation of high- and low-res boxes temporal and
@@ -199,6 +203,7 @@ class FFCaseCreation:
         self.extent_low  = extent_low
         self.extent_high = extent_high
         self.ffbin       = ffbin
+        self.tsbin       = tsbin
         self.mod_wake    = mod_wake
         self.yaw_init    = yaw_init
         self.ADmodel     = ADmodel
@@ -416,6 +421,17 @@ class FFCaseCreation:
                 print('WARNING: No FAST.Farm binary has been given. Using {self.ffbin}')
         elif not os.path.isfile(self.ffbin):
             raise ValueError (f'The FAST.Farm binary given does not exist.')
+
+        # Check the TurbSim binary
+        if self.inflowType == 'TS':
+            if self.tsbin is None:
+                self.tsbin = shutil.which('turbsim')
+                if not self.tsbin:
+                    raise ValueError(f'No TurbSim binary was given and none could be found in $PATH.')
+                if self.verbose>0:
+                    print('WARNING: No TurbSim binary has been given. Using {self.tsbin}')
+            elif not os.path.isfile(self.tsbin):
+                raise ValueError (f'The TurbSim binary given does not exist.')
 
 
         # Check turbine conditions arrays for consistency
@@ -1665,14 +1681,20 @@ class FFCaseCreation:
         # Change job name (for convenience only)
         sed_command = f"sed -i 's|^#SBATCH --job-name=lowBox|#SBATCH --job-name=lowBox_{os.path.basename(self.path)}|g' {self.slurmfilename_low}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
-        # Change the path inside the script to the desired one
-        sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_low}"""
+        # Change logfile name (for convenience only)
+        sed_command = f"sed -i 's|#SBATCH --output log.lowBox|#SBATCH --output log.turbsim_low|g' {self.slurmfilename_low}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        # Change memory per cpu
+        sed_command = f"sed -i 's|--mem-per-cpu=25000M|--mem-per-cpu={memory_per_cpu}M|g' {self.slurmfilename_low}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change number of nodes values 
         sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(self.nConditions*self.nSeeds/6))}|g' {self.slurmfilename_low}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
-        # Change memory per cpu
-        sed_command = f"sed -i 's|--mem-per-cpu=25000M|--mem-per-cpu={memory_per_cpu}M|g' {self.slurmfilename_low}"
+        # Change the fastfarm binary to be called
+        sed_command = f"""sed -i "s|^turbsimbin.*|turbsimbin='{self.tsbin}'|g" {self.slurmfilename_low}"""
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        # Change the path inside the script to the desired one
+        sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_low}"""
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Assemble list of conditions and write it
         listtoprint = "' '".join(self.condDirList)
@@ -1681,7 +1703,6 @@ class FFCaseCreation:
         # Change the number of seeds
         sed_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_low}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
-
 
         if self.nSeeds > 6:
             print(f'--- WARNING: The memory-per-cpu on the low-res boxes SLURM script might be too low given {self.nSeeds} seeds.')
@@ -1945,6 +1966,15 @@ class FFCaseCreation:
         # Change job name (for convenience only)
         sed_command = f"sed -i 's|^#SBATCH --job-name.*|#SBATCH --job-name=highBox_{os.path.basename(self.path)}|g' {self.slurmfilename_high}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        # Change logfile name (for convenience only)
+        sed_command = f"sed -i 's|#SBATCH --output log.highBox|#SBATCH --output log.turbsim_high|g' {self.slurmfilename_high}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        # Change number of nodes values
+        sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(ntasks/36))}|g' {self.slurmfilename_high}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        # Change the fastfarm binary to be called
+        sed_command = f"""sed -i "s|^turbsimbin.*|turbsimbin='{self.tsbin}'|g" {self.slurmfilename_high}"""
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change the path inside the script to the desired one
         sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_high}"""
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
@@ -1953,9 +1983,6 @@ class FFCaseCreation:
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change number of seeds
         set_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_high}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
-        # Change number of nodes values
-        sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(ntasks/36))}|g' {self.slurmfilename_high}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Assemble list of conditions and write it
         listtoprint = "' '".join(self.condDirList)
