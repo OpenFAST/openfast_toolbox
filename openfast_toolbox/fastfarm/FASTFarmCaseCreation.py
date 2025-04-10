@@ -101,6 +101,7 @@ class FFCaseCreation:
                  ds_low_les  = None,
                  extent_low  = None,
                  ffbin = None,
+                 tsbin = None,
                  mod_wake = 1,
                  yaw_init = None,
                  ADmodel = None,
@@ -148,8 +149,11 @@ class FFCaseCreation:
             Grid resolution of the desired low-resolution box. If LES boxes given, should
             match LES box; otherwise desired TurbSim boxes. Default values as given in the
             modeling guidances are used if none is given
-        ff_bin: str
+        ffbin: str
             Full path of the FAST.Farm binary to be used. If not specified, the one available
+            in the $PATH will be used
+        tsbin: str
+            Full path of the TurbSim binary to be used. If not specified, the one available
             in the $PATH will be used
         mod_wake: int
             Wake model to be used on the computation of high- and low-res boxes temporal and
@@ -199,6 +203,7 @@ class FFCaseCreation:
         self.extent_low  = extent_low
         self.extent_high = extent_high
         self.ffbin       = ffbin
+        self.tsbin       = tsbin
         self.mod_wake    = mod_wake
         self.yaw_init    = yaw_init
         self.ADmodel     = ADmodel
@@ -416,6 +421,17 @@ class FFCaseCreation:
                 print('WARNING: No FAST.Farm binary has been given. Using {self.ffbin}')
         elif not os.path.isfile(self.ffbin):
             raise ValueError (f'The FAST.Farm binary given does not exist.')
+
+        # Check the TurbSim binary
+        if self.inflowType == 'TS':
+            if self.tsbin is None:
+                self.tsbin = shutil.which('turbsim')
+                if not self.tsbin:
+                    raise ValueError(f'No TurbSim binary was given and none could be found in $PATH.')
+                if self.verbose>0:
+                    print('WARNING: No TurbSim binary has been given. Using {self.tsbin}')
+            elif not os.path.isfile(self.tsbin):
+                raise ValueError (f'The TurbSim binary given does not exist.')
 
 
         # Check turbine conditions arrays for consistency
@@ -673,8 +689,16 @@ class FFCaseCreation:
                 # Write updated DISCON
                 if writeFiles and self.hasController:
                     if not hasattr(self, 'cpctcqfilepath'):
+                        # Only do this once (allows re-running of the setup)
                         self.cpctcqfilepath = self.DISCONFile['PerfFileName']
-                    self.cpctcqfilename = os.path.basename(self.cpctcqfilepath)  # Typically Cp_Ct_Cq.<turbine>.txt
+                        self.cpctcqfilename = os.path.basename(self.cpctcqfilepath)  # Typically Cp_Ct_Cq.<turbine>.txt
+                        # Adjust the full path if needed
+                        self.cpctcqfilepath = os.path.join(self.templatePathabs, self.cpctcqfilename)
+                        if not os.path.isfile(self.cpctcqfilepath):
+                            raise ValueError(f'The coefficient file {self.cpctcqfilename} given in {self.controllerInputfilepath} '\
+                                             f'should exist in the template directory {self.templatePath}. Its full path as given '\
+                                             f'in {self.controllerInputfilename} is {self.cpctcqfilepath}')
+
                     shutilcopy2_untilSuccessful(self.cpctcqfilepath, os.path.join(currPath,self.cpctcqfilename))
                     self.DISCONFile['PerfFileName'] = f'{self.cpctcqfilename}'
                     self.DISCONFile.write(os.path.join(currPath, self.controllerInputfilename))
@@ -1530,7 +1554,11 @@ class FFCaseCreation:
 
     def _setRotorParameters(self):
   
-        if self.D == 220: # 12 MW turbine
+        def _isclose(a, b, tol=1):
+            # Allow 1m difference in the specification of the diameter
+            return abs(a-b)<=tol
+
+        if _isclose(self.D, 220): # 12 MW turbine
             self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1.429, 1.429]), # 1.429 comes from Matt's hydrodyn input file
                                     'WaveTp':      (['wspd'], [ 7.073, 7.073]), # 7.073 comes from Matt's hydrodyn input file
                                     'RotSpeed':    (['wspd'], [ 4.0, 4.0]),     # 4 rpm comes from Matt's ED input file
@@ -1539,7 +1567,7 @@ class FFCaseCreation:
                                     #'WvLowCOffS':  (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now
                                    },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
             
-        elif self.D == 240: # IEA 15 MW
+        elif _isclose(self.D, 240): # IEA 15 MW
             self.bins = xr.Dataset({'WaveHs':      (['wspd'], [1.172, 1.323, 1.523, 1.764, 2.255]),  # higher values on default input from the repository (4.52)
                                     'WaveTp':      (['wspd'], [7.287, 6.963, 7.115, 6.959, 7.067]),  # higher values on default input from the repository (9.45)
                                     'RotSpeed':    (['wspd'], [4.995, 6.087, 7.557, 7.557, 7.557]),
@@ -1549,7 +1577,7 @@ class FFCaseCreation:
                                    },  coords={'wspd': [6.6, 8.6, 10.6, 12.6, 15]} )  # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
             
 
-        elif self.D == 178: # DTU 10MW W turbine
+        elif _isclose(self.D, 178): # DTU 10MW W turbine
             print(f'CHANGE THE _setRotorParameters of the DTU 10MW turbine')
             self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1.429, 1.429]), # 1.429 comes from Matt's hydrodyn input file
                                     'WaveTp':      (['wspd'], [ 7.073, 7.073]), # 7.073 comes from Matt's hydrodyn input file
@@ -1560,7 +1588,7 @@ class FFCaseCreation:
                                    },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
 
 
-        elif self.D == 82: # Vestas V82, 1.5MW, 82 m diameter
+        elif _isclose(self.D, 82): # Vestas V82, 1.5MW, 82 m diameter
             print(f'CHANGE THE _setRotorParameters of the V82 1.5MW turbine')
             self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1.429, 1.429]), # 1.429 comes from Matt's hydrodyn input file
                                     'WaveTp':      (['wspd'], [ 7.073, 7.073]), # 7.073 comes from Matt's hydrodyn input file
@@ -1571,7 +1599,7 @@ class FFCaseCreation:
                                    },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
 
 
-        elif self.D == 93: # Siemens SWT-2.3-93 2.3 MW, 93 m diameter
+        elif _isclose(self.D, 93): # Siemens SWT-2.3-93 2.3 MW, 93 m diameter
             self.bins = xr.Dataset({'WaveHs':      (['wspd'], [ 1, 1]),         # arbitrary since no hydrodyn is used
                                     'WaveTp':      (['wspd'], [ 7, 7]),         # arbitrary since no hydrodyn is used
                                     'RotSpeed':    (['wspd'], [ 5.0, 5.0]),     # from input file
@@ -1653,14 +1681,20 @@ class FFCaseCreation:
         # Change job name (for convenience only)
         sed_command = f"sed -i 's|^#SBATCH --job-name=lowBox|#SBATCH --job-name=lowBox_{os.path.basename(self.path)}|g' {self.slurmfilename_low}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
-        # Change the path inside the script to the desired one
-        sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_low}"""
+        # Change logfile name (for convenience only)
+        sed_command = f"sed -i 's|#SBATCH --output log.lowBox|#SBATCH --output log.turbsim_low|g' {self.slurmfilename_low}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        # Change memory per cpu
+        sed_command = f"sed -i 's|--mem-per-cpu=25000M|--mem-per-cpu={memory_per_cpu}M|g' {self.slurmfilename_low}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change number of nodes values 
         sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(self.nConditions*self.nSeeds/6))}|g' {self.slurmfilename_low}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
-        # Change memory per cpu
-        sed_command = f"sed -i 's|--mem-per-cpu=25000M|--mem-per-cpu={memory_per_cpu}M|g' {self.slurmfilename_low}"
+        # Change the fastfarm binary to be called
+        sed_command = f"""sed -i "s|^turbsimbin.*|turbsimbin='{self.tsbin}'|g" {self.slurmfilename_low}"""
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        # Change the path inside the script to the desired one
+        sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_low}"""
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Assemble list of conditions and write it
         listtoprint = "' '".join(self.condDirList)
@@ -1669,7 +1703,6 @@ class FFCaseCreation:
         # Change the number of seeds
         sed_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_low}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
-
 
         if self.nSeeds > 6:
             print(f'--- WARNING: The memory-per-cpu on the low-res boxes SLURM script might be too low given {self.nSeeds} seeds.')
@@ -1933,6 +1966,15 @@ class FFCaseCreation:
         # Change job name (for convenience only)
         sed_command = f"sed -i 's|^#SBATCH --job-name.*|#SBATCH --job-name=highBox_{os.path.basename(self.path)}|g' {self.slurmfilename_high}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        # Change logfile name (for convenience only)
+        sed_command = f"sed -i 's|#SBATCH --output log.highBox|#SBATCH --output log.turbsim_high|g' {self.slurmfilename_high}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        # Change number of nodes values
+        sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(ntasks/36))}|g' {self.slurmfilename_high}"
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        # Change the fastfarm binary to be called
+        sed_command = f"""sed -i "s|^turbsimbin.*|turbsimbin='{self.tsbin}'|g" {self.slurmfilename_high}"""
+        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change the path inside the script to the desired one
         sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_high}"""
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
@@ -1941,9 +1983,6 @@ class FFCaseCreation:
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Change number of seeds
         set_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_high}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
-        # Change number of nodes values
-        sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(ntasks/36))}|g' {self.slurmfilename_high}"
         _ = subprocess.call(sed_command, cwd=self.path, shell=True)
         # Assemble list of conditions and write it
         listtoprint = "' '".join(self.condDirList)

@@ -25,7 +25,8 @@ class AMRWindSimulation:
                     dt_hr = None, dt_lr = None,
                     mod_wake = None,
                     level_lr = 0,
-                    level_hr = -1):
+                    level_hr = -1, 
+                    verbose=1):
         '''
         Values from the AMR-Wind input file
         Inputs:
@@ -79,6 +80,7 @@ class AMRWindSimulation:
         self.mod_wake           = mod_wake
         self.level_lr           = level_lr
         self.level_hr           = level_hr
+        self.verbose            = verbose
 
         # Placeholder variables, to be calculated by FFCaseCreation
         self.output_frequency_lr = None
@@ -178,7 +180,7 @@ class AMRWindSimulation:
         # For convenience, the turbines should not be zero-indexed
         if 'name' in self.wts[0]:
             if self.wts[0]['name'] != 'T1':
-                print(f"--- WARNING: Recommended turbine numbering should start at 1. Currently it is zero-indexed.")
+                if self.verbose>0: print(f"--- WARNING: Recommended turbine numbering should start at 1. Currently it is zero-indexed.")
 
 
         # Flags of given/calculated spatial resolution for warning/error printing purposes
@@ -191,7 +193,7 @@ class AMRWindSimulation:
         if self.ds_lr is not None:
             warn_msg += f"--- WARNING: LOW-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON LOW-RES BOX CHECKS TO WARNINGS. ---\n"
             self.given_ds_lr = True
-        print(f'{warn_msg}\n')
+        if self.verbose>0: print(f'{warn_msg}\n')
         a=1
 
 
@@ -344,7 +346,7 @@ class AMRWindSimulation:
                         f"to the call to `AMRWindSimulation`. Note that sampled values will no longer be at the cell centers, as you will be requesting "\
                         f"sampling at {self.ds_low_les} m while the underlying grid will be at {self.ds_max_at_lr_level} m.\n --- SUPRESSING FURTHER ERRORS ---"
             if self.given_ds_hr:
-                print(f'WARNING: {error_msg}')
+                if self.verbose>0: print(f'WARNING: {error_msg}')
             else:
                 raise ValueError(error_msg)
 
@@ -375,7 +377,7 @@ class AMRWindSimulation:
         # For curled wake model: ds_lr_max = self.cmeander_max * self.dt_low_les * self.vhub**2 / 5
 
         ds_low_les = getMultipleOf(ds_lr_max, multipleof=self.ds_hr) 
-        print(f"Low-res spatial resolution should be at least {ds_lr_max:.2f} m, but since it needs to be a multiple of high-res "\
+        if self.verbose>0: print(f"Low-res spatial resolution should be at least {ds_lr_max:.2f} m, but since it needs to be a multiple of high-res "\
               f"resolution of {self.ds_hr}, we pick ds_low to be {ds_low_les} m")
 
         #self.ds_lr = self.ds_low_les
@@ -629,7 +631,7 @@ class AMRWindSimulation:
         		f"AMR-Wind grid (subset): {amr_xyzgrid_at_lhr_level_cc[amr_index  ]}, {amr_xyzgrid_at_lhr_level_cc[amr_index+1]}, "\
         		f"{amr_xyzgrid_at_lhr_level_cc[amr_index+2]}, {amr_xyzgrid_at_lhr_level_cc[amr_index+3]}, ..."
             if self.given_ds_lr:
-                print(f'WARNING: {error_msg}')
+                if self.verbose>0: print(f'WARNING: {error_msg}')
             else:
                 raise ValueError(error_msg)
 

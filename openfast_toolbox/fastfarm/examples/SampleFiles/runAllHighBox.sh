@@ -2,10 +2,10 @@
 #SBATCH --job-name=highBox
 #SBATCH --output log.highBox
 #SBATCH --nodes=3
-#SBATCH --ntasks-per-node=36
+#SBATCH --ntasks-per-node=104
 #SBATCH --time=4:00:00
-#SBATCH --mem=150G
-#SBATCH --account=osw
+#SBATCH --mem=250G
+#SBATCH --account=total
 
 source $HOME/.bash_profile
 
@@ -17,13 +17,15 @@ echo "Submit time is" $(squeue -u $USER -o '%30j %20V' | grep -e $SLURM_JOB_NAME
 echo "Starting job at: " $(date)
 
 module purge
-module use /nopt/nrel/apps/modules/centos77/modulefiles
-module load mkl/2020.1.217
-module load comp-intel/2020.1.217
+module load PrgEnv-intel/8.5.0
+module load intel-oneapi-mkl/2024.0.0-intel
+module load intel-oneapi
+module load binutils
+module load hdf5/1.14.3-intel-oneapi-mpi-intel
 
 # ********************************** USER INPUT ********************************** #
-turbsimbin='/home/rthedin/local/local_openfast_intelCompilers/bin/turbsim'
-basepath='/projects/shellwind/rthedin/Task2_2regis'
+turbsimbin='/full/path/to/your/binary/.../bin/turbsim'
+basepath='/full/path/to/your/case/dir'
 
 condList=('Cond00_v08.6_PL0.2_TI10' 'Cond01_v10.6_PL0.2_TI10' 'Cond02_v12.6_PL0.2_TI10')
 
@@ -33,7 +35,7 @@ nSeeds=6
 nTurbines=12
 # ******************************************************************************** #
 
-rampercpu=$((149000/36))
+rampercpu=$((249000/36))
 
 for cond in ${condList[@]}; do
     for case in ${caseList[@]}; do
