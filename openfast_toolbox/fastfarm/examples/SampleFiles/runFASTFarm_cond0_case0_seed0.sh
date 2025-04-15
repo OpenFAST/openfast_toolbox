@@ -15,10 +15,6 @@ echo "Job took the following nodes (SLURM_NODELIST)" $SLURM_NODELIST
 echo "Submit time is" $(squeue -u $USER -o '%30j %20V' | grep -e $SLURM_JOB_NAME | awk '{print $2}')
 echo "Starting job at: " $(date)
 
-nodelist=`scontrol show hostname $SLURM_NODELIST`
-nodelist=($nodelist)
-echo "Formatted list of nodes is: $nodelist"
-
 module purge
 module load PrgEnv-intel/8.5.0
 module load intel-oneapi-mkl/2024.0.0-intel
@@ -37,7 +33,8 @@ seed=0
 
 dir=$(printf "%s/%s/%s/Seed_%01d" $basepath $cond $case $seed)
 cd $dir
-echo "Submitting $dir/FFarm_mod.fstf"
+export OMP_STACKSIZE="32 M"
+echo "Submitting $dir/FFarm_mod.fstf with OMP_STACKSIZE=32M"
 $fastfarmbin $dir/FFarm_mod.fstf > $dir/log.fastfarm.seed$seed.txt 2>&1
 
 echo "Ending job at: " $(date)
