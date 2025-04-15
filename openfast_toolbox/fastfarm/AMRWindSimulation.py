@@ -336,8 +336,13 @@ class AMRWindSimulation:
 
         # Perform some checks
         if self.ds_high_les < self.ds_max_at_hr_level:
-            raise ValueError(f"AMR-Wind grid spacing of {self.ds_max_at_hr_level} m at the high-res box level of {self.level_hr} is too coarse for "\
-                             f"the high resolution domain! AMR-Wind grid spacing at level {self.level_hr} must be at least {self.ds_high_les} m.")
+            error_msg = f"AMR-Wind grid spacing of {self.ds_max_at_hr_level} m at the high-res box level of {self.level_hr} is too coarse for "\
+                        f"the high resolution domain. AMR-Wind grid spacing at level {self.level_hr} must be at least {self.ds_high_les} m."
+            if self.given_ds_hr:
+                if self.verbose>0: print(f'WARNING: {error_msg}')
+            else:
+                raise ValueError(error_msg)
+
 
         if self.ds_low_les < self.ds_max_at_lr_level:
             error_msg = f"AMR-Wind grid spacing of {self.ds_max_at_lr_level} at the low-res box level of {self.level_lr} is too coarse for "\
@@ -345,7 +350,7 @@ class AMRWindSimulation:
                         f"If you can afford to have {self.ds_low_les} m on AMR-Wind for the low-res box, do so. If you cannot, add `ds_lr={self.ds_max_at_lr_level}` " \
                         f"to the call to `AMRWindSimulation`. Note that sampled values will no longer be at the cell centers, as you will be requesting "\
                         f"sampling at {self.ds_low_les} m while the underlying grid will be at {self.ds_max_at_lr_level} m.\n --- SUPRESSING FURTHER ERRORS ---"
-            if self.given_ds_hr:
+            if self.given_ds_lr:
                 if self.verbose>0: print(f'WARNING: {error_msg}')
             else:
                 raise ValueError(error_msg)
