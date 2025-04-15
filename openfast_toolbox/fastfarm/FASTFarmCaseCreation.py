@@ -1677,7 +1677,7 @@ class FFCaseCreation:
             filename  = sed_split[-1]
             sed_split = f'sed ' + ' '.join(sed_split[2:]) + f"> {os.path.join(self.path, 'temp.txt')}"
             _ = subprocess.call(sed_split, cwd=self.path, shell=True)
-            shutil.move(os.path.join(self.path,'temp.txt'), f"{filename}_mod")
+            shutil.move(os.path.join(self.path,'temp.txt'), filename)
 
 
     def TS_low_slurm_prepare(self, slurmfilepath, inplace=True):
