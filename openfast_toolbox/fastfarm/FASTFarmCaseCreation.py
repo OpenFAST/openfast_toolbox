@@ -1084,8 +1084,8 @@ class FFCaseCreation:
         self.EDtowerfilename = "unused";  self.EDtowerfilepath = "unused"
         self.ADbladefilename = "unused";  self.ADbladefilepath = "unused"
         self.turbfilename    = "unused";  self.turbfilepath  = "unused"
+        self.controllerInputfilename = "unused"; self.controllerInputfilepath = "unused"
         self.libdisconfilepath       = "unused"
-        self.controllerInputfilename = "unused"
         self.coeffTablefilename      = "unused"
         self.hydroDatapath           = "unused"
         self.turbsimLowfilepath      = "unused"
@@ -1663,7 +1663,24 @@ class FFCaseCreation:
 
         self.TSlowBoxFilesCreatedBool = True
 
-    def TS_low_slurm_prepare(self, slurmfilepath):
+
+    def sed_inplace(self, sed_command, inplace):
+        '''
+        sed in place does not work on standard input. A workaround here
+        is to save to another file and then copy over
+        '''
+
+        if inplace:
+            _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        else:
+            sed_split = sed_command.split(' ')
+            filename  = sed_split[-1]
+            sed_split = f'sed ' + ' '.join(sed_split[2:]) + f"> {os.path.join(self.path, 'temp.txt')}"
+            _ = subprocess.call(sed_split, cwd=self.path, shell=True)
+            shutil.move(os.path.join(self.path,'temp.txt'), os.path.join(self.path,filename))
+
+
+    def TS_low_slurm_prepare(self, slurmfilepath, inplace=True):
 
         # --------------------------------------------------
         # ----- Prepare SLURM script for Low-res boxes -----
@@ -1680,35 +1697,35 @@ class FFCaseCreation:
 
         # Change job name (for convenience only)
         sed_command = f"sed -i 's|^#SBATCH --job-name=lowBox|#SBATCH --job-name=lowBox_{os.path.basename(self.path)}|g' {self.slurmfilename_low}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change logfile name (for convenience only)
         sed_command = f"sed -i 's|#SBATCH --output log.lowBox|#SBATCH --output log.turbsim_low|g' {self.slurmfilename_low}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change memory per cpu
         sed_command = f"sed -i 's|--mem-per-cpu=25000M|--mem-per-cpu={memory_per_cpu}M|g' {self.slurmfilename_low}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change number of nodes values 
         sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(self.nConditions*self.nSeeds/6))}|g' {self.slurmfilename_low}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change the fastfarm binary to be called
         sed_command = f"""sed -i "s|^turbsimbin.*|turbsimbin='{self.tsbin}'|g" {self.slurmfilename_low}"""
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change the path inside the script to the desired one
         sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_low}"""
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Assemble list of conditions and write it
         listtoprint = "' '".join(self.condDirList)
         sed_command = f"""sed -i "s|^condList.*|condList=('{listtoprint}')|g" {self.slurmfilename_low}"""
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change the number of seeds
         sed_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_low}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
 
         if self.nSeeds > 6:
             print(f'--- WARNING: The memory-per-cpu on the low-res boxes SLURM script might be too low given {self.nSeeds} seeds.')
 
 
-    def TS_low_slurm_submit(self, qos='normal', A=None, t=None, p=None):
+    def TS_low_slurm_submit(self, qos='normal', A=None, t=None, p=None, inplace=True):
         # ---------------------------------
         # ----- Run turbSim Low boxes -----
         # ---------------------------------
@@ -1723,7 +1740,7 @@ class FFCaseCreation:
 
         sub_command = f"sbatch {options}{self.slurmfilename_low}"
         print(f'Calling: {sub_command}')
-        _ = subprocess.call(sub_command, cwd=self.path, shell=True)
+        self.sed_inplace(sub_command, inplace)
 
 
     def TS_low_createSymlinks(self):
@@ -1951,7 +1968,7 @@ class FFCaseCreation:
         self.TShighBoxFilesCreatedBool = True
         
 
-    def TS_high_slurm_prepare(self, slurmfilepath):
+    def TS_high_slurm_prepare(self, slurmfilepath, inplace=True):
         # ---------------------------------------------------
         # ----- Prepare SLURM script for High-res boxes -----
         # ---------------------------------------------------
@@ -1965,38 +1982,38 @@ class FFCaseCreation:
         
         # Change job name (for convenience only)
         sed_command = f"sed -i 's|^#SBATCH --job-name.*|#SBATCH --job-name=highBox_{os.path.basename(self.path)}|g' {self.slurmfilename_high}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change logfile name (for convenience only)
         sed_command = f"sed -i 's|#SBATCH --output log.highBox|#SBATCH --output log.turbsim_high|g' {self.slurmfilename_high}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change number of nodes values
         sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(ntasks/36))}|g' {self.slurmfilename_high}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change the fastfarm binary to be called
         sed_command = f"""sed -i "s|^turbsimbin.*|turbsimbin='{self.tsbin}'|g" {self.slurmfilename_high}"""
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change the path inside the script to the desired one
         sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_high}"""
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change number of turbines
         sed_command = f"sed -i 's|^nTurbines.*|nTurbines={self.nTurbines}|g' {self.slurmfilename_high}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Change number of seeds
-        set_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_high}"
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        sed_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_high}"
+        self.sed_inplace(sed_command, inplace)
         # Assemble list of conditions and write it
         listtoprint = "' '".join(self.condDirList)
         sed_command = f"""sed -i "s|^condList.*|condList=('{listtoprint}')|g" {self.slurmfilename_high}"""
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
         # Assemble list of cases and write it
         highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
         listtoprint = "' '".join(highBoxesCaseDirList)
         sed_command = f"""sed -i "s|^caseList.*|caseList=('{listtoprint}')|g" {self.slurmfilename_high}"""
-        _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+        self.sed_inplace(sed_command, inplace)
 
 
 
-    def TS_high_slurm_submit(self, qos='normal', A=None, t=None, p=None):
+    def TS_high_slurm_submit(self, qos='normal', A=None, t=None, p=None, inplace=True):
         # ----------------------------------
         # ----- Run turbSim High boxes -----
         # ----------------------------------
@@ -2011,7 +2028,7 @@ class FFCaseCreation:
 
         sub_command = f"sbatch {options}{self.slurmfilename_high}"
         print(f'Calling: {sub_command}')
-        _ = subprocess.call(sub_command, cwd=self.path, shell=True)
+        self.sed_inplace(sub_command, inplace)
 
     
     def TS_high_create_symlink(self):
@@ -2518,7 +2535,7 @@ class FFCaseCreation:
 
 
 
-    def FF_slurm_prepare(self, slurmfilepath):
+    def FF_slurm_prepare(self, slurmfilepath, inplace=True):
         # ----------------------------------------------
         # ----- Prepare SLURM script for FAST.Farm -----
         # ------------- ONE SCRIPT PER CASE ------------
@@ -2538,32 +2555,32 @@ class FFCaseCreation:
         
                     # Change job name (for convenience only)
                     sed_command = f"sed -i 's|#SBATCH --job-name=runFF|#SBATCH --job-name=c{cond}_c{case}_s{seed}_runFF_{os.path.basename(self.path)}|g' {fname}"
-                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    self.sed_inplace(sed_command, inplace)
                     # Change logfile name (for convenience only)
                     sed_command = f"sed -i 's|#SBATCH --output log.fastfarm_c0_c0_seed0|#SBATCH --output log.fastfarm_c{cond}_c{case}_s{seed}|g' {fname}"
-                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    self.sed_inplace(sed_command, inplace)
                     # Change the fastfarm binary to be called
                     sed_command = f"""sed -i "s|^fastfarmbin.*|fastfarmbin='{self.ffbin}'|g" {fname}"""
-                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    self.sed_inplace(sed_command, inplace)
                     # Change the path inside the script to the desired one
                     sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {fname}"""
-                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    self.sed_inplace(sed_command, inplace)
                     # Write condition
                     sed_command = f"""sed -i "s|^cond.*|cond='{self.condDirList[cond]}'|g" {fname}"""
-                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    self.sed_inplace(sed_command, inplace)
                     # Write case
                     sed_command = f"""sed -i "s|^case.*|case='{self.caseDirList[case]}'|g" {fname}"""
-                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    self.sed_inplace(sed_command, inplace)
                     # Write seed
                     sed_command = f"""sed -i "s|^seed.*|seed={seed}|g" {fname}"""
-                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    self.sed_inplace(sed_command, inplace)
                     # Wirte FAST.Farm filename
                     sed_command = f"""sed -i "s/FFarm_mod.fstf/FF.fstf/g" {fname}"""
-                    _ = subprocess.call(sed_command, cwd=self.path, shell=True)
+                    self.sed_inplace(sed_command, inplace)
 
 
 
-    def FF_slurm_submit(self, qos='normal', A=None, t=None, p=None, delay=4):
+    def FF_slurm_submit(self, qos='normal', A=None, t=None, p=None, delay=4, inplace=True):
 
         # ----------------------------------
         # ---------- Run FAST.Farm ---------
@@ -2588,7 +2605,7 @@ class FFCaseCreation:
 
                     sub_command = f"sbatch {options}{fname}"
                     print(f'Calling: {sub_command}')
-                    _ = subprocess.call(sub_command, cwd=self.path, shell=True)
+                    self.sed_inplace(sub_command, inplace)
                     time.sleep(delay) # Sometimes the same job gets submitted twice. This gets around it.
 
 # ----------------------------------------------
