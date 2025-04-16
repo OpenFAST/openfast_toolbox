@@ -71,11 +71,11 @@ def readTurbineOutputPar(caseobj, dt_openfast, dt_processing, saveOutput=True, o
     outputnc   = os.path.join(caseobj.path, ncfile)
 
     if output=='zarr' and os.path.isdir(outputzarr) and saveOutput:
-       print(f'Output file {zarrstore} exists. Loading it..')
+       print(f'Output file {zarrstore} exists. Loading it.')
        comb_ds = xr.open_zarr(outputzarr)
        return comb_ds
     if output=='nc' and os.path.isfile(outputnc) and saveOutput:
-       print(f'Output file {ncfile} exists. Loading it..')
+       print(f'Output file {ncfile} exists. Loading it.')
        comb_ds = xr.open_dataset(outputnc)
        return comb_ds
         
@@ -440,7 +440,7 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
             if len(slicesToRead) > 1:
                 print(f"!! WARNING: Asked for multiple slices. Returning only the first one, {slices}\n",
                       f"           To load other slices, request `slicesToRead='y'`")
-            print(f'Processed output for slice {slices} found. Loading it.')
+            print(f'Processed output file {outputfile} for slice {slices} exists. Loading it.')
             # Data already processed. Reading output
             Slices = xr.open_zarr(outputfile)
             return Slices
@@ -449,7 +449,7 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
             if len(slicesToRead) > 1:
                 print(f"!! WARNING: Asked for multiple slices. Returning only the first one, {slices}\n",
                       f"           To load other slices, request `slicesToRead='y'`")
-            print(f'Processed output for slice {slices} found. Loading it.')
+            print(f'Processed output file {outputfile} for slice {slices} exists. Loading it.')
             # Data already processed. Reading output
             Slices = xr.open_dataset(outputfile)
             return Slices

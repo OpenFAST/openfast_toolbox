@@ -1677,7 +1677,7 @@ class FFCaseCreation:
             filename  = sed_split[-1]
             sed_split = f'sed ' + ' '.join(sed_split[2:]) + f"> {os.path.join(self.path, 'temp.txt')}"
             _ = subprocess.call(sed_split, cwd=self.path, shell=True)
-            shutil.move(os.path.join(self.path,'temp.txt'), filename)
+            shutil.move(os.path.join(self.path,'temp.txt'), os.path.join(self.path,filename))
 
 
     def TS_low_slurm_prepare(self, slurmfilepath, inplace=True):
@@ -1740,7 +1740,7 @@ class FFCaseCreation:
 
         sub_command = f"sbatch {options}{self.slurmfilename_low}"
         print(f'Calling: {sub_command}')
-        self.sed_inplace(sed_command, inplace)
+        self.sed_inplace(sub_command, inplace)
 
 
     def TS_low_createSymlinks(self):
@@ -1999,7 +1999,7 @@ class FFCaseCreation:
         sed_command = f"sed -i 's|^nTurbines.*|nTurbines={self.nTurbines}|g' {self.slurmfilename_high}"
         self.sed_inplace(sed_command, inplace)
         # Change number of seeds
-        set_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_high}"
+        sed_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_high}"
         self.sed_inplace(sed_command, inplace)
         # Assemble list of conditions and write it
         listtoprint = "' '".join(self.condDirList)
@@ -2028,7 +2028,7 @@ class FFCaseCreation:
 
         sub_command = f"sbatch {options}{self.slurmfilename_high}"
         print(f'Calling: {sub_command}')
-        self.sed_inplace(sed_command, inplace)
+        self.sed_inplace(sub_command, inplace)
 
     
     def TS_high_create_symlink(self):
@@ -2605,7 +2605,7 @@ class FFCaseCreation:
 
                     sub_command = f"sbatch {options}{fname}"
                     print(f'Calling: {sub_command}')
-                    self.sed_inplace(sed_command, inplace)
+                    self.sed_inplace(sub_command, inplace)
                     time.sleep(delay) # Sometimes the same job gets submitted twice. This gets around it.
 
 # ----------------------------------------------
