@@ -2138,8 +2138,8 @@ class FFCaseCreation:
         
         offset=10
         planes_xy = [self.zhub+self.zbot]
-        planes_yz = np.unique(xWT+offset)
-        planes_xz = np.unique(yWT)
+        planes_yz = np.unique(np.round(xWT+offset, 2))
+        planes_xz = np.unique(np.round(yWT, 2))
         
         # Number of planes must be at most 9
         self.planes_xy = planes_xy[0:9]
