@@ -1822,7 +1822,7 @@ class FFCaseCreation:
         
         # Determine offsets from turbines coordinate frame to TurbSim coordinate frame
         self.yoffset_turbsOrigin2TSOrigin = -( (self.TSlowbox.ymax - self.TSlowbox.ymin)/2 + self.TSlowbox.ymin )
-        self.xoffset_turbsOrigin2TSOrigin = -( -self.extent_low[0]*self.D + np.min(self.allCases.Tx.values))
+        self.xoffset_turbsOrigin2TSOrigin = -self.extent_low[0]*self.D
         
         if self.verbose>0:
             print(f"    The y offset between the turbine ref frame and turbsim is {self.yoffset_turbsOrigin2TSOrigin}")
