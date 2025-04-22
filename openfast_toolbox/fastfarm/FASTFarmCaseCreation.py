@@ -531,6 +531,7 @@ class FFCaseCreation:
         self.hasSrvD                   = False
         self.hasHD                     = False
         self.hasMD                     = False
+        self.hasBath                   = False
         self.hasSS                     = False
         self.hasSubD                   = False
         self.hasBD                     = False
@@ -824,6 +825,9 @@ class FFCaseCreation:
                             self.MoorDynFile.write(os.path.join(currPath,f'{self.MDfilename}{t+1}_mod.dat'))
                         else:
                             if t==0: shutilcopy2_untilSuccessful(self.MDfilepath, os.path.join(currPath, self.MDfilename))
+                    
+                    if writeFiles and self.hasBath:
+                        if t==0: shutilcopy2_untilSuccessful(self.bathfilepath, os.path.join(currPath, self.bathfilename))
 
                     # Update each turbine's OpenFAST input
                     self.turbineFile['TMax']         = self.tmax
@@ -1043,6 +1047,7 @@ class FFCaseCreation:
             'SEDfilename'             : None,
             'HDfilename'              : 'HydroDyn.dat', # ending with .T for per-turbine HD, .dat for holisitc
             'MDfilename'              : 'MoorDyn.T',    # ending with .T for per-turbine MD, .dat for holistic
+            'bathfilename'            : 'bathymetry.txt',   
             'SSfilename'              : 'SeaState.dat',
             'SrvDfilename'            : 'ServoDyn.T',
             'ADfilename'              : 'AeroDyn.dat',
@@ -1072,6 +1077,7 @@ class FFCaseCreation:
         self.SEDfilename     = "unused";  self.SEDfilepath     = "unused"
         self.HDfilename      = "unused";  self.HDfilepath      = "unused"
         self.MDfilename      = "unused";  self.MDfilepath      = "unused"
+        self.bathfilename    = "unused";  self.bathfilepath    = "unused"
         self.SSfilename      = "unused";  self.SSfilepath      = "unused"
         self.SrvDfilename    = "unused";  self.SrvDfilepath    = "unused"
         self.ADfilename      = "unused";  self.ADfilepath      = "unused"
@@ -1102,7 +1108,7 @@ class FFCaseCreation:
         self.templatePathabs = os.path.abspath(self.templatePath)
 
         # Check and set the templateFiles
-        valid_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'SSfilename',
+        valid_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'bathfilename', 'SSfilename',
                       'SrvDfilename', 'ADfilename', 'ADskfilename', 'SubDfilename', 'IWfilename', 'BDfilename',
                       'BDbladefilename', 'EDbladefilename', 'EDtowerfilename', 'ADbladefilename', 'turbfilename',
                       'libdisconfilepath', 'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath',
@@ -1168,6 +1174,11 @@ class FFCaseCreation:
                 self.MDfilename = value
                 self.hasMD = True
 
+            elif key == 'bathfilename':
+                self.bathfilepath = os.path.join(self.templatePath, value)
+                checkIfExists(self.bathfilepath)
+                self.bathfilename = value
+                self.hasBath = True
             elif key == 'SSfilename':
                 if not value.endswith('.dat'):
                     raise ValueError(f'The SeaState filename should end in `.dat`.')
