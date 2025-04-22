@@ -2750,11 +2750,12 @@ class FFCaseCreation:
 
                 # plot turbine disk accoding to all yaws in current wdir
                 allyaw_currwdir = self.allCases.where(self.allCases['inflow_deg']==inflow,drop=True).sel(turbine=currTurbine)['yaw']
+                phi             = self.allCases.where(self.allCases['inflow_deg']==inflow,drop=True).sel(turbine=currTurbine)['phi']
                 _, ind = np.unique(allyaw_currwdir, axis=0, return_index=True)
                 yaw_currwdir = allyaw_currwdir[np.sort(ind)].values # duplicates removed, same order as original array
                 for yaw in yaw_currwdir:
-                    ax.plot([dst.x.values-(dst.D.values/2)*sind(yaw), dst.x.values+(dst.D.values/2)*sind(yaw)],
-                            [dst.y.values-(dst.D.values/2)*cosd(yaw), dst.y.values+(dst.D.values/2)*cosd(yaw)], c=color, alpha=alphas[j])
+                    ax.plot([dst.x.values-(dst.D.values/2)*sind(yaw+phi), dst.x.values+(dst.D.values/2)*sind(yaw+phi)],
+                            [dst.y.values-(dst.D.values/2)*cosd(yaw+phi), dst.y.values+(dst.D.values/2)*cosd(yaw+phi)], c=color, alpha=alphas[j])
 
             # plot convex hull of farm (or line) for given inflow
             turbs = self.wts_rot_ds.sel(inflow_deg=inflow)[['x','y']].to_array().transpose()
