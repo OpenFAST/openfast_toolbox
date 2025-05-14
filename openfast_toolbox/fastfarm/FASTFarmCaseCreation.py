@@ -771,7 +771,15 @@ class FFCaseCreation:
         
                         self.ElastoDynFile['NacYaw']   = yaw_deg_ + yaw_mis_deg_
                         self.ElastoDynFile['PtfmYaw']  = phi_deg_
-                        self.ElastoDynFile['BldFile1'] = self.ElastoDynFile['BldFile2'] = self.ElastoDynFile['BldFile3'] = f'"{self.EDbladefilename}"'
+                        # The blade file entry `BldFile[1-3]` is not actually read. Sometimes we see `BldFile([1-3])`.
+                        if 'BldFile1' in self.ElastoDynFile.keys():
+                            self.ElastoDynFile['BldFile1'] = f'"{self.EDbladefilename}"'
+                            self.ElastoDynFile['BldFile2'] = f'"{self.EDbladefilename}"'
+                            self.ElastoDynFile['BldFile3'] = f'"{self.EDbladefilename}"'
+                        else: # assuming BldFile(1), etc
+                            self.ElastoDynFile['BldFile(1)'] = f'"{self.EDbladefilename}"'
+                            self.ElastoDynFile['BldFile(2)'] = f'"{self.EDbladefilename}"'
+                            self.ElastoDynFile['BldFile(3)'] = f'"{self.EDbladefilename}"'
                         self.ElastoDynFile['TwrFile']  = f'"{self.EDtowerfilename}"'
                         self.ElastoDynFile['Azimuth']  = round(np.random.uniform(low=0, high=360)) # start at a random value
                         if writeFiles:
@@ -1567,6 +1575,7 @@ class FFCaseCreation:
                                     #'WvLowCOffS':  (['wspd'], [0,   0]),       # 2nd order wave info. Unused for now
                                    },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
             
+             
         elif _isclose(self.D, 240): # IEA 15 MW
             self.bins = xr.Dataset({'WaveHs':      (['wspd'], [1.172, 1.323, 1.523, 1.764, 2.255]),  # higher values on default input from the repository (4.52)
                                     'WaveTp':      (['wspd'], [7.287, 6.963, 7.115, 6.959, 7.067]),  # higher values on default input from the repository (9.45)
