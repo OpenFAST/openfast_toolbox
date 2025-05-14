@@ -2366,8 +2366,8 @@ class FFCaseCreation:
                     d = self._getBoxesParamsForFF(lowbts, highbts, self.dt_low_les, D_, HubHt_, xWT, yt)
         
                     # Write the file
-                    writeFastFarm(outputFSTF, templateFSTF, xWT, yt, zWT, d, OutListT1=self.outlistFF, noLeadingZero=True)
-        
+                    writeFastFarm(outputFSTF, templateFSTF, xWT, yt, zWT, d, OutListT1=self.outlistFF,
+                                  noLeadingZero=True, turbineTemplateFullFilename=f"../{self.turbfilename}1.fst")
         
                     # Open saved file and change additional values manually or make sure we have the correct ones
                     ff_file = FASTInputFile(outputFSTF)
@@ -2488,8 +2488,12 @@ class FFCaseCreation:
         # --- High-res location per turbine
         X0_desired = np.asarray(xWT)-LX_High/2  # high-res is centered on turbine location
         Y0_desired = np.asarray(yt)-LY_High/2   # high-res is centered on turbine location
-        X0_High    = X0_Low + np.floor((X0_desired-X0_Low)/dX_High)*dX_High
-        Y0_High    = Y0_Low + np.floor((Y0_desired-Y0_Low)/dY_High)*dY_High
+        if self.inflowType == 'TS':
+            X0_High    = X0_desired
+            Y0_High    = Y0_desired
+        elif self.inflowType == 'LES':
+            X0_High    = X0_Low + np.floor((X0_desired-X0_Low)/dX_High)*dX_High
+            Y0_High    = Y0_Low + np.floor((Y0_desired-Y0_Low)/dY_High)*dY_High
     
         if self.verbose>2:
             print(f'  Low Box  \t\t  High box   ')
@@ -2538,17 +2542,18 @@ class FFCaseCreation:
     
     
         # --- Sanity check: check that the high res is at "almost" an integer location
-        X_rel = (np.array(d['X0_High'])-d['X0_Low'])/d['dX_High']
-        Y_rel = (np.array(d['Y0_High'])-d['Y0_Low'])/d['dY_High']
-        dX = X_rel - np.round(X_rel) # Should be close to zero
-        dY = Y_rel - np.round(Y_rel) # Should be close to zero
-    
-        if any(abs(dX)>1e-3):
-            print('Deltas:',dX)
-            raise Exception('Some X0_High are not on an integer multiple of the high-res grid')
-        if any(abs(dY)>1e-3):
-            print('Deltas:',dY)
-            raise Exception('Some Y0_High are not on an integer multiple of the high-res grid')
+        if self.inflowType == 'LES':
+            X_rel = (np.array(d['X0_High'])-d['X0_Low'])/d['dX_High']
+            Y_rel = (np.array(d['Y0_High'])-d['Y0_Low'])/d['dY_High']
+            dX = X_rel - np.round(X_rel) # Should be close to zero
+            dY = Y_rel - np.round(Y_rel) # Should be close to zero
+        
+            if any(abs(dX)>1e-3):
+                print('Deltas:',dX)
+                raise Exception('Some X0_High are not on an integer multiple of the high-res grid')
+            if any(abs(dY)>1e-3):
+                print('Deltas:',dY)
+                raise Exception('Some Y0_High are not on an integer multiple of the high-res grid')
             
         return d
 
