@@ -88,17 +88,17 @@ class FFCaseCreation:
     def __init__(self,
                  path,
                  wts,
-                 tmax,
+                 tmax_desired,
                  zbot,
                  vhub,
                  shear,
                  TIvalue,
                  inflow_deg,
-                 dt_high_les = None,
-                 ds_high_les = None,
+                 dt_high = None,
+                 ds_high = None,
                  extent_high = None,
-                 dt_low_les  = None,
-                 ds_low_les  = None,
+                 dt_low  = None,
+                 ds_low  = None,
                  extent_low  = None,
                  ffbin = None,
                  tsbin = None,
@@ -123,8 +123,8 @@ class FFCaseCreation:
             Full path for the target case directory
         wts: dictionary
             Wind farm layout and turbine parameters in dictionary form
-        tmax: scalar
-            Max simulation time given in seconds
+        tmax_desired: scalar
+            Max desired simulation time given in seconds. OF toolbox makes small adjustments to ensure compatibility to dT
         vhub: list of scalars or single scalar
             Wind speeds at hub height to sweep on. Accepts a list or single value
         shear: list of scalars or single scalar
@@ -133,19 +133,19 @@ class FFCaseCreation:
             TI values at hub height to sweep on. Accepts a list or single value
         inflow_deg: list of scalars or single scalar
             Inflow angles to sweep on. Accepts a list or single value
-        dt_high_les: scalar
+        dt_high: scalar
             Time step of the desired high-resolution box. If LES boxes given, should
             match LES box; otherwise desired TurbSim boxes. Default values as given in the
             modeling guidances are used if none is given
-        ds_high_les: scalar
+        ds_high: scalar
             Grid resolution of the desired high-resolution box. If LES boxes given, should
             match LES box; otherwise desired TurbSim boxes. Default values as given in the
             modeling guidances are used if none is given
-        dt_low_les: scalar
+        dt_low: scalar
             Time step of the desired low-resolution box. If LES boxes given, should match
             match LES box; otherwise desired TurbSim boxes. Default values as given in the
             modeling guidances are used if none is given
-        ds_low_les: scalar
+        ds_low: scalar
             Grid resolution of the desired low-resolution box. If LES boxes given, should
             match LES box; otherwise desired TurbSim boxes. Default values as given in the
             modeling guidances are used if none is given
@@ -190,16 +190,16 @@ class FFCaseCreation:
 
         self.path        = path
         self.wts         = wts
-        self.tmax        = tmax
+        self.tmax_desired = tmax_desired
         self.zbot        = zbot
         self.vhub        = vhub
         self.shear       = shear
         self.TIvalue     = TIvalue
         self.inflow_deg  = inflow_deg
-        self.dt_high_les = dt_high_les
-        self.ds_high_les = ds_high_les
-        self.dt_low_les  = dt_low_les
-        self.ds_low_les  = ds_low_les
+        self.dt_high     = dt_high
+        self.ds_high     = ds_high
+        self.dt_low      = dt_low
+        self.ds_low      = ds_low
         self.extent_low  = extent_low
         self.extent_high = extent_high
         self.ffbin       = ffbin
@@ -286,8 +286,8 @@ class FFCaseCreation:
         
         if self.TSlowBoxFilesCreatedBool or self.inflowType == 'LES':
             s += f'  Low-resolution domain: \n'
-            s += f'   - ds low: {self.ds_low_les} m\n'
-            s += f'   - dt low: {self.dt_low_les} s\n'
+            s += f'   - ds low: {self.ds_low} m\n'
+            s += f'   - dt low: {self.dt_low} s\n'
             s += f'   - Extent of low-res box (in D): xmin = {self.extent_low[0]}, xmax = {self.extent_low[1]}, '
             s += f'ymin = {self.extent_low[2]}, ymax = {self.extent_low[3]}, zmax = {self.extent_low[4]}\n'
         else:
@@ -296,8 +296,8 @@ class FFCaseCreation:
         
         if self.TShighBoxFilesCreatedBool or self.inflowType == 'LES':
             s += f'  High-resolution domain: \n'
-            s += f'   - ds high: {self.ds_high_les} m\n'
-            s += f'   - dt high: {self.dt_high_les} s\n'
+            s += f'   - ds high: {self.ds_high} m\n'
+            s += f'   - dt high: {self.dt_high} s\n'
             s += f'   - Extent of high-res boxes: {self.extent_high} D total\n'
         else:
             s += f'High-res boxes not created yet.\n'
@@ -324,6 +324,9 @@ class FFCaseCreation:
         self.cmax      = self.wts[0]['cmax']
         self.fmax      = self.wts[0]['fmax']
         self.Cmeander  = self.wts[0]['Cmeander']
+
+        if self.inflowType == 'TS':
+            self.dt_high = 1./(2.*self.fmax)
 
         # Check the platform heading and initialize as zero if needed
         if 'phi_deg' not in self.wts[0]:  # check key for first turbine
@@ -371,7 +374,7 @@ class FFCaseCreation:
         if self.cmax     <= 0: raise ValueError('cmax cannot be negative')
         if self.fmax     <= 0: raise ValueError('fmax cannot be negative')
         if self.Cmeander <= 0: raise ValueError('Cmeander cannot be negative')
-        if self.tmax     <= 0: raise ValueError('A positive tmax should be requested')
+        if self.tmax_desired     <= 0: raise ValueError('A positive tmax_desired should be requested')
         if self.zbot     <= 0: raise ValueError('zbot should be greater than 0 (recommended 1)')
   
         # Ensure quantities are list
@@ -490,9 +493,9 @@ class FFCaseCreation:
                 if not os.path.isdir(p):
                     print(f'WARNING: The LES path {p} does not exist')
             # LES is requested, so domain limits must be given
-            if None in (self.dt_high_les, self.ds_high_les, self.dt_low_les, self.ds_low_les):
+            if None in (self.dt_high, self.ds_high, self.dt_low, self.ds_low):
                 raise ValueError (f'An LES-driven case was requested, but one or more grid parameters were not given. '\
-                                   'Set `dt_high_les`, `ds_high_les`, `dt_low_les`, and `ds_low_les` based on your LES boxes.')
+                                   'Set `dt_high`, `ds_high`, `dt_low`, and `ds_low` based on your LES boxes.')
         else:
             raise ValueError (f"Inflow type `inflowType` should be 'TS' or 'LES'. Received {self.inflowType}.")
             
@@ -504,18 +507,18 @@ class FFCaseCreation:
 
         # Check the ds and dt for the high- and low-res boxes. If not given, call the
         # AMR-Wind auxiliary function with dummy domain limits. 
-        if None in (self.dt_high_les, self.ds_high_les, self.dt_low_les, self.ds_low_les):
+        if None in (self.dt_high, self.ds_high, self.dt_low, self.ds_low):
             mod_wake_str = ['','polar', 'curled', 'cartesian']
             print(f'WARNING: One or more temporal or spatial resolution for low- and high-res domains were not given.')
             print(f'         Estimated values for {mod_wake_str[self.mod_wake]} wake model shown below.')
             self._determine_resolutions_from_dummy_amrwind_grid()
             
         # Check the domain extents
-        if self.dt_low_les%(self.dt_high_les-1e-15) > 1e-12:
+        if self.dt_low%(self.dt_high-1e-15) > 1e-12:
             raise ValueError(f'The temporal resolution dT_Low should be a multiple of dT_High')
-        if self.dt_low_les < self.dt_high_les:
+        if self.dt_low < self.dt_high:
             raise ValueError(f'The temporal resolution dT_High should not be greater than dT_Low on the LES side')
-        if self.ds_low_les < self.ds_high_les:
+        if self.ds_low < self.ds_high:
             raise ValueError(f'The grid resolution dS_High should not be greater than dS_Low on the LES side')
 
 
@@ -562,19 +565,19 @@ class FFCaseCreation:
                                 buffer_hr = self.extent_high,
                                 mod_wake = self.mod_wake)
 
-        print(f'         High-resolution: ds: {amr.ds_hr} m, dt: {amr.dt_high_les} s')
-        print(f'         Low-resolution:  ds: {amr.ds_lr} m, dt: {amr.dt_low_les} s\n')
+        print(f'         High-resolution: ds: {amr.ds_hr} m, dt: {amr.dt_high} s')
+        print(f'         Low-resolution:  ds: {amr.ds_lr} m, dt: {amr.dt_low} s\n')
         print(f'WARNING: If the above values are too fine or manual tuning is warranted, specify them manually.')
-        print(f'         To do that, specify, e.g., `dt_high_les = {2*amr.dt_high_les}` to the call to `FFCaseCreation`.')
-        print(f'                                    `ds_high_les = {2*amr.ds_high_les}`')
-        print(f'                                    `dt_low_les  = {2*amr.dt_low_les}`')
-        print(f'                                    `ds_low_les  = {2*amr.ds_low_les}`')
+        print(f'         To do that, specify, e.g., `dt_high = {2*amr.dt_high}` to the call to `FFCaseCreation`.')
+        print(f'                                    `ds_high = {2*amr.ds_high}`')
+        print(f'                                    `dt_low  = {2*amr.dt_low}`')
+        print(f'                                    `ds_low  = {2*amr.ds_low}`')
         print(f'         If the values above are okay, you can safely ignore this warning.\n')
 
-        self.dt_high_les = amr.dt_high_les
-        self.ds_high_les = amr.dt_high_les
-        self.dt_low_les  = amr.dt_low_les
-        self.ds_low_les  = amr.dt_low_les
+        self.dt_high = amr.dt_high
+        self.ds_high = amr.dt_high
+        self.dt_low  = amr.dt_low
+        self.ds_low  = amr.dt_low
 
 
 
@@ -1659,8 +1662,15 @@ class FFCaseCreation:
                 # By passing low_ext, manual mode for the domain size is activated, and by passing ds_low,
                 # manual mode for discretization (and further domain size) is also activated
                 currentTS = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xlocs_, y=ylocs_, zbot=self.zbot, cmax=self.cmax,
-                                           fmax=self.fmax, Cmeander=self.Cmeander, boxType=boxType, low_ext=self.extent_low, ds_low=self.ds_low_les)
+                                           fmax=self.fmax, Cmeander=self.Cmeander, boxType=boxType, low_ext=self.extent_low, ds_low=self.ds_low)
                 self.TSlowbox = currentTS
+
+                # Ensure that dt low is a multiple of dt high and that tmax is a multiple of both dt low and dt high, and that tmax is larger than tmax_desired
+                currentTS.dt = getMultipleOf(currentTS.dt, multipleof=self.dt_high)
+                self.tmax = getMultipleOf(self.tmax_desired, multipleof=currentTS.dt)
+                if self.tmax < self.tmax_desired:
+                    self.tmax += currentTS.dt
+
                 if runOnce:
                     return
                 currentTS.writeTSFile(self.turbsimLowfilepath, currentTSLowFile, tmax=self.tmax, verbose=self.verbose)
@@ -1670,9 +1680,6 @@ class FFCaseCreation:
                 Lowinp['PLExp']     = shear_
                 #Lowinp['latitude']  = latitude  # Not used when IECKAI model is selected.
                 Lowinp['InCDec1']   = Lowinp['InCDec2'] = Lowinp['InCDec3'] = f'"{a} {b/(8.1*Lambda1):.8f}"'
-                # The dt was computed for a proper low-res box but here we will want to compare with the high-res
-                # and it is convenient to have the same time step. Let's do that change here
-                Lowinp['TimeStep']  = 1/(2*self.fmax)
                 if writeFiles:
                     lowFileName = os.path.join(seedPath, 'Low.inp') 
                     Lowinp.write(lowFileName)
@@ -1890,11 +1897,17 @@ class FFCaseCreation:
                         uvel = np.roll(bts['u'][0, :, jTurb, kTurb], start_time_step)
                         vvel = np.roll(bts['u'][1, :, jTurb, kTurb], start_time_step)
                         wvel = np.roll(bts['u'][2, :, jTurb, kTurb], start_time_step)
+
+                        # Map it to high-res time and dt (both) 
+                        time_hr = np.arange(0, self.tmax + self.dt_high, self.dt_high)
+                        uvel_hr = np.interp(time_hr, time, uvel)
+                        vvel_hr = np.interp(time_hr, time, vvel)
+                        wvel_hr = np.interp(time_hr, time, wvel)
         
                         # Checks
-                        assert len(time)==len(uvel)
-                        assert len(uvel)==len(vvel)
-                        assert len(vvel)==len(wvel)
+                        assert len(time_hr)==len(uvel_hr)
+                        assert len(uvel_hr)==len(vvel_hr)
+                        assert len(vvel_hr)==len(wvel_hr)
         
                         # Save timeseries as CondXX/Seed_Z/USRTimeSeries_T*.txt. This file will later be copied to CondXX/CaseYY/Seed_Z
                         timeSeriesOutputFile = os.path.join(caseSeedPath, f'USRTimeSeries_T{t+1}.txt')
@@ -1912,8 +1925,7 @@ class FFCaseCreation:
                             print(f"Seed {seed}, Case {case}: Turbine {t+1} is not at a grid point location. Tubine is at y={yloc_}",\
                                   f"on the turbine reference frame, which is y={yt} on the low-res TurbSim reference frame. The",\
                                   f"nearest grid point in y is {bts['y'][jTurb]} so printing y={yoffset} to the time-series file.")
-                        writeTimeSeriesFile(timeSeriesOutputFile, yoffset, Hub_series, uvel, vvel, wvel, time)
-
+                        writeTimeSeriesFile(timeSeriesOutputFile, yoffset, Hub_series, uvel_hr, vvel_hr, wvel_hr, time_hr)
 
 
 
@@ -1921,8 +1933,8 @@ class FFCaseCreation:
 
         #todo: Check if the low-res boxes were created successfully
 
-        if self.ds_high_les != self.cmax:
-            print(f'WARNING: The requested ds_high = {self.ds_high_les} m is not actually used. The TurbSim ')
+        if self.ds_high != self.cmax:
+            print(f'WARNING: The requested ds_high = {self.ds_high} m is not actually used. The TurbSim ')
             print(f'         boxes use the default max chord value ({self.cmax} m here) for the spatial resolution.')
 
         # Create symbolic links for the low-res boxes
@@ -1969,7 +1981,7 @@ class FFCaseCreation:
                         # Modify some values and save file (some have already been set in the call above)
                         Highinp = FASTInputFile(currentTSHighFile)
                         Highinp['RandSeed1'] = self.seedValues[seed]
-                        Highinp['TimeStep']  = 1/(2*self.fmax)
+                        Highinp['TimeStep']  = 1./(2.*self.fmax)
                         Highinp['TurbModel'] = f'"TIMESR"'
                         Highinp['UserFile']  = f'"USRTimeSeries_T{t+1}.txt"'
                         Highinp['RefHt']     = HubHt_
@@ -2264,8 +2276,8 @@ class FFCaseCreation:
                     ff_file['TMax'] = self.tmax
         
                     # LES-related parameters
-                    ff_file['DT_Low-VTK']   = self.dt_low_les
-                    ff_file['DT_High-VTK']  = self.dt_high_les
+                    ff_file['DT_Low-VTK']   = self.dt_low
+                    ff_file['DT_High-VTK']  = self.dt_high
                     ff_file['WindFilePath'] = f'''"{os.path.join(seedPath, LESboxesDirName)}"'''
                     #if checkWindFiles:
                     #    ff_file['ChkWndFiles'] = 'TRUE'
@@ -2289,7 +2301,7 @@ class FFCaseCreation:
                         self.dr = round(self.D/15)
                     ff_file['dr'] = self.dr
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
-                    ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low_les*Vhub_*(1-1/6)) ) )
+                    ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
 
                     # Ensure radii outputs are within [0, NumRadii-1]
                     for i, r in enumerate(ff_file['OutRadii']):
@@ -2363,7 +2375,7 @@ class FFCaseCreation:
                     highbts  = TurbSimFile(os.path.join(seedPath,'TurbSim', f'HighT1.bts'))
         
                     # Get dictionary with all the D{X,Y,Z,t}, L{X,Y,Z,t}, N{X,Y,Z,t}, {X,Y,Z}0
-                    d = self._getBoxesParamsForFF(lowbts, highbts, self.dt_low_les, D_, HubHt_, xWT, yt)
+                    d = self._getBoxesParamsForFF(lowbts, highbts, self.dt_low, D_, HubHt_, xWT, yt)
         
                     # Write the file
                     writeFastFarm(outputFSTF, templateFSTF, xWT, yt, zWT, d, OutListT1=self.outlistFF,
@@ -2395,7 +2407,7 @@ class FFCaseCreation:
                         self.dr = round(self.D/10)
                     ff_file['dr'] = self.dr
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
-                    ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low_les*Vhub_*(1-1/6)) ) )
+                    ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
         
                     # Vizualization outputs
                     ff_file['WrDisWind'] = 'False'
@@ -2430,7 +2442,7 @@ class FFCaseCreation:
     
         dT_High = np.round(highbts.dt, 4)
         # dX_High can sometimes be too high. So get the closest to the cmax, but multiple of what should have been
-        dX_High = round(meanU_High*dT_High)
+        dX_High = meanU_High*dT_High
         if self.verbose>1:
             print(f'original dX_High is {dX_High}')
         dX_High = round(self.cmax/dX_High) * dX_High

@@ -8,7 +8,6 @@
 
 @author: kshaler
 """
-import os, glob, struct
 import numpy as np
 
 class TSCaseCreation:
