@@ -325,7 +325,7 @@ class FFCaseCreation:
         self.fmax      = self.wts[0]['fmax']
         self.Cmeander  = self.wts[0]['Cmeander']
 
-        if self.inflowType == 'TS':
+        if self.inflowType == 'TS' and self.dt_high == None:
             self.dt_high = 1./(2.*self.fmax)
 
         # Check the platform heading and initialize as zero if needed
@@ -507,19 +507,21 @@ class FFCaseCreation:
 
         # Check the ds and dt for the high- and low-res boxes. If not given, call the
         # AMR-Wind auxiliary function with dummy domain limits. 
-        if None in (self.dt_high, self.ds_high, self.dt_low, self.ds_low):
+        if None in (self.dt_high, self.ds_high, self.dt_low, self.ds_low) and self.inflowType == 'LES':
             mod_wake_str = ['','polar', 'curled', 'cartesian']
             print(f'WARNING: One or more temporal or spatial resolution for low- and high-res domains were not given.')
             print(f'         Estimated values for {mod_wake_str[self.mod_wake]} wake model shown below.')
             self._determine_resolutions_from_dummy_amrwind_grid()
             
-        # Check the domain extents
-        if self.dt_low%(self.dt_high-1e-15) > 1e-12:
-            raise ValueError(f'The temporal resolution dT_Low should be a multiple of dT_High')
-        if self.dt_low < self.dt_high:
-            raise ValueError(f'The temporal resolution dT_High should not be greater than dT_Low on the LES side')
-        if self.ds_low < self.ds_high:
-            raise ValueError(f'The grid resolution dS_High should not be greater than dS_Low on the LES side')
+        # Check the domain extents when values are provided by the user:
+        if self.dt_low != None and self.dt_high!= None:
+            if self.dt_low%(self.dt_high-1e-15) > 1e-12:
+                raise ValueError(f'The temporal resolution dT_Low should be a multiple of dT_High')
+            if self.dt_low < self.dt_high:
+                raise ValueError(f'The temporal resolution dT_High should not be greater than dT_Low on the LES side')
+        if self.ds_low != None and self.ds_high!= None:
+            if self.ds_low < self.ds_high:
+                raise ValueError(f'The grid resolution dS_High should not be greater than dS_Low on the LES side')
 
 
         # Check the reference turbine for rotation
@@ -1899,7 +1901,7 @@ class FFCaseCreation:
                         wvel = np.roll(bts['u'][2, :, jTurb, kTurb], start_time_step)
 
                         # Map it to high-res time and dt (both) 
-                        time_hr = np.arange(0, self.tmax + self.dt_high, self.dt_high)
+                        time_hr = np.arange(bts.t[0], self.tmax + self.dt_high, self.dt_high)
                         uvel_hr = np.interp(time_hr, time, uvel)
                         vvel_hr = np.interp(time_hr, time, vvel)
                         wvel_hr = np.interp(time_hr, time, wvel)

@@ -66,19 +66,6 @@ def main():
     # Set the yaw of each turbine for wind dir. One row for each wind direction.
     yaw_init = None
     
-    # ----------- Low- and high-res boxes parameters
-    # Should match LES if comparisons are to be made; otherwise, set desired values
-    # For an automatic computation of such parameters, omit them from the call to FFCaseCreation
-    # High-res boxes settings
-    dt_high_les = 0.6                # sampling frequency of high-res files
-    ds_high_les = 10.0               # dx, dy, dz that you want these high-res files at
-    extent_high = 1.2               # high-res box extent in y and x for each turbine, in D.
-    # Low-res boxes settings
-    dt_low_les  = 3                  # sampling frequency of low-res files
-    ds_low_les  = 20.0               # dx, dy, dz of low-res files
-    extent_low  = [3, 8,  3, 3, 2]   # extent in xmin, xmax, ymin, ymax, zmax, in D
-    
-    
     # ----------- Execution parameters
     ffbin = '/full/path/to/your/binary/.../bin/FAST.Farm'
 
@@ -132,8 +119,6 @@ def main():
 
     # Initial setup
     case = FFCaseCreation(path, wts, tmax, zbot, vhub, shear, TIvalue, inflow_deg,
-                          dt_high_les, ds_high_les, extent_high,
-                          dt_low_les, ds_low_les, extent_low,
                           ffbin=ffbin, mod_wake=mod_wake, yaw_init=yaw_init,
                           nSeeds=nSeeds,
                           inflowType=inflowType,
