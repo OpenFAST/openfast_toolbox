@@ -463,6 +463,8 @@ class FFCaseCreation:
                              f'in the ADmodel and EDmodel arrays ({np.shape(self.ADmodel)[1]})')
   
         # Check on seed parameters
+        if self.nSeeds is None and self.inflowType == 'LES':
+            self.nSeeds = 1
         if not isinstance(self.nSeeds,int):
             raise ValueError(f'An integer number of seeds should be requested. Got {self.nSeeds}.')
         if self.nSeeds > 30:
@@ -1895,7 +1897,7 @@ class FFCaseCreation:
                         wvel = np.roll(bts['u'][2, :, jTurb, kTurb], start_time_step)
 
                         # Map it to high-res time and dt (both) 
-                        time_hr = np.arange(time[0], time[-1]+self.dt_high, self.dt_high)
+                        time_hr = np.arange(time[0], self.tmax_low+self.dt_high, self.dt_high)
                         uvel_hr = np.interp(time_hr, time, uvel)
                         vvel_hr = np.interp(time_hr, time, vvel)
                         wvel_hr = np.interp(time_hr, time, wvel)
