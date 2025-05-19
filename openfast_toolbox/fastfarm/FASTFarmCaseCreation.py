@@ -562,19 +562,19 @@ class FFCaseCreation:
                                 buffer_hr = self.extent_high,
                                 mod_wake = self.mod_wake)
 
-        print(f'         High-resolution: ds: {amr.ds_hr} m, dt: {amr.dt_high} s')
-        print(f'         Low-resolution:  ds: {amr.ds_lr} m, dt: {amr.dt_low} s\n')
+        print(f'         High-resolution: ds: {amr.ds_high_les} m, dt: {amr.dt_high_les} s')
+        print(f'         Low-resolution:  ds: {amr.ds_low_les} m, dt: {amr.dt_low_les} s\n')
         print(f'WARNING: If the above values are too fine or manual tuning is warranted, specify them manually.')
-        print(f'         To do that, specify, e.g., `dt_high = {2*amr.dt_high}` to the call to `FFCaseCreation`.')
-        print(f'                                    `ds_high = {2*amr.ds_high}`')
-        print(f'                                    `dt_low  = {2*amr.dt_low}`')
-        print(f'                                    `ds_low  = {2*amr.ds_low}`')
+        print(f'         To do that, specify, e.g., `dt_high = {2*amr.dt_high_les}` to the call to `FFCaseCreation`.')
+        print(f'                                    `ds_high = {2*amr.ds_high_les}`')
+        print(f'                                    `dt_low  = {2*amr.dt_low_les}`')
+        print(f'                                    `ds_low  = {2*amr.ds_low_les}`')
         print(f'         If the values above are okay, you can safely ignore this warning.\n')
 
-        self.dt_high = amr.dt_high
-        self.ds_high = amr.dt_high
-        self.dt_low  = amr.dt_low
-        self.ds_low  = amr.dt_low
+        self.dt_high = amr.dt_high_les
+        self.ds_high = amr.dt_high_les
+        self.dt_low  = amr.dt_low_les
+        self.ds_low  = amr.dt_low_les
 
 
 
