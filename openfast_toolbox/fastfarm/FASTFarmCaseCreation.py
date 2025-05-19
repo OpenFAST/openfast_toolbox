@@ -686,6 +686,10 @@ class FFCaseCreation:
                     shutilcopy2_untilSuccessful(self.BDfilepath,      os.path.join(currPath,self.BDfilename)) 
                     shutilcopy2_untilSuccessful(self.BDbladefilepath, os.path.join(currPath,self.BDbladefilename)) 
 
+                # SubDyn
+                if self.hasSubD and writeFiles:
+                    shutilcopy2_untilSuccessful(self.SubDfilepath,      os.path.join(currPath,self.SubDfilename)) 
+
                 # Write updated DISCON
                 if writeFiles and self.hasController:
                     if not hasattr(self, 'cpctcqfilepath'):
@@ -1794,12 +1798,6 @@ class FFCaseCreation:
         # and sweep in yaw do not require extra TurbSim runs
         self.nHighBoxCases = len(np.unique(self.inflow_deg))  # some wind dir might be repeated for sweep on yaws
         
-        # Old method to get allHighBoxCases. Doesn't work well if I have weird manual sweeps
-        allHighBoxCases_old  = self.allCases.where(~self.allCases['misalignment'], drop=True).drop_vars('misalignment')\
-                                            .where(self.allCases['nFullAeroDyn']==self.nTurbines, drop=True).drop_vars('ADmodel')\
-                                            .where(self.allCases['nFulllElastoDyn']==self.nTurbines, drop=True).drop_vars('EDmodel')\
-                                            .where(self.allCases['yawCase']==1, drop=True).drop_vars('yawCase')
-
         # This is a new method, but I'm not sure if it will work always, so let's leave the one above and check it
         uniquewdir = np.unique(self.allCases.inflow_deg)
         allHighBoxCases = []
@@ -1808,26 +1806,6 @@ class FFCaseCreation:
             firstCaseWithInflow_i = self.allCases.where(self.allCases['inflow_deg'] == currwdir, drop=True).isel(case=0)
             allHighBoxCases.append(firstCaseWithInflow_i)
         self.allHighBoxCases = xr.concat(allHighBoxCases, dim='case')
-        # But, before I change the algorithm, I want to time-test it, so let's compare both ways
-        if not self.allHighBoxCases['inflow_deg'].identical(allHighBoxCases_old['inflow_deg']):
-            self.allHighBoxCases_old = allHighBoxCases_old
-            print(f'!!!!!! WARNING !!!!!!!!!')
-            print(f'The new method for computing all the high-box cases is not producing the same set of cases as the old algorithm.')
-            print(f'This should only happen if you have complex sweeps that you modified manually after the code creates the initial arrays')
-            print(f'Check the variable <obj>.allHighBoxCases_old to see the cases using the old algorithm')
-            print(f'Check the variable <obj>.allHighBoxCases     to see the cases using the new algorithm')
-            print(f'You should check which xr.dataset has the correct, unique inflow_deg values. The correct array will only have unique values')
-            print(f'')
-            if len(self.allHighBoxCases_old['inflow_deg']) != len(np.unique(self.allHighBoxCases_old['inflow_deg'])):
-                print(f'    Checking the inflow_deg variable, it looks like the old method has non-unique wind directions. The old method is wrong here.')
-            if len(self.allHighBoxCases['inflow_deg'])     != len(np.unique(self.allHighBoxCases['inflow_deg'])):
-                print(f'    Checking the inflow_deg variable, it looks like the new method has non-unique wind directions. The new method is wrong here.')
-            else:
-                print('    The new method appears to be correct here! Trust but verify')
-            print('')
-            print(f'!!!!!!!!!!!!!!!!!!!!!!!!')
-            print(f'')
-
 
         if self.nHighBoxCases != len(self.allHighBoxCases.case):
             raise ValueError(f'The number of cases do not match as expected. {self.nHighBoxCases} unique wind directions, but {len(self.allHighBoxCases.case)} unique cases.')
@@ -1930,10 +1908,6 @@ class FFCaseCreation:
     def TS_high_setup(self, writeFiles=True):
 
         #todo: Check if the low-res boxes were created successfully
-
-        if self.ds_high != self.cmax:
-            print(f'WARNING: The requested ds_high = {self.ds_high} m is not actually used. The TurbSim ')
-            print(f'         boxes use the default max chord value ({self.cmax} m here) for the spatial resolution.')
 
         # Create symbolic links for the low-res boxes
         self.TS_low_createSymlinks()
@@ -2303,6 +2277,7 @@ class FFCaseCreation:
                     ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
 
                     # Ensure radii outputs are within [0, NumRadii-1]
+                    ff_file['OutRadii'] = [ff_file['OutRadii']] if isinstance(ff_file['OutRadii'],(float,int)) else ff_file['OutRadii'] 
                     for i, r in enumerate(ff_file['OutRadii']):
                         if r > ff_file['NumRadii']-1:
                             ff_file['NOutRadii'] = i
@@ -2408,6 +2383,14 @@ class FFCaseCreation:
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
                     ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
         
+                    # Ensure radii outputs are within [0, NumRadii-1]
+                    ff_file['OutRadii'] = [ff_file['OutRadii']] if isinstance(ff_file['OutRadii'],(float,int)) else ff_file['OutRadii'] 
+                    for i, r in enumerate(ff_file['OutRadii']):
+                        if r > ff_file['NumRadii']-1:
+                            ff_file['NOutRadii'] = i
+                            ff_file['OutRadii'] = ff_file['OutRadii'][:i]
+                            break
+
                     # Vizualization outputs
                     ff_file['WrDisWind'] = 'False'
                     ff_file['WrDisDT']   = ff_file['DT_Low']      # default is the same as DT_Low
@@ -2746,17 +2729,12 @@ class FFCaseCreation:
         alphas = np.append(1, np.linspace(0.5,0.2, len(self.wts_rot_ds['inflow_deg'])-1))
 
         # low-res box
-        try:
-            ax.plot([self.TSlowbox.xmin, self.TSlowbox.xmax, self.TSlowbox.xmax, self.TSlowbox.xmin, self.TSlowbox.xmin],
-                    [self.TSlowbox.ymin, self.TSlowbox.ymin, self.TSlowbox.ymax, self.TSlowbox.ymax, self.TSlowbox.ymin],'--k',lw=2,label='Low')
-        except AttributeError:
-            print(f'WARNING: The exact limits of the low-res box have not been computed yet. Showing extents given as inputs')
-            xmin = self.allCases['Tx'].min()-self.extent_low[0]*self.D
-            xmax = self.allCases['Tx'].max()+self.extent_low[1]*self.D
-            ymin = self.allCases['Ty'].min()-self.extent_low[2]*self.D
-            ymax = self.allCases['Ty'].max()+self.extent_low[3]*self.D
-            ax.plot([xmin, xmax, xmax, xmin, xmin],
-                    [ymin, ymin, ymax, ymax, ymin],'--k',lw=2,label='Low')
+        xmin = self.allCases['Tx'].min()-self.extent_low[0]*self.D
+        xmax = self.allCases['Tx'].max()+self.extent_low[1]*self.D
+        ymin = self.allCases['Ty'].min()-self.extent_low[2]*self.D
+        ymax = self.allCases['Ty'].max()+self.extent_low[3]*self.D
+        ax.plot([xmin, xmax, xmax, xmin, xmin],
+                [ymin, ymin, ymax, ymax, ymin],'--k',lw=2,label='Low')
 
 
         for j, inflow in enumerate(self.wts_rot_ds['inflow_deg']):
@@ -2807,7 +2785,7 @@ class FFCaseCreation:
         handles, labels = plt.gca().get_legend_handles_labels()
         by_label = dict(zip(labels, handles))
         if showLegend:
-            plt.legend(by_label.values(), by_label.keys(), loc='upper left', bbox_to_anchor=(1.02,1.015), fontsize=fontsize, ncols=int(self.nTurbines/25))
+            plt.legend(by_label.values(), by_label.keys(), loc='upper left', bbox_to_anchor=(1.02,1.015), fontsize=fontsize, ncols=int(np.ceil(self.nTurbines/25)))
 
         ax.set_xlabel("x [m]", fontsize=fontsize)
         ax.set_ylabel("y [m]", fontsize=fontsize)

@@ -108,7 +108,7 @@ class TSCaseCreation:
         if self.boxType == 'lowres':
             self._discretization_lowres()
         elif self.boxType == 'highres':
-            self._discretization_higres()
+            self._discretization_highres()
         else:
             raise ValueError("boxType can only be 'lowres' or 'highres'. Stopping.")
 
@@ -126,17 +126,21 @@ class TSCaseCreation:
 
         self.dy = np.floor(self.ds_low/self.ds_high)*self.ds_high
         self.dz = np.floor(self.ds_low/self.ds_high)*self.ds_high
+        self.dt = self.dt_low
 
     def _discretization_highres(self):
 
         # Temporal resolution for high-res
-        self.dt_high = 1.0/(2.0*self.fmax)
+        if self.dt_high is None:
+            self.dt_high = 1.0/(2.0*self.fmax)
         
         # Spatial resolution for high-res
         if self.ds_high is None:
             self.ds_high = self.cmax
+
         self.dy = self.ds_high
         self.dz = self.ds_high
+        self.dt = self.dt_high
 
 
     def domainSize(self, zbot):
