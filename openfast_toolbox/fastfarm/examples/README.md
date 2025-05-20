@@ -1,10 +1,13 @@
+# FAST.Farm Examples
 
+This directory contains a few examples on how to setup FAST.Farm from scratch. The examples included are:
 
-Example 1: Create a TurbSim input file for a FAST.Farm simulation, with proper box extent parameters.
-  
-Example 2: Setup the high and low res parameters of FAST.Farm input using a TurbSim box
+1. Example 1: Determine the spatial and temporal resolution needed for a given farm and given turbine. Uses the requirements outlined in the modeling guidances.
 
-Example 3: Creation of complete setup of FAST.Farm, including TurbSim inputs for high- and low-res boxes. Combination of Examples 1 and 2 above.
+2. Example 2a: Create a complete FAST.Farm setup, driven by TurbSim inflow.
 
+3. Example 2b: Create a complete FAST.Farm setup, driven by LES inflow.
 
-NOTE: the interface of these scripts is still in a preliminary phase and might be updated in the future.
+4. Example 3: Create an LES (AMR-Wind) sampling input for a given desired FAST.Farm run. 
+
+Note that these examples do not showcase all the capability of the toolbox and the user is encourage to read the docstrings. The values given in the examples should not be considered realistic for an actual simulation and are meant to illustrate the input format.
