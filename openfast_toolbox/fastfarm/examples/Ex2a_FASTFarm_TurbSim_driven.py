@@ -123,7 +123,7 @@ def main():
     # The values below are illustrative and do not represent recommended values.
     # The user should set these according to the farm and computational resources
     # available. For the recommended temporal and spatial resolutions, follow the
-    # modeling guidances or the example `Ex3_FFarmCompleteSetup_discretization.py`.
+    # modeling guidances or the example `Ex1_FASTFarm_discretization.py`.
 
     # ----------- Low- and high-res boxes parameters
     # High-res boxes settings

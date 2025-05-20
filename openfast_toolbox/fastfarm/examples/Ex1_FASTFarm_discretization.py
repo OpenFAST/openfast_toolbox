@@ -124,13 +124,13 @@ def main():
 
     # ----------- Low- and high-res boxes parameters
     # High-res boxes settings
-    dt_high    = None    # sampling frequency of high-res files
-    ds_high    = None    # dx, dy, dz of high-res files
+    dt_high     = None    # sampling frequency of high-res files
+    ds_high     = None    # dx, dy, dz of high-res files
     extent_high = None   # extent in y and x for each turbine, in D
     # Low-res boxes settings
-    dt_low     = None   # sampling frequency of low-res files
-    ds_low     = None   # dx, dy, dz of low-res files
-    extent_low = None   # extent in [xmin,xmax,ymin,ymax,zmax], in D
+    dt_low      = None   # sampling frequency of low-res files
+    ds_low      = None   # dx, dy, dz of low-res files
+    extent_low  = None   # extent in [xmin,xmax,ymin,ymax,zmax], in D
 
 
     # -----------------------------------------------------------------------------
