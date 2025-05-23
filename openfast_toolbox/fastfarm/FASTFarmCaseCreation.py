@@ -2266,10 +2266,6 @@ class FFCaseCreation:
                     #if checkWindFiles:
                     #    ff_file['ChkWndFiles'] = 'TRUE'
         
-                    # Super controller
-                    ff_file['UseSC'] = False
-                    ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
-
                     # Shared mooring system
                     if self.hasMD and not self.multi_MD:
                         ff_file['Mod_SharedMooring'] = 3  # {0: None, 3=MoorDyn}
@@ -2373,10 +2369,6 @@ class FFCaseCreation:
                     ff_file['Mod_AmbWind'] = self.Mod_AmbWind  # 3: multiple TurbSim
                     ff_file['TMax'] = self.tmax
         
-                    # Super controller
-                    ff_file['UseSC'] = False
-                    ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
-                    
                     # Shared mooring system
                     if self.hasMD and not self.multi_MD:
                         ff_file['Mod_SharedMooring'] = 3  # {0: None, 3=MoorDyn}
