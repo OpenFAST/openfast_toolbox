@@ -1,114 +1,95 @@
-# -*- coding: utf-8 -*-
-"""
-  - The x-y extents of the box are large enough to accomodate all turbines
-  - The z extent is large enough to include the rotor, start from the user specified `zbot`,
-      and accomodates for the meandering in the vertical direction .
-  - The dy and dz resolution is set of the maximum chord of the turbine
-  - The dt resolution is set based on the maximum frequency expected to be relevant for dynamics
-
-@author: kshaler
-"""
-import os, glob, struct
 import numpy as np
 
 class TSCaseCreation:
     
     def __init__(self, D, HubHt, Vhub, TI, PLexp, x, y, z=None, zbot=1.0, cmax=5.0, fmax=5.0,
-                 Cmeander=1.9, boxType='highres', high_ext=1.2, low_ext=None, ds_low=None):
+                 Cmeander=1.9, boxType='highres', extent=None,
+                 ds_low=None, ds_high=None, dt_low=None, dt_high=None, mod_wake=1):
         """
         Instantiate the object. 
         
         Parameters
-        ----------
-        D        :   float,
-                    rotor diameter (m)
-        HubHt    :   float,
-                    turbine hub height (m)
-        Vhub	 :   float,
-                    mean wind speed at hub height (m/s)
-        TI	     :   float,
-                   turbulence intensity at hub height
-        PLexp    :   float,
-                    power law exponent for shear (-)
-        x, y, z  :   float,
-                    x-, y-, and z-location of turbine, respectively
-                    if z is None, z is set to 0
-        cmax     :   float,
-                    maximum blade chord (m). If not specified, set to NREL 5MW value.
-        fmax     :   float,
-                    maximum excitation frequency (Hz). If not specified set to NREL 5MW tower value.
-        boxType  :   str,
-                    box type, either 'lowres' or 'highres'. Sets the appropriate dt, dy, and dz for discretization
-                    Defaults to `highres` for backward compatibility
-        high_ext :   float
-                    extent of the high-res box around individual turbines (in D). This is the total length
-        low_ext  :  list of floats [xmin, xmax, ymin, ymax, zabovehub]
-                    extents for the low-res box. All values should be positive  If not specified, resorts to
-                    computations by the manual
+        ==========
+        D: float
+            Rotor diameter (m)
+        HubHt: float
+            Turbine hub height (m)
+        Vhub: float
+            Mean wind speed at hub height (m/s)
+        TI: float
+            Turbulence intensity at hub height
+        PLexp: float
+            Power law exponent for shear (-)
+        x, y, z: float,
+            x-, y-, and z-location of turbine, respectively. If z is None, z is set to 0
+        cmax: float
+            Maximum blade chord (m). If not specified, set to NREL 5MW value.
+        fmax: float
+            Maximum excitation frequency (Hz). If not specified set to NREL 5MW tower value.
+        boxType: str
+            Box type, either 'lowres' or 'highres'. Sets the appropriate dt, dy, and
+            dz for discretization. Defaults to `highres` for backward compatibility
+        extent: float or list of floats [xmin, xmax, ymin, ymax, zabovehub]
+            Extent of the box. If high-res, extent is the total length around individual
+            turbines (in D), typically 1.2D. If low-res, a list of each indidual extent
+            is expected. All values should be positive.
+        ds: float
+            Spatial resolution of the requested box. Optional, and defaults to the value
+            given by the modeling guidances
+        dt: float
+            Temporal resolution of the requested box. Optional, and defaults to the value
+            given by the modeling guidances
+        mod_wake: int
+            The wake model to be used. Recommendations for dt_low changes across models.
+            Defaults to polar wake for backward compatibility.
         """
 
         # Perform some checks on the input
-        if low_ext is not None and len(low_ext) != 5:
-            raise ValueError('low_ext not defined properly. It should be [xmin, xmax, ymin, ymax, zabovehub]')
-
-        if low_ext is None:
-            manual_mode = False
-        else:
-            manual_mode = True
-
-        if ds_low is None:
-            manual_ds_low = False
-        else:
-            manual_ds_low = True
+        if boxType not in ['lowres', 'highres']:
+            raise ValueError(f"Box type can only be 'lowres' or 'highres'. Received {boxType}.")
+        if boxType == 'lowres':
+            if extent is None or len(extent) != 5:
+                raise ValueError(f'extent not defined properly for the low-res box. It should '\
+                                 f'be [xmin, xmax, ymin, ymax, zabovehub]. Received {extent}.')
+        elif boxType == 'highres':
+            if extent is None or not isinstance(extent, (int,float)) or extent<1:
+                raise ValueError(f'extent not defined properly for the high-res box. It should '\
+                                 f'be given as a scalar larger than the rotor diameter. Received {extent}')
 
         # Set parameters for convenience
+        self.D        = D
+        self.RefHt    = HubHt
+        self.URef     = Vhub
+        self.TI       = TI
+        self.PLexp    = PLexp
+        self.cmax     = cmax
+        self.fmax     = fmax
         self.Cmeander = Cmeander
         self.boxType  = boxType
-        self.high_ext = high_ext
-        self.low_ext  = low_ext
+        self.extent   = extent
         self.ds_low   = ds_low
-        # Turbine parameters
-        self.Turb(D, HubHt, cmax, fmax)
+        self.ds_high  = ds_high
+        self.dt_low   = dt_low
+        self.dt_high  = dt_high
+        self.mod_wake = mod_wake
+
         # Turbine location
         self.turbLocs(x,y,z)
         # Discretization
-        self.discretization(Vhub, TI, PLexp, manual_ds_low)
+        self.discretization()
         # Setup domain size
-        self.domainSize(zbot=zbot, manual_mode=manual_mode)
+        self.domainSize(zbot=zbot)
         # Determine origin
         # self.originLoc()
 
-    def Turb(self, D, HubHt, cmax=5.0, fmax=5.0):
-        """
-        Define turbine parameters
-        
-        Parameters
-        __________
-        D       :   float,
-                   rotor diameter (m)
-        HubHt   :   float,
-                   turbine hub height (m)
-        tpath   :   string,
-                   path to base turbine location (.fst)
-        cmax    :   float,
-                   maximum blade chord (m). If not specified, set to NREL 5MW value.
-        fmax    :   float,
-                   maximum excitation frequency (Hz). If not specified set to NREL 5MW tower value.
-        """
-        
-        self.D     = D
-        self.RefHt = HubHt
-        self.cmax  = cmax
-        self.fmax  = fmax
-        
     def turbLocs(self,x,y,z=None):
         """
         Specify turbine locations
         
         Parameters
-        ----------
-        x, y, z   :   float,
-               x-, y-, and z-location of turbine, respectively
+        ==========
+        x, y, z: float
+            x-, y-, and z-location of turbine, respectively
         """
         self.x     = np.asarray(x)
         self.y     = np.asarray(y)
@@ -117,97 +98,88 @@ class TSCaseCreation:
         else:
             self.z     = np.asarray(z)
 
-    def discretization(self, Vhub, TI, Shear, manual_ds_low=False):
+    def discretization(self):
         '''
         Specify discretization for both the high-res and low-res boxes. Follows guidelines present at
         https://openfast.readthedocs.io/en/main/source/user/fast.farm/ModelGuidance.html#low-resolution-domain
 
         '''
         
-        self.URef = Vhub
-        self.TI = TI
-        self.PLexp = Shear
-        
-        # Derived properties
         if self.boxType == 'lowres':
-            self.dt = self.Cmeander*self.D/(10*Vhub)
-            ds_low  = self.Cmeander*self.D*Vhub/150
-            if manual_ds_low:
-                ds_low = self.ds_low
-            ds_high = self.cmax
-            self.dy = np.floor(ds_low/ds_high)*ds_high
-            self.dz = np.floor(ds_low/ds_high)*ds_high
-            #self.dt = 1.0/(2.0*self.fmax)
-            #self.dy = self.cmax
-            #self.dz = self.cmax
-
+            self._discretization_lowres()
         elif self.boxType == 'highres':
-            self.dt = 1.0/(2.0*self.fmax)
-            self.dy = self.cmax
-            self.dz = self.cmax
-
+            self._discretization_highres()
         else:
             raise ValueError("boxType can only be 'lowres' or 'highres'. Stopping.")
 
-    def domainSize(self, zbot, manual_mode=False):
+    def _discretization_lowres(self):
+
+        # Temporal resolution for low-res
+        if self.mod_wake == 1 and self.dt_low is None:
+            self.dt_low = self.Cmeander*self.D/(10*self.URef)
+        elif self.mod_wake == 2 and self.dt_low is None:
+            self.dt_low = (self.D/15)/(2*self.URef)
+
+        # Spatial resolution for low-res
+        if self.ds_low is None:
+            self.ds_low = self.Cmeander*self.D*self.URef/150
+
+        self.dy = np.floor(self.ds_low/self.ds_high)*self.ds_high
+        self.dz = np.floor(self.ds_low/self.ds_high)*self.ds_high
+        self.dt = self.dt_low
+
+    def _discretization_highres(self):
+
+        # Temporal resolution for high-res
+        if self.dt_high is None:
+            self.dt_high = 1.0/(2.0*self.fmax)
+        
+        # Spatial resolution for high-res
+        if self.ds_high is None:
+            self.ds_high = self.cmax
+
+        self.dy = self.ds_high
+        self.dz = self.ds_high
+        self.dt = self.dt_high
+
+
+    def domainSize(self, zbot):
     
         # Set default
         self.ymin = None
         self.ymax = None
 
         if self.boxType == 'lowres':
-            if manual_mode:
-                self.ymin = min(self.y) - self.low_ext[2]*self.D
-                self.ymax = max(self.y) + self.low_ext[3]*self.D
-                Zdist_Low = self.RefHt + self.low_ext[4]*self.D
-            else:
-                self.ymin = min(self.y)-2.23313*self.Cmeander*self.D/2  # JJ: I don't recall where these recommendations came from. I can't find them on the modelling guidance document
-                self.ymax = max(self.y)+2.23313*self.Cmeander*self.D/2  # JJ: I only see the y0_Low <= WT_Y_min -3*D recommendation
-                Zdist_Low = self.RefHt + self.D/2 + 2.23313*self.Cmeander*self.D/2 # JJ: ditto
-            
+            self.ymin = min(self.y) - self.extent[2]*self.D
+            self.ymax = max(self.y) + self.extent[3]*self.D
+            Zdist_Low = self.RefHt + self.extent[4]*self.D
             Ydist_Low = self.ymax - self.ymin
 
             self.ny = np.ceil(Ydist_Low/self.dy)+1
             self.nz = np.ceil(Zdist_Low/self.dz)+1
 
-            # We need to make sure the number of points is odd.
-            if self.ny%2 == 0:
-                self.ny += 1
-            if self.nz%2 == 0:
-                self.nz += 1
-               
-            
-            self.Width  = self.dy*(self.ny-1)
-            self.Height = self.dz*(self.nz-1)
-            
-            Dgrid=min(self.Height,self.Width)
-
-            # Set the hub height using half of the total grid height 
-            self.HubHt_for_TS = zbot - 0.5*Dgrid + self.Height
-
         elif self.boxType=='highres':
-            Ydist_high = self.high_ext*self.D
-            Zdist_high = self.RefHt + self.high_ext*self.D/2 - zbot
+            Ydist_high = self.extent*self.D
+            Zdist_high = self.RefHt + self.extent*self.D/2 - zbot
            
             self.ny = np.ceil(Ydist_high/self.dy)+1
             self.nz = np.ceil(Zdist_high/self.dz)+1
            
-            # We need to make sure the number of points is odd.
-            if self.ny%2 == 0:
-                self.ny += 1
-            if self.nz%2 == 0:
-                self.nz += 1
-
-            self.Width  = self.dy*(self.ny-1)
-            self.Height = self.dz*(self.nz-1)
-           
-            Dgrid = min(self.Height,self.Width)
-
-            # Set the hub height using half of the total grid height 
-            self.HubHt_for_TS = zbot - 0.5*Dgrid + self.Height
-
         else:
             raise ValueError("boxType can only be 'lowres' or 'highres'. Stopping.")
+
+        # We need to make sure the number of points is odd.
+        if self.ny%2 == 0:
+            self.ny += 1
+        if self.nz%2 == 0:
+            self.nz += 1
+        
+        self.Width  = self.dy*(self.ny-1)
+        self.Height = self.dz*(self.nz-1)
+        Dgrid=min(self.Height,self.Width)
+
+        # Set the hub height using half of the total grid height 
+        self.HubHt_for_TS = zbot - 0.5*Dgrid + self.Height
 
 
     def originLoc(self):
@@ -216,7 +188,9 @@ class TSCaseCreation:
 
 
     def plotSetup(self, fig=None, ax=None):
-        """ Plot a figure showing the turbine locations and the extent of the turbulence box"""
+        """
+        Plot a figure showing the turbine locations and the extent of the turbulence box
+        """
         if fig is None:
             import matplotlib.pyplot as plt
             fig = plt.figure(figsize=(6,5))
@@ -243,7 +217,8 @@ class TSCaseCreation:
         return fig, ax
 
     def writeTSFile(self, fileIn, fileOut, NewFile=True, tpath=None, tmax=50, turb=None, verbose=0):
-        """ Write a TurbSim primary input file, 
+        """
+        Write a TurbSim primary input file.
         See WriteTSFile below.
         """
         WriteTSFile(fileIn, fileOut, self, NewFile=NewFile, tpath=tpath, tmax=tmax, turb=turb, verbose=verbose)
@@ -251,17 +226,19 @@ class TSCaseCreation:
 
         
 def WriteTSFile(fileIn, fileOut, params, NewFile=True, tpath=None, tmax=50, turb=None, verbose=0):
-    """ Write a TurbSim primary input file, 
+    """
+    Write a TurbSim primary input file, 
 
-        tpath:     string,
-                   path to base turbine location (.fst)
-                   only used if NewFile is False
-        boxType:   string,
-                   Box type, either 'lowres' or 'highres'. Writes the proper `TurbModel`
-                   if boxType=='highres', `turb` needs to be specified
-        turb:      int,
-                   turbine number to be printed on the time series file. Only needed
-                   if boxType='highres'
+    Parameters
+    ==========
+    tpath: string
+        Path to base turbine location (.fst). Only used if NewFile is False
+    boxType: string
+        Box type, either 'lowres' or 'highres'. Writes the proper `TurbModel`
+        If boxType=='highres', `turb` needs to be specified
+    turb: int
+        Turbine number to be printed on the time series file. Only needed
+        if boxType='highres'
 
     """
 
@@ -375,8 +352,8 @@ def WriteTSFile(fileIn, fileOut, params, NewFile=True, tpath=None, tmax=50, turb
 
 
 def writeTimeSeriesFile(fileOut,yloc,zloc,u,v,w,time):
-    """ Write a TurbSim primary input file, 
-
+    """
+    Write a TurbSim primary input file, 
     """
 
     print(f'Writing {fileOut}')

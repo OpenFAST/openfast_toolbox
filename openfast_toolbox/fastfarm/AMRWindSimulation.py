@@ -735,6 +735,8 @@ class AMRWindSimulation:
         else: 
             # full file given
             outfile = out
+            if not os.path.exists(os.path.dirname(outfile)):
+                os.makedirs(os.path.dirname(outfile))
             if not overwrite:
                 if os.path.isfile(outfile):
                     raise FileExistsError(f"{str(outfile)} already exists! Aborting...")
