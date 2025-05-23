@@ -531,6 +531,7 @@ class FFCaseCreation:
         self.hasSrvD                   = False
         self.hasHD                     = False
         self.hasMD                     = False
+        self.hasBath                   = False
         self.hasSS                     = False
         self.hasSubD                   = False
         self.hasBD                     = False
@@ -836,6 +837,9 @@ class FFCaseCreation:
                             self.MoorDynFile.write(os.path.join(currPath,f'{self.MDfilename}{t+1}_mod.dat'))
                         else:
                             if t==0: shutilcopy2_untilSuccessful(self.MDfilepath, os.path.join(currPath, self.MDfilename))
+                    
+                    if writeFiles and self.hasBath:
+                        if t==0: shutilcopy2_untilSuccessful(self.bathfilepath, os.path.join(currPath, self.bathfilename))
 
                     # Update each turbine's OpenFAST input
                     self.turbineFile['TMax']         = self.tmax
@@ -1055,6 +1059,7 @@ class FFCaseCreation:
             'SEDfilename'             : None,
             'HDfilename'              : 'HydroDyn.dat', # ending with .T for per-turbine HD, .dat for holisitc
             'MDfilename'              : 'MoorDyn.T',    # ending with .T for per-turbine MD, .dat for holistic
+            'bathfilename'            : 'bathymetry.txt',   
             'SSfilename'              : 'SeaState.dat',
             'SrvDfilename'            : 'ServoDyn.T',
             'ADfilename'              : 'AeroDyn.dat',
@@ -1084,6 +1089,7 @@ class FFCaseCreation:
         self.SEDfilename     = "unused";  self.SEDfilepath     = "unused"
         self.HDfilename      = "unused";  self.HDfilepath      = "unused"
         self.MDfilename      = "unused";  self.MDfilepath      = "unused"
+        self.bathfilename    = "unused";  self.bathfilepath    = "unused"
         self.SSfilename      = "unused";  self.SSfilepath      = "unused"
         self.SrvDfilename    = "unused";  self.SrvDfilepath    = "unused"
         self.ADfilename      = "unused";  self.ADfilepath      = "unused"
@@ -1114,7 +1120,7 @@ class FFCaseCreation:
         self.templatePathabs = os.path.abspath(self.templatePath)
 
         # Check and set the templateFiles
-        valid_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'SSfilename',
+        valid_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'bathfilename', 'SSfilename',
                       'SrvDfilename', 'ADfilename', 'ADskfilename', 'SubDfilename', 'IWfilename', 'BDfilename',
                       'BDbladefilename', 'EDbladefilename', 'EDtowerfilename', 'ADbladefilename', 'turbfilename',
                       'libdisconfilepath', 'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath',
@@ -1180,6 +1186,11 @@ class FFCaseCreation:
                 self.MDfilename = value
                 self.hasMD = True
 
+            elif key == 'bathfilename':
+                self.bathfilepath = os.path.join(self.templatePath, value)
+                checkIfExists(self.bathfilepath)
+                self.bathfilename = value
+                self.hasBath = True
             elif key == 'SSfilename':
                 if not value.endswith('.dat'):
                     raise ValueError(f'The SeaState filename should end in `.dat`.')
@@ -1812,7 +1823,7 @@ class FFCaseCreation:
         
         # Determine offsets from turbines coordinate frame to TurbSim coordinate frame
         self.yoffset_turbsOrigin2TSOrigin = -( (self.TSlowbox.ymax - self.TSlowbox.ymin)/2 + self.TSlowbox.ymin )
-        self.xoffset_turbsOrigin2TSOrigin = - self.extent_low[0]*self.D
+        self.xoffset_turbsOrigin2TSOrigin = -self.extent_low[0]*self.D
         
         if self.verbose>0:
             print(f"    The y offset between the turbine ref frame and turbsim is {self.yoffset_turbsOrigin2TSOrigin}")
@@ -2142,8 +2153,8 @@ class FFCaseCreation:
         
         offset=10
         planes_xy = [self.zhub+self.zbot]
-        planes_yz = np.unique(xWT+offset)
-        planes_xz = np.unique(yWT)
+        planes_yz = np.unique(np.round(xWT+offset, 2))
+        planes_xz = np.unique(np.round(yWT, 2))
         
         # Number of planes must be at most 9
         self.planes_xy = planes_xy[0:9]
@@ -2763,11 +2774,12 @@ class FFCaseCreation:
 
                 # plot turbine disk accoding to all yaws in current wdir
                 allyaw_currwdir = self.allCases.where(self.allCases['inflow_deg']==inflow,drop=True).sel(turbine=currTurbine)['yaw']
+                phi             = self.allCases.where(self.allCases['inflow_deg']==inflow,drop=True).sel(turbine=currTurbine)['phi']
                 _, ind = np.unique(allyaw_currwdir, axis=0, return_index=True)
                 yaw_currwdir = allyaw_currwdir[np.sort(ind)].values # duplicates removed, same order as original array
                 for yaw in yaw_currwdir:
-                    ax.plot([dst.x.values-(dst.D.values/2)*sind(yaw), dst.x.values+(dst.D.values/2)*sind(yaw)],
-                            [dst.y.values-(dst.D.values/2)*cosd(yaw), dst.y.values+(dst.D.values/2)*cosd(yaw)], c=color, alpha=alphas[j])
+                    ax.plot([dst.x.values-(dst.D.values/2)*sind(yaw+phi), dst.x.values+(dst.D.values/2)*sind(yaw+phi)],
+                            [dst.y.values-(dst.D.values/2)*cosd(yaw+phi), dst.y.values+(dst.D.values/2)*cosd(yaw+phi)], c=color, alpha=alphas[j])
 
             # plot convex hull of farm (or line) for given inflow
             turbs = self.wts_rot_ds.sel(inflow_deg=inflow)[['x','y']].to_array().transpose()
