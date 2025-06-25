@@ -1675,7 +1675,7 @@ class FFCaseCreation:
                 # manual mode for discretization (and further domain size) is also activated
                 self.TSlowbox = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xlocs_, y=ylocs_, zbot=self.zbot,
                                                cmax=self.cmax, fmax=self.fmax, Cmeander=self.Cmeander, boxType='lowres', extent=self.extent_low,
-                                               ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high)
+                                               ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high, mod_wake=self.mod_wake)
 
                 if runOnce: return
 
@@ -1958,7 +1958,7 @@ class FFCaseCreation:
                         # Create and write new Low.inp files creating the proper box with proper resolution
                         currentTS = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xloc_, y=yloc_, zbot=self.zbot,
                                                    cmax=self.cmax, fmax=self.fmax, Cmeander=self.Cmeander, boxType='highres', extent=self.extent_high,
-                                                   ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high)
+                                                   ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high, mod_wake=self.mod_wake)
 
                         currentTS.writeTSFile(self.turbsimHighfilepath, currentTSHighFile, tmax=self.tmax_low, turb=t, verbose=self.verbose)
         
