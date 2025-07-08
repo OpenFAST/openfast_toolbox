@@ -2267,8 +2267,9 @@ class FFCaseCreation:
                     #    ff_file['ChkWndFiles'] = 'TRUE'
         
                     # Super controller
-                    ff_file['UseSC'] = False
-                    ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
+                    if 'UseSC' in ff_file.keys():
+                        ff_file['UseSC'] = False
+                        ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
 
                     # Shared mooring system
                     if self.hasMD and not self.multi_MD:
@@ -2374,8 +2375,9 @@ class FFCaseCreation:
                     ff_file['TMax'] = self.tmax
         
                     # Super controller
-                    ff_file['UseSC'] = False
-                    ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
+                    if 'UseSC' in ff_file.keys():
+                        ff_file['UseSC'] = False
+                        ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
                     
                     # Shared mooring system
                     if self.hasMD and not self.multi_MD:
