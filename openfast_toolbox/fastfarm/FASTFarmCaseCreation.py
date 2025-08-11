@@ -165,7 +165,7 @@ class FFCaseCreation:
         ADmodel: list of strings
             List of AeroDyn/AeroDisk models to use for each case
         EDmodel: list of strings
-            List of ElastoDym/SimplifiedElastoDyn models to use for each case
+            List of ElastoDyn/SimplifiedElastoDyn models to use for each case
         nSeeds: int
             Number of seeds used for TurbSim simulations. If changing this value, give seedValues
         seedValues: list of int
@@ -805,6 +805,9 @@ class FFCaseCreation:
                     if ADmodel_ == 'ADyn':
                         self.AeroDynFile['ADBlFile(1)'] = self.AeroDynFile['ADBlFile(2)'] = self.AeroDynFile['ADBlFile(3)'] = f'"{self.ADbladefilename}"'
                         self.AeroDynFile['Wake_Mod'] = 1 
+                        if 'Skew_Mod' in self.AeroDynFile.keys():
+                            self.AeroDynFile['Skew_Mod'] = 1
+                            self.AeroDynFile['SkewMomCorr'] = True
                         # self.AeroDynFile['UA_Mod'] = 0
                         # Adjust the Airfoil path to point to the templatePath (1:-1 to remove quotes)
                         self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, "Airfoils", i[1:-1].split("Airfoils/", 1)[-1])}"' 
