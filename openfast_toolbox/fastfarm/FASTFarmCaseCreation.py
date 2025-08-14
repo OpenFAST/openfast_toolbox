@@ -561,10 +561,13 @@ class FFCaseCreation:
                                 n_cell, max_level, incflo_velocity_hh,
                                 buffer_lr = self.extent_low,
                                 buffer_hr = self.extent_high,
+                                ds_hr = self.ds_high, ds_lr = self.ds_low,
+                                dt_hr = self.dt_high, dt_lr = self.dt_low,
                                 mod_wake = self.mod_wake)
 
-        print(f'         High-resolution: ds: {amr.ds_high_les} m, dt: {amr.dt_high_les} s')
-        print(f'         Low-resolution:  ds: {amr.ds_low_les} m, dt: {amr.dt_low_les} s\n')
+        print(f'Calculated values:')
+        print(f'    High-resolution: ds: {amr.ds_high_les} m, dt: {amr.dt_high_les} s')
+        print(f'    Low-resolution:  ds: {amr.ds_low_les} m, dt: {amr.dt_low_les} s\n')
         print(f'WARNING: If the above values are too fine or manual tuning is warranted, specify them manually.')
         print(f'         To do that, specify, e.g., `dt_high = {2*amr.dt_high_les}` to the call to `FFCaseCreation`.')
         print(f'                                    `ds_high = {2*amr.ds_high_les}`')
@@ -1893,7 +1896,7 @@ class FFCaseCreation:
                         uvel_hr = np.interp(time_hr, time, uvel)
                         vvel_hr = np.interp(time_hr, time, vvel)
                         wvel_hr = np.interp(time_hr, time, wvel)
-        
+
                         # Checks
                         assert len(time_hr)==len(uvel_hr)
                         assert len(uvel_hr)==len(vvel_hr)
@@ -1911,7 +1914,7 @@ class FFCaseCreation:
                         # point in the low-res box, and then pass this offset to the time-series file. In this example, the offset is 2 m, thus the
                         # time-series file will have a y of 2 m.
                         yoffset = bts['y'][jTurb] - yt
-                        if yoffset != 0:
+                        if yoffset != 0 and self.verbose>1:
                             print(f"Seed {seed}, Case {case}: Turbine {t+1} is not at a grid point location. Tubine is at y={yloc_}",\
                                   f"on the turbine reference frame, which is y={yt} on the low-res TurbSim reference frame. The",\
                                   f"nearest grid point in y is {bts['y'][jTurb]} so printing y={yoffset} to the time-series file.")

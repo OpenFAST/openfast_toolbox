@@ -180,7 +180,7 @@ class AMRWindSimulation:
         # For convenience, the turbines should not be zero-indexed
         if 'name' in self.wts[0]:
             if self.wts[0]['name'] != 'T1':
-                if self.verbose>0: print(f"--- WARNING: Recommended turbine numbering should start at 1. Currently it is zero-indexed.")
+                if self.verbose>0: print(f"WARNING: Recommended turbine numbering should start at 1. Currently it is zero-indexed.")
 
 
         # Flags of given/calculated spatial resolution for warning/error printing purposes
@@ -188,10 +188,10 @@ class AMRWindSimulation:
         self.given_ds_lr = False
         warn_msg = ""
         if self.ds_hr is not None:
-            warn_msg += f"--- WARNING: HIGH-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON HIGH-RES BOXES CHECKS TO WARNINGS. ---\n"
+            warn_msg += f"WARNING: HIGH-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON HIGH-RES BOXES CHECKS TO WARNINGS."
             self.given_ds_hr = True
         if self.ds_lr is not None:
-            warn_msg += f"--- WARNING: LOW-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON LOW-RES BOX CHECKS TO WARNINGS. ---\n"
+            warn_msg += f"WARNING: LOW-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON LOW-RES BOX CHECKS TO WARNINGS."
             self.given_ds_lr = True
         if self.verbose>0: print(f'{warn_msg}\n')
         a=1
