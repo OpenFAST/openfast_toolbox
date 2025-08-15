@@ -145,12 +145,12 @@ def main():
     # ----------- Initial setup
     # The initial setup with the temporal and spatial resolutions of both high and
     # low resolution boxes given as None will trigger their automatic computation.
-    ffcase = FFCaseCreation(path, wts, tmax, zbot, vhub, shear, TIvalue, inflow_deg,
-                            dt_high=dt_high, ds_high=ds_high, extent_high=extent_high,
-                            dt_low=dt_low,   ds_low=ds_low,   extent_low=extent_low,
-                            ffbin=ffbin, mod_wake=mod_wake, yaw_init=yaw_init,
-                            nSeeds=nSeeds, tsbin=tsbin, inflowType=inflowType,
-                            refTurb_rot=refTurb_rot, verbose=0)
+    amr = FFCaseCreation(path, wts, tmax, zbot, vhub, shear, TIvalue, inflow_deg,
+                         dt_high=dt_high, ds_high=ds_high, extent_high=extent_high,
+                         dt_low=dt_low,   ds_low=ds_low,   extent_low=extent_low,
+                         ffbin=ffbin, mod_wake=mod_wake, yaw_init=yaw_init,
+                         nSeeds=nSeeds, tsbin=tsbin, inflowType=inflowType,
+                         refTurb_rot=refTurb_rot, verbose=0)
 
 
 
