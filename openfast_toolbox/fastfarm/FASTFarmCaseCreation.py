@@ -811,10 +811,8 @@ class FFCaseCreation:
                         if 'Skew_Mod' in self.AeroDynFile.keys():
                             self.AeroDynFile['Skew_Mod'] = 1
                             self.AeroDynFile['SkewMomCorr'] = True
-                        self.AeroDynFile['UA_Mod']  = 4
                         self.AeroDynFile['BEM_Mod'] = 2
                         self.AeroDynFile['IntegrationMethod'] = 4
-                        self.AeroDynFile['SectAvg'] = True
                         # Adjust the Airfoil path to point to the templatePath (1:-1 to remove quotes)
                         self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, "Airfoils", i[1:-1].split("Airfoils/", 1)[-1])}"' 
                                         for i in self.AeroDynFile['AFNames'] ]
