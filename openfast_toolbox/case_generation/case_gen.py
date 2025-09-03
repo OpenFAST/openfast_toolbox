@@ -360,8 +360,7 @@ def removeFASTOuputs(workDir):
 # --------------------------------------------------------------------------------{
 def paramsSteadyAero(p=None):
     p = dict() if p is None else p
-    p['AeroFile|AFAeroMod']=1 # remove dynamic effects dynamic
-    p['AeroFile|WakeMod']=1 # remove dynamic inflow dynamic
+    p['AeroFile|Wake_Mod']=1 # remove dynamic inflow dynamic
     p['AeroFile|TwrPotent']=0 # remove tower shadow
     p['AeroFile|TwrAero']=False # remove tower shadow
 
@@ -496,7 +495,6 @@ def paramsLinearTrim(p=None):
     p['LinOutMod']              = False
     p['OutFmt']                 = '"ES20.12E3"'  # Important for decent resolution
 
-    p['AeroFile|AFAeroMod']     = 1
     p['AeroFile|CavitCheck']    = 'False'
     p['AeroFile|CompAA']        = 'False'
     
@@ -599,7 +597,7 @@ def CPCT_LambdaPitch(refdir, main_fastfile, Lambda=None, Pitch=np.linspace(-10,4
 
     """
 
-    WS_default=5 # If user does not provide a wind speed vector, wind speed used
+    WS_default=8 # If user does not provide a wind speed vector, wind speed used
 
     # if the user provided a full path to the main file, we scrap the directory. TODO, should be cleaner
     if len(os.path.dirname(main_fastfile))>0:
