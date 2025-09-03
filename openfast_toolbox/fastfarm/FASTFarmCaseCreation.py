@@ -165,7 +165,7 @@ class FFCaseCreation:
         ADmodel: list of strings
             List of AeroDyn/AeroDisk models to use for each case
         EDmodel: list of strings
-            List of ElastoDym/SimplifiedElastoDyn models to use for each case
+            List of ElastoDyn/SimplifiedElastoDyn models to use for each case
         nSeeds: int
             Number of seeds used for TurbSim simulations. If changing this value, give seedValues
         seedValues: list of int
@@ -561,10 +561,13 @@ class FFCaseCreation:
                                 n_cell, max_level, incflo_velocity_hh,
                                 buffer_lr = self.extent_low,
                                 buffer_hr = self.extent_high,
+                                ds_hr = self.ds_high, ds_lr = self.ds_low,
+                                dt_hr = self.dt_high, dt_lr = self.dt_low,
                                 mod_wake = self.mod_wake)
 
-        print(f'         High-resolution: ds: {amr.ds_high_les} m, dt: {amr.dt_high_les} s')
-        print(f'         Low-resolution:  ds: {amr.ds_low_les} m, dt: {amr.dt_low_les} s\n')
+        print(f'Calculated values:')
+        print(f'    High-resolution: ds: {amr.ds_high_les} m, dt: {amr.dt_high_les} s')
+        print(f'    Low-resolution:  ds: {amr.ds_low_les} m, dt: {amr.dt_low_les} s\n')
         print(f'WARNING: If the above values are too fine or manual tuning is warranted, specify them manually.')
         print(f'         To do that, specify, e.g., `dt_high = {2*amr.dt_high_les}` to the call to `FFCaseCreation`.')
         print(f'                                    `ds_high = {2*amr.ds_high_les}`')
@@ -805,7 +808,11 @@ class FFCaseCreation:
                     if ADmodel_ == 'ADyn':
                         self.AeroDynFile['ADBlFile(1)'] = self.AeroDynFile['ADBlFile(2)'] = self.AeroDynFile['ADBlFile(3)'] = f'"{self.ADbladefilename}"'
                         self.AeroDynFile['Wake_Mod'] = 1 
-                        # self.AeroDynFile['UA_Mod'] = 0
+                        if 'Skew_Mod' in self.AeroDynFile.keys():
+                            self.AeroDynFile['Skew_Mod'] = 1
+                            self.AeroDynFile['SkewMomCorr'] = True
+                        self.AeroDynFile['BEM_Mod'] = 2
+                        self.AeroDynFile['IntegrationMethod'] = 4
                         # Adjust the Airfoil path to point to the templatePath (1:-1 to remove quotes)
                         self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, "Airfoils", i[1:-1].split("Airfoils/", 1)[-1])}"' 
                                         for i in self.AeroDynFile['AFNames'] ]
@@ -1675,7 +1682,7 @@ class FFCaseCreation:
                 # manual mode for discretization (and further domain size) is also activated
                 self.TSlowbox = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xlocs_, y=ylocs_, zbot=self.zbot,
                                                cmax=self.cmax, fmax=self.fmax, Cmeander=self.Cmeander, boxType='lowres', extent=self.extent_low,
-                                               ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high)
+                                               ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high, mod_wake=self.mod_wake)
 
                 if runOnce: return
 
@@ -1890,7 +1897,7 @@ class FFCaseCreation:
                         uvel_hr = np.interp(time_hr, time, uvel)
                         vvel_hr = np.interp(time_hr, time, vvel)
                         wvel_hr = np.interp(time_hr, time, wvel)
-        
+
                         # Checks
                         assert len(time_hr)==len(uvel_hr)
                         assert len(uvel_hr)==len(vvel_hr)
@@ -1908,7 +1915,7 @@ class FFCaseCreation:
                         # point in the low-res box, and then pass this offset to the time-series file. In this example, the offset is 2 m, thus the
                         # time-series file will have a y of 2 m.
                         yoffset = bts['y'][jTurb] - yt
-                        if yoffset != 0:
+                        if yoffset != 0 and self.verbose>1:
                             print(f"Seed {seed}, Case {case}: Turbine {t+1} is not at a grid point location. Tubine is at y={yloc_}",\
                                   f"on the turbine reference frame, which is y={yt} on the low-res TurbSim reference frame. The",\
                                   f"nearest grid point in y is {bts['y'][jTurb]} so printing y={yoffset} to the time-series file.")
@@ -1958,7 +1965,7 @@ class FFCaseCreation:
                         # Create and write new Low.inp files creating the proper box with proper resolution
                         currentTS = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xloc_, y=yloc_, zbot=self.zbot,
                                                    cmax=self.cmax, fmax=self.fmax, Cmeander=self.Cmeander, boxType='highres', extent=self.extent_high,
-                                                   ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high)
+                                                   ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high, mod_wake=self.mod_wake)
 
                         currentTS.writeTSFile(self.turbsimHighfilepath, currentTSHighFile, tmax=self.tmax_low, turb=t, verbose=self.verbose)
         
@@ -2267,8 +2274,9 @@ class FFCaseCreation:
                     #    ff_file['ChkWndFiles'] = 'TRUE'
         
                     # Super controller
-                    ff_file['UseSC'] = False
-                    ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
+                    if 'UseSC' in ff_file.keys():
+                        ff_file['UseSC'] = False
+                        ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
 
                     # Shared mooring system
                     if self.hasMD and not self.multi_MD:
@@ -2374,8 +2382,9 @@ class FFCaseCreation:
                     ff_file['TMax'] = self.tmax
         
                     # Super controller
-                    ff_file['UseSC'] = False
-                    ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
+                    if 'UseSC' in ff_file.keys():
+                        ff_file['UseSC'] = False
+                        ff_file['SC_FileName'] = '/path/to/SC_DLL.dll'
                     
                     # Shared mooring system
                     if self.hasMD and not self.multi_MD:

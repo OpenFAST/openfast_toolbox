@@ -180,7 +180,7 @@ class AMRWindSimulation:
         # For convenience, the turbines should not be zero-indexed
         if 'name' in self.wts[0]:
             if self.wts[0]['name'] != 'T1':
-                if self.verbose>0: print(f"--- WARNING: Recommended turbine numbering should start at 1. Currently it is zero-indexed.")
+                if self.verbose>0: print(f"WARNING: Recommended turbine numbering should start at 1. Currently it is zero-indexed.")
 
 
         # Flags of given/calculated spatial resolution for warning/error printing purposes
@@ -188,10 +188,10 @@ class AMRWindSimulation:
         self.given_ds_lr = False
         warn_msg = ""
         if self.ds_hr is not None:
-            warn_msg += f"--- WARNING: HIGH-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON HIGH-RES BOXES CHECKS TO WARNINGS. ---\n"
+            warn_msg += f"WARNING: HIGH-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON HIGH-RES BOXES CHECKS TO WARNINGS."
             self.given_ds_hr = True
         if self.ds_lr is not None:
-            warn_msg += f"--- WARNING: LOW-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON LOW-RES BOX CHECKS TO WARNINGS. ---\n"
+            warn_msg += f"WARNING: LOW-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON LOW-RES BOX CHECKS TO WARNINGS."
             self.given_ds_lr = True
         if self.verbose>0: print(f'{warn_msg}\n')
         a=1
@@ -642,7 +642,7 @@ class AMRWindSimulation:
 
 
 
-    def write_sampling_params(self, out=None, format='netcdf', overwrite=False):
+    def write_sampling_params(self, out=None, format='netcdf', terrain=None, overwrite=False):
         '''
         Write out text that can be used for the sampling planes in an 
           AMR-Wind input file
@@ -650,12 +650,25 @@ class AMRWindSimulation:
         out: str
             Output path or full filename for Input file to be written
             to. If None, result is written to screen.
+        format: str
+            Format requested for the output to be saved from AMR-Wind. Options are
+            native and netcdf
+        terrain: bool (required)
+            If the case contains terrain. If it does, mu_turb will also be requested. This
+            is necessary to process terrain files and set NaN inside the terrain.
         overwrite: bool
             If saving to a file, whether or not to overwrite potentially
             existing file
         '''
         if format not in ['netcdf','native']:
             raise ValueError(f'format should be either native or netcdf')
+
+        if terrain == True:
+            fields = 'velocity mu_turb'
+        elif terrain == False:
+            fields = 'velocity'
+        else:
+            raise ValueError(f'The `terrain` input should be explicitly set to True or False')
 
         # Write time step information for consistenty with sampling frequency
         s = f"time.fixed_dt    = {self.dt}\n\n"
@@ -674,7 +687,7 @@ class AMRWindSimulation:
         s += f"# ---- Low-res sampling parameters ----\n"
         s += f"{self.postproc_name_lr}.output_format    = {format}\n"
         s += f"{self.postproc_name_lr}.output_frequency = {self.output_frequency_lr}\n"
-        s += f"{self.postproc_name_lr}.fields           = velocity # temperature tke\n"
+        s += f"{self.postproc_name_lr}.fields           = {fields}\n"
         s += f"{self.postproc_name_lr}.labels           = {sampling_labels_lr_str}\n\n"
 
         # Write out low resolution sampling plane info
@@ -692,7 +705,7 @@ class AMRWindSimulation:
         s += f"# ---- High-res sampling parameters ----\n"
         s += f"{self.postproc_name_hr}.output_format     = {format}\n"
         s += f"{self.postproc_name_hr}.output_frequency  = {self.output_frequency_hr}\n"
-        s += f"{self.postproc_name_hr}.fields            = velocity # temperature tke\n"
+        s += f"{self.postproc_name_hr}.fields            = {fields}\n"
         s += f"{self.postproc_name_hr}.labels            = {sampling_labels_hr_str}\n"
 
         # Write out high resolution sampling plane info
