@@ -827,9 +827,20 @@ class FFCaseCreation:
                         self.AeroDynFile['ADBlFile(1)'] = self.AeroDynFile['ADBlFile(2)'] = self.AeroDynFile['ADBlFile(3)'] = f'"{self.ADbladefilename}"'
                         self.AeroDynFile['Wake_Mod'] = 1 
                         # self.AeroDynFile['UA_Mod'] = 0
-                        # Adjust the Airfoil path to point to the templatePath (1:-1 to remove quotes)
-                        self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, "Airfoils", i[1:-1].split("Airfoils/", 1)[-1])}"' 
-                                        for i in self.AeroDynFile['AFNames'] ]
+                        
+                        # If the user provides airfoils path, we will copy it to the case folder 
+                        if self.airfoilspath is not None and writeFiles:
+                            srcF = os.path.join(self.templatePath, 'Airfoils')
+                            dstF = os.path.join(currPath, 'Airfoils')
+                            os.makedirs(dstF, exist_ok=True)
+                            for file in os.listdir(srcF):
+                                src = os.path.join(srcF, file)
+                                dst = os.path.join(dstF, file)
+                                shutil.copy2(src, dst)
+                        else:
+                            # Adjust the Airfoil path to point to the templatePath (1:-1 to remove quotes)
+                            self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, "Airfoils", i[1:-1].split("Airfoils/", 1)[-1])}"' 
+                                            for i in self.AeroDynFile['AFNames'] ]
                         if writeFiles:
                             if t==0: shutilcopy2_untilSuccessful(self.ADbladefilepath, os.path.join(currPath,self.ADbladefilename))
                             if t==0: self.AeroDynFile.write(os.path.join(currPath,f'{self.ADfilename}'))
@@ -1108,6 +1119,7 @@ class FFCaseCreation:
             'controllerInputfilename' : 'DISCON',
             'coeffTablefilename'      : None,
             'hydroDatapath'           : '/full/path/to/hydroData',
+            'airfoilspath'            : '/full/path/to/airfoils',
             'turbsimLowfilepath'      : './SampleFiles/template_Low_InflowXX_SeedY.inp',
             'turbsimHighfilepath'     : './SampleFiles/template_HighT1_InflowXX_SeedY.inp',
             'FFfilename'              : 'Model_FFarm.fstf'
@@ -1138,6 +1150,7 @@ class FFCaseCreation:
         self.libdisconfilepath       = "unused"
         self.coeffTablefilename      = "unused"
         self.hydroDatapath           = "unused"
+        self.airfoilspath            = "unused"
         self.turbsimLowfilepath      = "unused"
         self.turbsimHighfilepath     = "unused"
         self.FFfilename              = "unused"
@@ -1155,7 +1168,7 @@ class FFCaseCreation:
         valid_keys = {'EDfilename', 'SEDfilename', 'HDfilename', 'MDfilename', 'bathfilename', 'SSfilename',
                       'SrvDfilename', 'ADfilename', 'ADskfilename', 'SubDfilename', 'IWfilename', 'BDfilename',
                       'BDbladefilename', 'EDbladefilename', 'EDtowerfilename', 'ADbladefilename', 'turbfilename',
-                      'libdisconfilepath', 'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath',
+                      'libdisconfilepath', 'controllerInputfilename', 'coeffTablefilename', 'hydroDatapath', 'airfoilspath',
                       'FFfilename', 'turbsimLowfilepath', 'turbsimHighfilepath'}
         if not isinstance(templateFiles, dict):
             raise ValueError(f'templateFiles should be a dictionary with the following valid entries: {valid_keys}')
@@ -1343,6 +1356,12 @@ class FFCaseCreation:
                 if not os.path.isdir(self.hydrodatafilepath):
                     raise ValueError(f'The hydroData directory hydroDatapath should be a directory. Received {value}.')
                 self.hydroDatapath = value
+
+            elif key == 'airfoilspath':
+                self.airfoilsfilepath = os.path.join(self.templatePath, value)
+                if not os.path.isdir(self.airfoilsfilepath):
+                    raise ValueError(f'The airfoils directory airfoilspath should be a directory. Received {value}.')
+                self.airfoilsfilepath = value
 
             elif key == 'turbsimLowfilepath':
                 if not value.endswith('.inp'):
