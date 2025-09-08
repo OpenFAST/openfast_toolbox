@@ -94,6 +94,9 @@ class FFCaseCreation:
                  shear,
                  TIvalue,
                  inflow_deg,
+                 waveHs      = None,
+                 waveTp      = None,
+                 hydroForce  = None,
                  dt_high_les = None,
                  ds_high_les = None,
                  extent_high = None,
@@ -133,6 +136,14 @@ class FFCaseCreation:
             TI values at hub height to sweep on. Accepts a list or single value
         inflow_deg: list of scalars or single scalar
             Inflow angles to sweep on. Accepts a list or single value
+        waveHs: list of scalars or single scalar
+            Wave heights to sweep on. Accepts a list or single value.
+            If not given, seaState does not change
+        waveTp: list of scalars or single scalar
+            Wave periods to sweep on. Accepts a list or single value.
+            If not given, seaState does not change
+        hydroForce: list of scalars or single scalar
+            Additional force in the x-axis to be added to hydrodyn files to simulate current.
         dt_high_les: scalar
             Time step of the desired high-resolution box. If LES boxes given, should
             match LES box; otherwise desired TurbSim boxes. Default values as given in the
@@ -196,6 +207,9 @@ class FFCaseCreation:
         self.shear       = shear
         self.TIvalue     = TIvalue
         self.inflow_deg  = inflow_deg
+        self.waveHs      = waveHs
+        self.waveTp      = waveTp  
+        self.hydroForce  = hydroForce
         self.dt_high_les = dt_high_les
         self.ds_high_les = ds_high_les
         self.dt_low_les  = dt_low_les
@@ -258,6 +272,8 @@ class FFCaseCreation:
         s += f' - Wind speeds at hub height (m/s): {self.vhub}\n'
         s += f' - Shear exponent:                  {self.shear}\n'
         s += f' - TI (%):                          {self.TIvalue}\n'
+        s += f' - Significant wave height:          {self.waveHs}\n'
+        s += f' - Peak Wave period:                      {self.waveTp}\n'
         s += f'\nCase details:\n'
         s += f' - Number of conditions: {self.nConditions}\n'
         for c in self.condDirList:
@@ -379,7 +395,8 @@ class FFCaseCreation:
         self.shear      = [self.shear]      if isinstance(self.shear,(float,int))      else self.shear
         self.TIvalue    = [self.TIvalue]    if isinstance(self.TIvalue,(float,int))    else self.TIvalue
         self.inflow_deg = [self.inflow_deg] if isinstance(self.inflow_deg,(float,int)) else self.inflow_deg
-
+        self.waveHs     = [self.waveHs]     if isinstance(self.waveHs,(float,int))     else self.waveHs
+        self.waveTp     = [self.waveTp]     if isinstance(self.waveTp,(float,int))     else self.waveTp
         # Fill turbine parameters arrays if not given
         if self.yaw_init is None:
             yaw = np.ones((1,self.nTurbines))*0
@@ -590,9 +607,14 @@ class FFCaseCreation:
             Vhub_    = self.allCond['vhub'      ].isel(cond=cond).values
             shear_   = self.allCond['shear'     ].isel(cond=cond).values
             tivalue_ = self.allCond['TIvalue'   ].isel(cond=cond).values
+            if self.waveHs is not None and self.waveTp is not None:
+                waveHs_  = self.allCond['waveHs'    ].isel(cond=cond).values
+                waveTp_  = self.allCond['waveTp'    ].isel(cond=cond).values
             
-            # Set current path name string
-            condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}'
+                # Set current path name string
+                condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}_Hs{waveHs_:04.1f}_Tp{waveTp_:04.1f}'
+            else:
+                condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}'                
             condDirList.append(condStr)
             condPath = os.path.join(self.path, condStr)
             
@@ -662,12 +684,23 @@ class FFCaseCreation:
         
                 # Update parameters to be changed in the SeaState files
                 if self.hasSS:
-                    self.SeaStateFile['WaveHs']     = self.bins.sel(wspd=Vhub_, method='nearest').WaveHs.values
-                    self.SeaStateFile['WaveTp']     = self.bins.sel(wspd=Vhub_, method='nearest').WaveTp.values
-                    self.SeaStateFile['WvHiCOffD']  = 2.0*np.pi/self.SeaStateFile['WaveTp']
-                    self.SeaStateFile['WvLowCOffS'] = 2.0*np.pi/self.SeaStateFile['WaveTp']
-                    if writeFiles:
-                        self.SeaStateFile.write(os.path.join(currPath, self.SSfilename))
+                    if self.waveHs is not None and self.waveTp is not None:
+                        self.SeaStateFile['WaveHs'] = self.waveHs[cond]
+                        self.SeaStateFile['WaveTp'] = self.waveTp[cond]
+                        self.SeaStateFile['WvHiCOffD']  = 2.0*np.pi/self.SeaStateFile['WaveTp']
+                        self.SeaStateFile['WvLowCOffS'] = 2.0*np.pi/self.SeaStateFile['WaveTp']
+                        for seed in range(self.nSeeds):
+                            seedPath = os.path.join(currPath, f'Seed_{seed}')
+                            self.SeaStateFile['WaveSeed(1)'] = self.seedValues[seed]
+                            if writeFiles:
+                                self.SeaStateFile.write(os.path.join(seedPath, self.SSfilename))                                               
+                    else:
+                        self.SeaStateFile['WaveHs']     = self.bins.sel(wspd=Vhub_, method='nearest').WaveHs.values
+                        self.SeaStateFile['WaveTp']     = self.bins.sel(wspd=Vhub_, method='nearest').WaveTp.values
+                        self.SeaStateFile['WvHiCOffD']  = 2.0*np.pi/self.SeaStateFile['WaveTp']
+                        self.SeaStateFile['WvLowCOffS'] = 2.0*np.pi/self.SeaStateFile['WaveTp']
+                        if writeFiles:
+                            self.SeaStateFile.write(os.path.join(currPath, self.SSfilename))
 
                 # HydroDyn (farm-wide)
                 if self.hasHD and writeFiles:
@@ -816,6 +849,8 @@ class FFCaseCreation:
                     # Update each turbine's HydroDyn
                     if self.hasHD:
                         self.HydroDynFile['PtfmRefY'] = self.allCases.sel(case=case, turbine=t)['phi'].values
+                        if self.hydroForce:
+                            self.HydroDynFile['KDAdd'][0] = f'             {self.hydroForce}   AddF0    - Additional preload (N, N-m) [If NBodyMod=1, one size 6*NBody x 1 vector; if NBodyMod>1, NBody size 6 x 1 vectors]'
                         if writeFiles:
                             self.HydroDynFile.write(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
 
@@ -829,87 +864,89 @@ class FFCaseCreation:
                     if writeFiles and self.hasBath:
                         if t==0: shutilcopy2_untilSuccessful(self.bathfilepath, os.path.join(currPath, self.bathfilename))
 
-                    # Update each turbine's OpenFAST input
-                    self.turbineFile['TMax']         = self.tmax
-                    self.turbineFile['CompInflow']   = 1  # 1: InflowWind;     2: OpenFoam (fully coupled; not VTK input to FF)
+                    for seed in range(self.nSeeds):
+                        seedPath = os.path.join(currPath, f'Seed_{seed}')
+                        # Update each turbine's OpenFAST input
+                        self.turbineFile['TMax']         = self.tmax
+                        self.turbineFile['CompInflow']   = 1  # 1: InflowWind;     2: OpenFoam (fully coupled; not VTK input to FF)
 
-                    if self.hasHD:
-                        self.turbineFile['CompHydro'] = 1
-                        if self.multi_HD:
-                            self.turbineFile['HydroFile'] = f'"{self.HDfilename}{t+1}_mod.dat"'
+                        if self.hasHD:
+                            self.turbineFile['CompHydro'] = 1
+                            if self.multi_HD:
+                                self.turbineFile['HydroFile'] = f'"../{self.HDfilename}{t+1}_mod.dat"'
+                            else:
+                                self.turbineFile['HydroFile'] = f'"../{self.HDfilename}"'
                         else:
-                            self.turbineFile['HydroFile'] = f'"{self.HDfilename}"'
-                    else:
-                        self.turbineFile['CompHydro'] = 0
-                        self.turbineFile['HydroFile'] = f'"unused"'
+                            self.turbineFile['CompHydro'] = 0
+                            self.turbineFile['HydroFile'] = f'"unused"'
 
-                    if self.hasSS:
-                        self.turbineFile['CompSeaSt'] = 1
-                        self.turbineFile['SeaStFile'] = self.SSfilename
-                    else:
-                        # This might be a v.3.x file without the CompSeaSt entry
-                        if 'CompSeaSt' in self.turbineFile.keys():
-                            self.turbineFile['CompSeaSt'] = 0
-                            self.turbineFile['SeaStFile'] = f'"unused"'
-
-                    if self.hasMD:
-                        if self.multi_MD:
-                            self.turbineFile['CompMooring'] = 3  # {0=None; 1=MAP++; 2=FEAMooring; 3=MoorDyn; 4=OrcaFlex}
-                            self.turbineFile['MooringFile']  = f'"{self.MDfilename}{t+1}_mod.dat'
+                        if self.hasSS:
+                            self.turbineFile['CompSeaSt'] = 1
+                            self.turbineFile['SeaStFile'] = self.SSfilename
                         else:
-                            # Should be in .fstf and not in .fst (updated later when ff file is written).
-                            pass
-                    else:
-                       self.turbineFile['CompMooring'] = 0
-                       self.turbineFile['MooringFile']  = f'"unused"' 
+                            # This might be a v.3.x file without the CompSeaSt entry
+                            if 'CompSeaSt' in self.turbineFile.keys():
+                                self.turbineFile['CompSeaSt'] = 0
+                                self.turbineFile['SeaStFile'] = f'"unused"'
 
-                    if self.hasSubD:
-                        self.turbineFile['CompSub']      = 1
-                    else:
-                        self.turbineFile['CompSub']      = 0
-                    self.turbineFile['SubFile']      = f'"{self.SubDfilename}"'
+                        if self.hasMD:
+                            if self.multi_MD:
+                                self.turbineFile['CompMooring'] = 3  # {0=None; 1=MAP++; 2=FEAMooring; 3=MoorDyn; 4=OrcaFlex}
+                                self.turbineFile['MooringFile']  = f'"../{self.MDfilename}{t+1}_mod.dat'
+                            else:
+                                # Should be in .fstf and not in .fst (updated later when ff file is written).
+                                pass
+                        else:
+                            self.turbineFile['CompMooring'] = 0
+                            self.turbineFile['MooringFile']  = f'"unused"' 
 
-                    if EDmodel_ == 'FED':
-                        self.turbineFile['CompElast']    = 1  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
-                        self.turbineFile['EDFile']       = f'"./{self.EDfilename}{t+1}_mod.dat"'
-                    elif EDmodel_ == 'SED':
-                        self.turbineFile['CompElast']    = 3  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
-                        self.turbineFile['CompSub']      = 0  # need to be disabled with SED
-                        self.turbineFile['SubFile']      = f'"unused"'
-                        self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
-                        self.turbineFile['HydroFile']    = f'"unused"'
-                        self.turbineFile['IntMethod']    = 3
-                        self.turbineFile['EDFile']       = f'"./{self.SEDfilename}{t+1}_mod.dat"'
+                        if self.hasSubD:
+                            self.turbineFile['CompSub']      = 1
+                        else:
+                            self.turbineFile['CompSub']      = 0
+                        self.turbineFile['SubFile']      = f'"../{self.SubDfilename}"'
 
-                    self.turbineFile['BDBldFile(1)'] = f'"{self.BDbladefilename}"'
-                    self.turbineFile['BDBldFile(2)'] = f'"{self.BDbladefilename}"'
-                    self.turbineFile['BDBldFile(3)'] = f'"{self.BDbladefilename}"'
-                    self.turbineFile['InflowFile']   = f'"./{self.IWfilename}"'
+                        if EDmodel_ == 'FED':
+                            self.turbineFile['CompElast']    = 1  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
+                            self.turbineFile['EDFile']       = f'"../{self.EDfilename}{t+1}_mod.dat"'
+                        elif EDmodel_ == 'SED':
+                            self.turbineFile['CompElast']    = 3  # 1: full ElastoDyn; 2: full ElastoDyn + BeamDyn;  3: Simplified ElastoDyn
+                            self.turbineFile['CompSub']      = 0  # need to be disabled with SED
+                            self.turbineFile['SubFile']      = f'"unused"'
+                            self.turbineFile['CompHydro']    = 0  # need to be disabled with SED
+                            self.turbineFile['HydroFile']    = f'"unused"'
+                            self.turbineFile['IntMethod']    = 3
+                            self.turbineFile['EDFile']       = f'"../{self.SEDfilename}{t+1}_mod.dat"'
 
-                    if ADmodel_ == 'ADyn':
-                        self.turbineFile['CompAero']     = 2  # 1: AeroDyn v14;    2: AeroDyn v15;   3: AeroDisk
-                        self.turbineFile['AeroFile']     = f'"{self.ADfilename}"'
-                    elif ADmodel_ == 'ADsk':
-                        # If you use AeroDisk with ElastoDyn, set the blade DOFs to false.
-                        self.turbineFile['CompAero']     = 3  # 1: AeroDyn v14;    2: AeroDyn v15;   3: AeroDisk
-                        self.turbineFile['AeroFile']     = f'"{self.ADskfilename}"'
+                        self.turbineFile['BDBldFile(1)'] = f'"../{self.BDbladefilename}"'
+                        self.turbineFile['BDBldFile(2)'] = f'"../{self.BDbladefilename}"'
+                        self.turbineFile['BDBldFile(3)'] = f'"../{self.BDbladefilename}"'
+                        self.turbineFile['InflowFile']   = f'"../{self.IWfilename}"'
+
+                        if ADmodel_ == 'ADyn':
+                            self.turbineFile['CompAero']     = 2  # 1: AeroDyn v14;    2: AeroDyn v15;   3: AeroDisk
+                            self.turbineFile['AeroFile']     = f'"../{self.ADfilename}"'
+                        elif ADmodel_ == 'ADsk':
+                            # If you use AeroDisk with ElastoDyn, set the blade DOFs to false.
+                            self.turbineFile['CompAero']     = 3  # 1: AeroDyn v14;    2: AeroDyn v15;   3: AeroDisk
+                            self.turbineFile['AeroFile']     = f'"../{self.ADskfilename}"'
+                            if writeFiles:
+                                if t==0: shutilcopy2_untilSuccessful(self.coeffTablefilepath, os.path.join(currPath,self.coeffTablefilename))
+
+                        if self.hasSrvD:
+                            self.turbineFile['ServoFile']    = f'"../{self.SrvDfilename}{t+1}_mod.dat"'
+                            self.turbineFile['CompServo']    = 1
+                        else:
+                            self.turbineFile['ServoFile']    = f'"unused"'
+                            self.turbineFile['CompServo']    = 0
+
+
+                        self.turbineFile['IceFile']      = f'"unused"'
+                        self.turbineFile['TStart']       = 0 # start saving openfast output from time 0 (to see transient)
+                        self.turbineFile['OutFileFmt']   = 3 # 1: .out; 2: .outb; 3: both
+            
                         if writeFiles:
-                            if t==0: shutilcopy2_untilSuccessful(self.coeffTablefilepath, os.path.join(currPath,self.coeffTablefilename))
-
-                    if self.hasSrvD:
-                        self.turbineFile['ServoFile']    = f'"{self.SrvDfilename}{t+1}_mod.dat"'
-                        self.turbineFile['CompServo']    = 1
-                    else:
-                        self.turbineFile['ServoFile']    = f'"unused"'
-                        self.turbineFile['CompServo']    = 0
-
-
-                    self.turbineFile['IceFile']      = f'"unused"'
-                    self.turbineFile['TStart']       = 0 # start saving openfast output from time 0 (to see transient)
-                    self.turbineFile['OutFileFmt']   = 3 # 1: .out; 2: .outb; 3: both
-        
-                    if writeFiles:
-                        self.turbineFile.write( os.path.join(currPath,f'{self.turbfilename}{t+1}.fst'))
+                            self.turbineFile.write( os.path.join(seedPath,f'{self.turbfilename}{t+1}.fst'))
 
             if self.verbose>0: print(f'Done processing condition {self.condDirList[cond]}                                              ')
 
@@ -958,8 +995,13 @@ class FFCaseCreation:
 
                 # Check SeaState
                 if self.hasSS:
-                    _ = checkIfExists(os.path.join(currPath,self.SSfilename))
-                    if not _: return False
+                    if self.waveHs is not None and self.waveTp is not None:
+                        for seed in range(self.nSeeds):
+                            _ = checkIfExists(os.path.join(currPath,f'Seed_{seed}',self.SSfilename))
+                            if not _: return False
+                    else:
+                        _ = checkIfExists(os.path.join(currPath,self.SSfilename))
+                        if not _: return False
 
                 # Check SubDyn
                 if self.hasSubD:
@@ -1013,8 +1055,10 @@ class FFCaseCreation:
                         _ = checkIfExists(os.path.join(currPath,self.ADbladefilename))
                         if not _: return False
 
-                    _ = checkIfExists(os.path.join(currPath,f'{self.turbfilename}{t+1}.fst'))
-                    if not _: return False
+                    for seed in range(self.nSeeds):
+                        seedPath = os.path.join(currPath, f'Seed_{seed}')
+                        _ = checkIfExists(os.path.join(seedPath,f'{self.turbfilename}{t+1}.fst'))
+                        if not _: return False
 
         # If we get to this point, all files exist
         return True
@@ -1398,34 +1442,64 @@ class FFCaseCreation:
 
 
     def _create_all_cond(self):
+        if self.waveHs is not None and self.waveTp is not None:
+            if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue) and len(self.TIvalue)==len(self.waveHs) and len(self.waveHs)==len(self.waveTp):
+                self.nConditions = len(self.vhub)
 
-        if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue):
-            self.nConditions = len(self.vhub)
+                if self.verbose>1: print(f'\nThe length of vhub, shear, TI, waveHs, and WaveTp are the same. Assuming each position is a condition.', end='\r')
+                if self.verbose>0: print(f'\nCreating {self.nConditions} conditions')
 
-            if self.verbose>1: print(f'\nThe length of vhub, shear, and TI are the same. Assuming each position is a condition.', end='\r')
-            if self.verbose>0: print(f'\nCreating {self.nConditions} conditions')
+                self.allCond = xr.Dataset({'vhub':    (['cond'], self.vhub   ),
+                                        'shear':   (['cond'], self.shear  ),
+                                        'TIvalue': (['cond'], self.TIvalue),
+                                        'waveHs':  (['cond'], self.waveHs),
+                                        'waveTp':  (['cond'], self.waveTp)},
+                                        coords={'cond': np.arange(self.nConditions)} )
+            
+            else:
+                import itertools
+                self.nConditions = len(self.vhub) * len(self.shear) * len(self.TIvalue) * len(self.waveHs) * len(self.waveTp)
 
-            self.allCond = xr.Dataset({'vhub':    (['cond'], self.vhub   ),
-                                       'shear':   (['cond'], self.shear  ),
-                                       'TIvalue': (['cond'], self.TIvalue)},
-                                       coords={'cond': np.arange(self.nConditions)} )
+                if self.verbose>1: print(f'The length of vhub, shear, TI, Hs, and Tp are different. Assuming sweep on each of them.')
+                if self.verbose>0: print(f'Creating {self.nConditions} conditions')
         
+                # Repeat arrays as necessary to build xarray Dataset
+                combination = np.vstack(list(itertools.product(self.vhub,self.shear,self.TIvalue, 
+                                                self.waveHs, self.waveTp)))
+
+                self.allCond = xr.Dataset({'vhub':    (['cond'], combination[:,0]),
+                                        'shear':   (['cond'], combination[:,1]),
+                                        'TIvalue': (['cond'], combination[:,2]),
+                                        'waveHs':  (['cond'], combination[:,3]),
+                                        'waveTp':  (['cond'], combination[:,4])},
+                                        coords={'cond': np.arange(self.nConditions)} )
         else:
-            import itertools
-            self.nConditions = len(self.vhub) * len(self.shear) * len(self.TIvalue)
+            if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue):
+                self.nConditions = len(self.vhub)
 
-            if self.verbose>1: print(f'The length of vhub, shear, and TI are different. Assuming sweep on each of them.')
-            if self.verbose>0: print(f'Creating {self.nConditions} conditions')
-    
-            # Repeat arrays as necessary to build xarray Dataset
-            combination = np.vstack(list(itertools.product(self.vhub,self.shear,self.TIvalue)))
+                if self.verbose>1: print(f'\nThe length of vhub, shear, and TI are the same. Assuming each position is a condition.', end='\r')
+                if self.verbose>0: print(f'\nCreating {self.nConditions} conditions')
 
-            self.allCond = xr.Dataset({'vhub':    (['cond'], combination[:,0]),
-                                       'shear':   (['cond'], combination[:,1]),
-                                       'TIvalue': (['cond'], combination[:,2])},
-                                       coords={'cond': np.arange(self.nConditions)} )
-  
+                self.allCond = xr.Dataset({'vhub':    (['cond'], self.vhub   ),
+                                        'shear':   (['cond'], self.shear  ),
+                                        'TIvalue': (['cond'], self.TIvalue)},
+                                        coords={'cond': np.arange(self.nConditions)} )
+            
+            else:
+                import itertools
+                self.nConditions = len(self.vhub) * len(self.shear) * len(self.TIvalue) * len(self.waveHs) * len(self.waveTp)
 
+                if self.verbose>1: print(f'The length of vhub, shear, and TI are different. Assuming sweep on each of them.')
+                if self.verbose>0: print(f'Creating {self.nConditions} conditions')
+        
+                # Repeat arrays as necessary to build xarray Dataset
+                combination = np.vstack(list(itertools.product(self.vhub,self.shear,self.TIvalue, 
+                                                self.waveHs, self.waveTp)))
+
+                self.allCond = xr.Dataset({'vhub':    (['cond'], combination[:,0]),
+                                        'shear':   (['cond'], combination[:,1]),
+                                        'TIvalue': (['cond'], combination[:,2])},
+                                        coords={'cond': np.arange(self.nConditions)} )
 
 
 
