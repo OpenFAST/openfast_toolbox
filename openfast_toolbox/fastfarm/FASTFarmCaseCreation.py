@@ -397,6 +397,7 @@ class FFCaseCreation:
         self.inflow_deg = [self.inflow_deg] if isinstance(self.inflow_deg,(float,int)) else self.inflow_deg
         self.waveHs     = [self.waveHs]     if isinstance(self.waveHs,(float,int))     else self.waveHs
         self.waveTp     = [self.waveTp]     if isinstance(self.waveTp,(float,int))     else self.waveTp
+        self.hydroForce = [self.hydroForce]     if isinstance(self.hydroForce,(float,int))     else self.hydroForce
         # Fill turbine parameters arrays if not given
         if self.yaw_init is None:
             yaw = np.ones((1,self.nTurbines))*0
@@ -607,12 +608,13 @@ class FFCaseCreation:
             Vhub_    = self.allCond['vhub'      ].isel(cond=cond).values
             shear_   = self.allCond['shear'     ].isel(cond=cond).values
             tivalue_ = self.allCond['TIvalue'   ].isel(cond=cond).values
-            if self.waveHs is not None and self.waveTp is not None:
+            if self.waveHs is not None and self.waveTp is not None and self.hydroForce is not None:
                 waveHs_  = self.allCond['waveHs'    ].isel(cond=cond).values
                 waveTp_  = self.allCond['waveTp'    ].isel(cond=cond).values
+                hydroF_  = self.allCond['hydroForce'].isel(cond=cond).values
             
                 # Set current path name string
-                condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}_Hs{waveHs_:04.1f}_Tp{waveTp_:04.1f}'
+                condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}_Hs{waveHs_:04.1f}_Tp{waveTp_:04.1f}_HF{hydroF_:+05.1f}'
             else:
                 condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}'                
             condDirList.append(condStr)
@@ -861,7 +863,7 @@ class FFCaseCreation:
                     if self.hasHD:
                         self.HydroDynFile['PtfmRefY'] = self.allCases.sel(case=case, turbine=t)['phi'].values
                         if self.hydroForce:
-                            self.HydroDynFile['KDAdd'][0] = f'             {self.hydroForce}   AddF0    - Additional preload (N, N-m) [If NBodyMod=1, one size 6*NBody x 1 vector; if NBodyMod>1, NBody size 6 x 1 vectors]'
+                            self.HydroDynFile['KDAdd'][0] = f'             {self.hydroForce[cond]}   AddF0    - Additional preload (N, N-m) [If NBodyMod=1, one size 6*NBody x 1 vector; if NBodyMod>1, NBody size 6 x 1 vectors]'
                         if writeFiles:
                             self.HydroDynFile.write(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
 
