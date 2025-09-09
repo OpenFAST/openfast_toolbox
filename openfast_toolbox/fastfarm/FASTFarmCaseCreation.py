@@ -274,6 +274,7 @@ class FFCaseCreation:
         s += f' - TI (%):                          {self.TIvalue}\n'
         s += f' - Significant wave height:          {self.waveHs}\n'
         s += f' - Peak Wave period:                      {self.waveTp}\n'
+        s += f' - Additional Hydrodynamic forces +x :    {self.hydroForce}\n'
         s += f'\nCase details:\n'
         s += f' - Number of conditions: {self.nConditions}\n'
         for c in self.condDirList:
@@ -1463,18 +1464,19 @@ class FFCaseCreation:
 
 
     def _create_all_cond(self):
-        if self.waveHs is not None and self.waveTp is not None:
-            if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue) and len(self.TIvalue)==len(self.waveHs) and len(self.waveHs)==len(self.waveTp):
+        if self.waveHs is not None and self.waveTp is not None and self.hydroForce:
+            if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue) and len(self.TIvalue)==len(self.waveHs) and len(self.waveHs)==len(self.waveTp) and len(self.waveTp)==len(self.hydroForce):
                 self.nConditions = len(self.vhub)
 
                 if self.verbose>1: print(f'\nThe length of vhub, shear, TI, waveHs, and WaveTp are the same. Assuming each position is a condition.', end='\r')
                 if self.verbose>0: print(f'\nCreating {self.nConditions} conditions')
 
-                self.allCond = xr.Dataset({'vhub':    (['cond'], self.vhub   ),
-                                        'shear':   (['cond'], self.shear  ),
-                                        'TIvalue': (['cond'], self.TIvalue),
-                                        'waveHs':  (['cond'], self.waveHs),
-                                        'waveTp':  (['cond'], self.waveTp)},
+                self.allCond = xr.Dataset({'vhub':     (['cond'], self.vhub   ),
+                                        'shear':       (['cond'], self.shear  ),
+                                        'TIvalue':     (['cond'], self.TIvalue),
+                                        'waveHs':      (['cond'], self.waveHs),
+                                        'waveTp':      (['cond'], self.waveTp),
+                                        'hydroForce':  (['cond'], self.hydroForce)},
                                         coords={'cond': np.arange(self.nConditions)} )
             
             else:
