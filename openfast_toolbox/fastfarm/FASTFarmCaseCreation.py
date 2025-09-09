@@ -96,7 +96,8 @@ class FFCaseCreation:
                  inflow_deg,
                  waveHs      = None,
                  waveTp      = None,
-                 hydroForce  = None,
+                 hydroFx     = None,
+                 hydroFy     = None,
                  dt_high_les = None,
                  ds_high_les = None,
                  extent_high = None,
@@ -142,8 +143,10 @@ class FFCaseCreation:
         waveTp: list of scalars or single scalar
             Wave periods to sweep on. Accepts a list or single value.
             If not given, seaState does not change
-        hydroForce: list of scalars or single scalar
+        hydroFx: list of scalars or single scalar
             Additional force in the x-axis to be added to hydrodyn files to simulate current.
+        hydroFy: list of scalars or single scalar
+            Additional force in the y-axis to be added to hydrodyn files to simulate current.
         dt_high_les: scalar
             Time step of the desired high-resolution box. If LES boxes given, should
             match LES box; otherwise desired TurbSim boxes. Default values as given in the
@@ -209,7 +212,8 @@ class FFCaseCreation:
         self.inflow_deg  = inflow_deg
         self.waveHs      = waveHs
         self.waveTp      = waveTp  
-        self.hydroForce  = hydroForce
+        self.hydroFx     = hydroFx
+        self.hydroFy     = hydroFy
         self.dt_high_les = dt_high_les
         self.ds_high_les = ds_high_les
         self.dt_low_les  = dt_low_les
@@ -274,7 +278,8 @@ class FFCaseCreation:
         s += f' - TI (%):                          {self.TIvalue}\n'
         s += f' - Significant wave height:          {self.waveHs}\n'
         s += f' - Peak Wave period:                      {self.waveTp}\n'
-        s += f' - Additional Hydrodynamic forces +x :    {self.hydroForce}\n'
+        s += f' - Additional Hydrodynamic forces +x :    {self.hydroFx}\n'
+        s += f' - Additional Hydrodynamic forces +y :    {self.hydroFy}\n'
         s += f'\nCase details:\n'
         s += f' - Number of conditions: {self.nConditions}\n'
         for c in self.condDirList:
@@ -398,7 +403,8 @@ class FFCaseCreation:
         self.inflow_deg = [self.inflow_deg] if isinstance(self.inflow_deg,(float,int)) else self.inflow_deg
         self.waveHs     = [self.waveHs]     if isinstance(self.waveHs,(float,int))     else self.waveHs
         self.waveTp     = [self.waveTp]     if isinstance(self.waveTp,(float,int))     else self.waveTp
-        self.hydroForce = [self.hydroForce]     if isinstance(self.hydroForce,(float,int))     else self.hydroForce
+        self.hydroFx    = [self.hydroFx]     if isinstance(self.hydroFx,(float,int))     else self.hydroFx
+        self.hydroFy    = [self.hydroFy]     if isinstance(self.hydroFy,(float,int))     else self.hydroFy
         # Fill turbine parameters arrays if not given
         if self.yaw_init is None:
             yaw = np.ones((1,self.nTurbines))*0
@@ -609,10 +615,11 @@ class FFCaseCreation:
             Vhub_    = self.allCond['vhub'      ].isel(cond=cond).values
             shear_   = self.allCond['shear'     ].isel(cond=cond).values
             tivalue_ = self.allCond['TIvalue'   ].isel(cond=cond).values
-            if self.waveHs is not None and self.waveTp is not None and self.hydroForce is not None:
+            if self.waveHs is not None and self.waveTp is not None and self.hydroFx is not None and self.hydroFy is not None:
                 waveHs_  = self.allCond['waveHs'    ].isel(cond=cond).values
                 waveTp_  = self.allCond['waveTp'    ].isel(cond=cond).values
-                hydroF_  = self.allCond['hydroForce'].isel(cond=cond).values
+                hydroFx_ = self.allCond['hydroFx'   ].isel(cond=cond).values
+                hydroFy_ = self.allCond['hydroFy'   ].isel(cond=cond).values
             
                 # Set current path name string
                 condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}_Hs{waveHs_:04.1f}_Tp{waveTp_:04.1f}_HF{hydroF_:06.1f}'
@@ -863,8 +870,10 @@ class FFCaseCreation:
                     # Update each turbine's HydroDyn
                     if self.hasHD:
                         self.HydroDynFile['PtfmRefY'] = self.allCases.sel(case=case, turbine=t)['phi'].values
-                        if self.hydroForce:
-                            self.HydroDynFile['KDAdd'][0] = f'             {self.hydroForce[cond]}   AddF0    - Additional preload (N, N-m) [If NBodyMod=1, one size 6*NBody x 1 vector; if NBodyMod>1, NBody size 6 x 1 vectors]'
+                        if self.hydroFx:
+                            self.HydroDynFile['KDAdd'][0] = f'             {self.hydroFx[cond]}   AddF0    - Additional preload (N, N-m) [If NBodyMod=1, one size 6*NBody x 1 vector; if NBodyMod>1, NBody size 6 x 1 vectors]'
+                        if self.hydroFy:
+                            self.HydroDynFile['KDAdd'][1] = f'             {self.hydroFxy[cond]}'
                         if writeFiles:
                             self.HydroDynFile.write(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
 
@@ -1464,8 +1473,8 @@ class FFCaseCreation:
 
 
     def _create_all_cond(self):
-        if self.waveHs is not None and self.waveTp is not None and self.hydroForce:
-            if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue) and len(self.TIvalue)==len(self.waveHs) and len(self.waveHs)==len(self.waveTp) and len(self.waveTp)==len(self.hydroForce):
+        if self.waveHs is not None and self.waveTp is not None and self.hydroFx is not None and self.hydroFy is not None:
+            if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue) and len(self.TIvalue)==len(self.waveHs) and len(self.waveHs)==len(self.waveTp) and len(self.waveTp)==len(self.hydroFx) and len(self.hydroFx)==len(self.hydroFy):
                 self.nConditions = len(self.vhub)
 
                 if self.verbose>1: print(f'\nThe length of vhub, shear, TI, waveHs, and WaveTp are the same. Assuming each position is a condition.', end='\r')
@@ -1476,7 +1485,8 @@ class FFCaseCreation:
                                         'TIvalue':     (['cond'], self.TIvalue),
                                         'waveHs':      (['cond'], self.waveHs),
                                         'waveTp':      (['cond'], self.waveTp),
-                                        'hydroForce':  (['cond'], self.hydroForce)},
+                                        'hydroFx':     (['cond'], self.hydroFx),
+                                        'hydroFy':     (['cond'], self.hydroFy)},
                                         coords={'cond': np.arange(self.nConditions)} )
             
             else:
