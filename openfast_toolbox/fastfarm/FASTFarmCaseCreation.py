@@ -2233,8 +2233,8 @@ class FFCaseCreation:
         alignedTurbs = self.allCases.where(self.allCases['inflow_deg']==0, drop=True).isel(case=0)
         if self.inflowStr == 'TurbSim':
             # Turbine location in TurbSim reference frame
-            xWT = alignedTurbs['Tx'].values + self.xoffset_turbsOrigin2TSOrigin
-            yWT = alignedTurbs['Ty'].values + self.yoffset_turbsOrigin2TSOrigin
+            xWT = alignedTurbs['Tx'].values # + self.xoffset_turbsOrigin2TSOrigin  # when adding the turbsOrigin2TSOrigin, it's causing the windows to be out of the low-res box, causing error
+            yWT = alignedTurbs['Ty'].values # + self.yoffset_turbsOrigin2TSOrigin
         elif self.inflowStr == 'LES':
             # Turbine location in LES reference frame
             xWT = alignedTurbs['Tx'].values
