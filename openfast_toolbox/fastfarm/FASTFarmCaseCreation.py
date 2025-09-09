@@ -873,7 +873,7 @@ class FFCaseCreation:
                         if self.hydroFx:
                             self.HydroDynFile['KDAdd'][0] = f'             {self.hydroFx[cond]}   AddF0    - Additional preload (N, N-m) [If NBodyMod=1, one size 6*NBody x 1 vector; if NBodyMod>1, NBody size 6 x 1 vectors]'
                         if self.hydroFy:
-                            self.HydroDynFile['KDAdd'][1] = f'             {self.hydroFxy[cond]}'
+                            self.HydroDynFile['KDAdd'][1] = f'             {self.hydroFy[cond]}'
                         if writeFiles:
                             self.HydroDynFile.write(os.path.join(currPath,f'{self.HDfilename}{t+1}_mod.dat'))
 
