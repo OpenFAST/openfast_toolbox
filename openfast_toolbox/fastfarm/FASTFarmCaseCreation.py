@@ -622,7 +622,7 @@ class FFCaseCreation:
                 hydroFy_ = self.allCond['hydroFy'   ].isel(cond=cond).values
             
                 # Set current path name string
-                condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}_Hs{waveHs_:04.1f}_Tp{waveTp_:04.1f}_HF{hydroF_:06.1f}'
+                condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}_Hs{waveHs_:04.1f}_Tp{waveTp_:04.1f}_HFx{hydroFx_:06.1f}_HFy{hydroFy_:06.1f}'
             else:
                 condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}'                
             condDirList.append(condStr)
