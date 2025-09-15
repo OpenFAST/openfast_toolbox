@@ -745,8 +745,8 @@ class FFCaseCreation:
 
                     shutilcopy2_untilSuccessful(self.cpctcqfilepath, os.path.join(currPath,self.cpctcqfilename))
                     self.DISCONFile['PerfFileName'] = f'{self.cpctcqfilename}'
+                    self.DISCONFile['Ind_BldPitch'] = self.DISCONFile['Ind_BldPitch'].astype(int)
                     self.DISCONFile.write(os.path.join(currPath, self.controllerInputfilename))
-
                 # Depending on the controller, the controller input file might need to be in the same level as the .fstf input file.
                 # The ideal solution would be to give the full path to the controller input file, but we may not have control over
                 # the compilation process and it is likely that a very long string with the full path will get cut. So we need to
