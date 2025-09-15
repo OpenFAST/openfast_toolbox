@@ -96,6 +96,7 @@ class FFCaseCreation:
                  inflow_deg,
                  waveHs      = None,
                  waveTp      = None,
+                 waveDir     = None,
                  hydroFx     = None,
                  hydroFy     = None,
                  dt_high_les = None,
@@ -143,6 +144,9 @@ class FFCaseCreation:
         waveTp: list of scalars or single scalar
             Wave periods to sweep on. Accepts a list or single value.
             If not given, seaState does not change
+        waveDir: list of scalars or single scalar
+            Wave directions to sweep on. Accepts a list or single value.
+            If not given, wave direction is whatever given in the template SeaState file
         hydroFx: list of scalars or single scalar
             Additional force in the x-axis to be added to hydrodyn files to simulate current.
         hydroFy: list of scalars or single scalar
@@ -212,6 +216,7 @@ class FFCaseCreation:
         self.inflow_deg  = inflow_deg
         self.waveHs      = waveHs
         self.waveTp      = waveTp  
+        self.waveDir     = waveDir
         self.hydroFx     = hydroFx
         self.hydroFy     = hydroFy
         self.dt_high_les = dt_high_les
@@ -278,6 +283,7 @@ class FFCaseCreation:
         s += f' - TI (%):                          {self.TIvalue}\n'
         s += f' - Significant wave height:          {self.waveHs}\n'
         s += f' - Peak Wave period:                      {self.waveTp}\n'
+        s += f' - Wave direction:                      {self.waveDir}\n'
         s += f' - Additional Hydrodynamic forces +x :    {self.hydroFx}\n'
         s += f' - Additional Hydrodynamic forces +y :    {self.hydroFy}\n'
         s += f'\nCase details:\n'
@@ -403,8 +409,9 @@ class FFCaseCreation:
         self.inflow_deg = [self.inflow_deg] if isinstance(self.inflow_deg,(float,int)) else self.inflow_deg
         self.waveHs     = [self.waveHs]     if isinstance(self.waveHs,(float,int))     else self.waveHs
         self.waveTp     = [self.waveTp]     if isinstance(self.waveTp,(float,int))     else self.waveTp
-        self.hydroFx    = [self.hydroFx]     if isinstance(self.hydroFx,(float,int))     else self.hydroFx
-        self.hydroFy    = [self.hydroFy]     if isinstance(self.hydroFy,(float,int))     else self.hydroFy
+        self.waveDir    = [self.waveDir]    if isinstance(self.waveDir,(float,int))    else self.waveDir
+        self.hydroFx    = [self.hydroFx]     if isinstance(self.hydroFx,(float,int))   else self.hydroFx
+        self.hydroFy    = [self.hydroFy]     if isinstance(self.hydroFy,(float,int))   else self.hydroFy
         # Fill turbine parameters arrays if not given
         if self.yaw_init is None:
             yaw = np.ones((1,self.nTurbines))*0
@@ -615,14 +622,15 @@ class FFCaseCreation:
             Vhub_    = self.allCond['vhub'      ].isel(cond=cond).values
             shear_   = self.allCond['shear'     ].isel(cond=cond).values
             tivalue_ = self.allCond['TIvalue'   ].isel(cond=cond).values
-            if self.waveHs is not None and self.waveTp is not None and self.hydroFx is not None and self.hydroFy is not None:
+            if self.waveHs is not None and self.waveTp is not None and self.waveDir is not None and self.hydroFx is not None and self.hydroFy is not None:
                 waveHs_  = self.allCond['waveHs'    ].isel(cond=cond).values
                 waveTp_  = self.allCond['waveTp'    ].isel(cond=cond).values
+                waveDir_ = self.allCond['waveDir'   ].isel(cond=cond).values
                 hydroFx_ = self.allCond['hydroFx'   ].isel(cond=cond).values
                 hydroFy_ = self.allCond['hydroFy'   ].isel(cond=cond).values
             
                 # Set current path name string
-                condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}_Hs{waveHs_:04.1f}_Tp{waveTp_:04.1f}_HFx{hydroFx_:06.1f}_HFy{hydroFy_:06.1f}'
+                condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}_Hs{waveHs_:04.1f}_Tp{waveTp_:04.1f}_Wdir{waveDir:02d}_HFx{hydroFx_:06.1f}_HFy{hydroFy_:06.1f}'
             else:
                 condStr = f'Cond{cond:02d}_v{Vhub_:04.1f}_PL{shear_}_TI{tivalue_}'                
             condDirList.append(condStr)
@@ -694,9 +702,10 @@ class FFCaseCreation:
         
                 # Update parameters to be changed in the SeaState files
                 if self.hasSS:
-                    if self.waveHs is not None and self.waveTp is not None:
-                        self.SeaStateFile['WaveHs'] = self.waveHs[cond]
-                        self.SeaStateFile['WaveTp'] = self.waveTp[cond]
+                    if self.waveHs is not None and self.waveTp is not None and self.waveDir is not None:
+                        self.SeaStateFile['WaveHs']  = self.waveHs[cond]
+                        self.SeaStateFile['WaveTp']  = self.waveTp[cond]
+                        self.SeaStateFile['WaveDir'] = self.waveDir[cond] 
                         self.SeaStateFile['WvHiCOffD']  = 2.0*np.pi/self.SeaStateFile['WaveTp']
                         self.SeaStateFile['WvLowCOffS'] = 2.0*np.pi/self.SeaStateFile['WaveTp']
                         for seed in range(self.nSeeds):
@@ -1018,7 +1027,7 @@ class FFCaseCreation:
 
                 # Check SeaState
                 if self.hasSS:
-                    if self.waveHs is not None and self.waveTp is not None:
+                    if self.waveHs is not None and self.waveTp is not None and self.waveDir is not None:
                         for seed in range(self.nSeeds):
                             _ = checkIfExists(os.path.join(currPath,f'Seed_{seed}',self.SSfilename))
                             if not _: return False
@@ -1473,11 +1482,11 @@ class FFCaseCreation:
 
 
     def _create_all_cond(self):
-        if self.waveHs is not None and self.waveTp is not None and self.hydroFx is not None and self.hydroFy is not None:
-            if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue) and len(self.TIvalue)==len(self.waveHs) and len(self.waveHs)==len(self.waveTp) and len(self.waveTp)==len(self.hydroFx) and len(self.hydroFx)==len(self.hydroFy):
+        if self.waveHs is not None and self.waveTp is not None and self.waveDir is not None and self.hydroFx is not None and self.hydroFy is not None:
+            if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue) and len(self.TIvalue)==len(self.waveHs) and len(self.waveHs)==len(self.waveTp) and len(self.waveTp)==len(self.waveDir) and len(self.waveDir)==len(self.hydroFx) and len(self.hydroFx)==len(self.hydroFy):
                 self.nConditions = len(self.vhub)
 
-                if self.verbose>1: print(f'\nThe length of vhub, shear, TI, waveHs, and WaveTp are the same. Assuming each position is a condition.', end='\r')
+                if self.verbose>1: print(f'\nThe length of vhub, shear, TI, waveHs, waveTp, waveDir, hydroFx, and hydroFy are the same. Assuming each position is a condition.', end='\r')
                 if self.verbose>0: print(f'\nCreating {self.nConditions} conditions')
 
                 self.allCond = xr.Dataset({'vhub':     (['cond'], self.vhub   ),
@@ -1485,26 +1494,30 @@ class FFCaseCreation:
                                         'TIvalue':     (['cond'], self.TIvalue),
                                         'waveHs':      (['cond'], self.waveHs),
                                         'waveTp':      (['cond'], self.waveTp),
+                                        'waveDir':     (['cond'], self.waveDir),
                                         'hydroFx':     (['cond'], self.hydroFx),
                                         'hydroFy':     (['cond'], self.hydroFy)},
                                         coords={'cond': np.arange(self.nConditions)} )
             
             else:
                 import itertools
-                self.nConditions = len(self.vhub) * len(self.shear) * len(self.TIvalue) * len(self.waveHs) * len(self.waveTp)
+                self.nConditions = len(self.vhub) * len(self.shear) * len(self.TIvalue) * len(self.waveHs) * len(self.waveTp) * len(self.waveDir) * len(self.hydroFx) * len(self.hydroFy)
 
                 if self.verbose>1: print(f'The length of vhub, shear, TI, Hs, and Tp are different. Assuming sweep on each of them.')
                 if self.verbose>0: print(f'Creating {self.nConditions} conditions')
         
                 # Repeat arrays as necessary to build xarray Dataset
                 combination = np.vstack(list(itertools.product(self.vhub,self.shear,self.TIvalue, 
-                                                self.waveHs, self.waveTp)))
+                                                self.waveHs, self.waveTp, self.waveDir, self.hydroFx, self.hydroFy)))
 
-                self.allCond = xr.Dataset({'vhub':    (['cond'], combination[:,0]),
-                                        'shear':   (['cond'], combination[:,1]),
+                self.allCond = xr.Dataset({'vhub': (['cond'], combination[:,0]),
+                                        'shear'  : (['cond'], combination[:,1]),
                                         'TIvalue': (['cond'], combination[:,2]),
-                                        'waveHs':  (['cond'], combination[:,3]),
-                                        'waveTp':  (['cond'], combination[:,4])},
+                                        'waveHs' : (['cond'], combination[:,3]),
+                                        'waveTp' : (['cond'], combination[:,4]),
+                                        'waveDir': (['cond'], combination[:,4]),
+                                        'hydroFx': (['cond'], combination[:,4]),
+                                        'hydroFy': (['cond'], combination[:,4])},
                                         coords={'cond': np.arange(self.nConditions)} )
         else:
             if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue):
@@ -1520,14 +1533,13 @@ class FFCaseCreation:
             
             else:
                 import itertools
-                self.nConditions = len(self.vhub) * len(self.shear) * len(self.TIvalue) * len(self.waveHs) * len(self.waveTp)
+                self.nConditions = len(self.vhub) * len(self.shear) * len(self.TIvalue)
 
                 if self.verbose>1: print(f'The length of vhub, shear, and TI are different. Assuming sweep on each of them.')
                 if self.verbose>0: print(f'Creating {self.nConditions} conditions')
         
                 # Repeat arrays as necessary to build xarray Dataset
-                combination = np.vstack(list(itertools.product(self.vhub,self.shear,self.TIvalue, 
-                                                self.waveHs, self.waveTp)))
+                combination = np.vstack(list(itertools.product(self.vhub,self.shear,self.TIvalue)))
 
                 self.allCond = xr.Dataset({'vhub':    (['cond'], combination[:,0]),
                                         'shear':   (['cond'], combination[:,1]),
