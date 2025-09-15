@@ -598,9 +598,9 @@ class FFCaseCreation:
         print(f'         If the values above are okay, you can safely ignore this warning.\n')
 
         self.dt_high_les = amr.dt_high_les
-        self.ds_high_les = amr.dt_high_les
+        self.ds_high_les = amr.ds_high_les
         self.dt_low_les  = amr.dt_low_les
-        self.ds_low_les  = amr.dt_low_les
+        self.ds_low_les  = amr.ds_low_les
 
 
 
