@@ -1438,8 +1438,8 @@ class FFCaseCreation:
         copied = False
         for t in range(self.nTurbines):
             libdisconfilename = os.path.splitext(os.path.basename(self.libdisconfilepath))[0]
-            currLibdiscon = os.path.join(os.path.dirname(self.libdisconfilepath), f'{libdisconfilename}.T{t+1}.so')
-            self.DLLfilepath = os.path.join(os.path.dirname(self.libdisconfilepath), f'{libdisconfilename}.T')
+            currLibdiscon = os.path.join(self.path, f'{libdisconfilename}.T{t+1}.so')
+            self.DLLfilepath = os.path.join(self.path, f'{libdisconfilename}.T')
             if not os.path.isfile(currLibdiscon):
                 if self.verbose>0: print(f'    Creating a copy of the controller {libdisconfilename}.so in {currLibdiscon}')
                 shutil.copy2(self.libdisconfilepath, currLibdiscon)
