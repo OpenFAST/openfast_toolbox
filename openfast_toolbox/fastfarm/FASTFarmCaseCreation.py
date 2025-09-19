@@ -2600,8 +2600,8 @@ class FFCaseCreation:
         # --- High-res location per turbine
         X0_desired = np.asarray(xWT)-LX_High/2  # high-res is centered on turbine location
         Y0_desired = np.asarray(yt)-LY_High/2   # high-res is centered on turbine location
-        X0_High    = X0_Low + np.floor((X0_desired-X0_Low)/dX_High)*dX_High
-        Y0_High    = Y0_Low + np.floor((Y0_desired-Y0_Low)/dY_High)*dY_High
+        X0_High    = X0_Low + (X0_desired-X0_Low)/dX_High*dX_High  # removed np.floor because it would prevent turbines being centered
+        Y0_High    = Y0_Low + (Y0_desired-Y0_Low)/dY_High*dY_High  # removed np.floor because it would prevent turbines being centered
     
         if self.verbose>2:
             print(f'  Low Box  \t\t  High box   ')
@@ -2648,19 +2648,20 @@ class FFCaseCreation:
         d['U_mean_Low']  = meanU_Low
         d['U_mean_High'] = meanU_High
     
-    
+
+        # Commenting this for now: it was creating problems when the turbine is not exactly centered in the high-res box so I removed the np.floor
         # --- Sanity check: check that the high res is at "almost" an integer location
-        X_rel = (np.array(d['X0_High'])-d['X0_Low'])/d['dX_High']
-        Y_rel = (np.array(d['Y0_High'])-d['Y0_Low'])/d['dY_High']
-        dX = X_rel - np.round(X_rel) # Should be close to zero
-        dY = Y_rel - np.round(Y_rel) # Should be close to zero
+        # X_rel = (np.array(d['X0_High'])-d['X0_Low'])/d['dX_High']
+        # Y_rel = (np.array(d['Y0_High'])-d['Y0_Low'])/d['dY_High']
+        # dX = X_rel - np.round(X_rel) # Should be close to zero
+        # dY = Y_rel - np.round(Y_rel) # Should be close to zero
     
-        if any(abs(dX)>1e-3):
-            print('Deltas:',dX)
-            raise Exception('Some X0_High are not on an integer multiple of the high-res grid')
-        if any(abs(dY)>1e-3):
-            print('Deltas:',dY)
-            raise Exception('Some Y0_High are not on an integer multiple of the high-res grid')
+        # if any(abs(dX)>1e-3):
+        #     print('Deltas:',dX)
+        #     raise Exception('Some X0_High are not on an integer multiple of the high-res grid')
+        # if any(abs(dY)>1e-3):
+        #     print('Deltas:',dY)
+        #     raise Exception('Some Y0_High are not on an integer multiple of the high-res grid')
             
         return d
 

@@ -61,9 +61,9 @@ class TSCaseCreation:
         else:
             manual_ds_low = True
 
-        # Force manual modes off:
-        manual_mode = False
-        manual_ds_low = False
+        # # Force manual modes off:
+        # manual_mode = False
+        # manual_ds_low = False
         
         # Set parameters for convenience
         self.Cmeander = Cmeander
