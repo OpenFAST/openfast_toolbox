@@ -1784,7 +1784,8 @@ class FFCaseCreation:
                 Lowinp['InCDec1']   = Lowinp['InCDec2'] = Lowinp['InCDec3'] = f'"{a} {b/(8.1*Lambda1):.8f}"'
                 # The dt was computed for a proper low-res box but here we will want to compare with the high-res
                 # and it is convenient to have the same time step. Let's do that change here
-                Lowinp['TimeStep']  = 1/(2*self.fmax)
+                # Lowinp['TimeStep']  = 1/(2*self.fmax)
+                Lowinp['TimeStep'] = np.round(Lowinp['TimeStep'], 2)
                 if writeFiles:
                     lowFileName = os.path.join(seedPath, 'Low.inp') 
                     Lowinp.write(lowFileName)
@@ -1994,6 +1995,9 @@ class FFCaseCreation:
                         Vmid = bts['u'][0,:,jMid,kMid]
                         time = bts.t
         
+                        # Given the nature of how TS decides on the total time, let's get the actual tmax from the low-res
+                        self.tmax_low = time[-1]
+
                         # The time-series need to be shifted depending on the turbine location, so we need to find how many
                         # grid points (time steps) the data have convected. We use the mean streamwise component for that
                         start_time_step = round( (xt/Vmid.mean())/bts.dt ) 
@@ -2002,11 +2006,17 @@ class FFCaseCreation:
                         uvel = np.roll(bts['u'][0, :, jTurb, kTurb], start_time_step)
                         vvel = np.roll(bts['u'][1, :, jTurb, kTurb], start_time_step)
                         wvel = np.roll(bts['u'][2, :, jTurb, kTurb], start_time_step)
-        
+
+                        # Map it to high-res time and dt (both) 
+                        time_hr = np.arange(time[0], self.tmax_low+self.dt_high_les, self.dt_high_les)
+                        uvel_hr = np.interp(time_hr, time, uvel)
+                        vvel_hr = np.interp(time_hr, time, vvel)
+                        wvel_hr = np.interp(time_hr, time, wvel)
+
                         # Checks
-                        assert len(time)==len(uvel)
-                        assert len(uvel)==len(vvel)
-                        assert len(vvel)==len(wvel)
+                        assert len(time_hr)==len(uvel_hr)
+                        assert len(uvel_hr)==len(vvel_hr)
+                        assert len(vvel_hr)==len(wvel_hr)
         
                         # Save timeseries as CondXX/Seed_Z/USRTimeSeries_T*.txt. This file will later be copied to CondXX/CaseYY/Seed_Z
                         timeSeriesOutputFile = os.path.join(caseSeedPath, f'USRTimeSeries_T{t+1}.txt')
@@ -2024,7 +2034,7 @@ class FFCaseCreation:
                             print(f"Seed {seed}, Case {case}: Turbine {t+1} is not at a grid point location. Tubine is at y={yloc_}",\
                                   f"on the turbine reference frame, which is y={yt} on the low-res TurbSim reference frame. The",\
                                   f"nearest grid point in y is {bts['y'][jTurb]} so printing y={yoffset} to the time-series file.")
-                        writeTimeSeriesFile(timeSeriesOutputFile, yoffset, Hub_series, uvel, vvel, wvel, time)
+                        writeTimeSeriesFile(timeSeriesOutputFile, yoffset, Hub_series, uvel_hr, vvel_hr, wvel_hr, time_hr)
 
 
 
@@ -2076,7 +2086,7 @@ class FFCaseCreation:
                         # Create and write new Low.inp files creating the proper box with proper resolution
                         currentTS = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xloc_, y=yloc_, zbot=self.zbot,
                                                    cmax=self.cmax, fmax=self.fmax, Cmeander=self.Cmeander, boxType=boxType, high_ext=self.extent_high)
-                        currentTS.writeTSFile(self.turbsimHighfilepath, currentTSHighFile, tmax=self.tmax, turb=t, verbose=self.verbose)
+                        currentTS.writeTSFile(self.turbsimHighfilepath, currentTSHighFile, tmax=self.tmax_low, turb=t, verbose=self.verbose)
         
                         # Modify some values and save file (some have already been set in the call above)
                         Highinp = FASTInputFile(currentTSHighFile)
