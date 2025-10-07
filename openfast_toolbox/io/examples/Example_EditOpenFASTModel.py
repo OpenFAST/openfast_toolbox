@@ -30,7 +30,7 @@ print('> Keys:',ED.keys())
 print('> Hub radius: ',ED['HubRad'])
 print('> Tip radius: ',ED['TipRad'])
 print('> Hub mass:   ',ED['HubMass'])
-ED['TipRadius'] = 64 # Modifying the data
+ED['TipRad'] = 64 # Modifying the data
 #ED.write('_NewFile.dat') # write a new file with modified data
 
 
