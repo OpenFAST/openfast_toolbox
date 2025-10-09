@@ -110,10 +110,10 @@ class Test(unittest.TestCase):
         F.test_ascii(bCompareWritesOnly=False,bDelete=True)
 
         dfs = F.toDataFrame()
-        self.assertTrue('AFCoeff_2' in dfs.keys())
+        self.assertTrue('AFCoeff_Re0.06' in dfs.keys())
 
-        df1 = dfs['AFCoeff_1']
-        df2 = dfs['AFCoeff_2']
+        df1 = dfs['AFCoeff_Re0.05']
+        df2 = dfs['AFCoeff_Re0.06']
         self.assertTrue('Cn_pot_[-]' in df2.keys())
 
         self.assertEqual(df1.shape[0],23)

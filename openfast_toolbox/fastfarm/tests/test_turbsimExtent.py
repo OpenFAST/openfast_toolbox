@@ -54,7 +54,7 @@ class Test(unittest.TestCase):
         np.testing.assert_almost_equal(FFTS['Y0_High'] , [-48    , 2      ], 5)
 
         # --- Write Fast Farm file with layout and Low and High res extent
-        templateFSTF = os.path.join(MyDir, '../examples/SampleFiles/TestCase.fstf')      # template file used for FastFarm input file, need to exist
+        templateFSTF = os.path.join(MyDir, '../examples/SampleFiles/FF_ForInitialDebug.fstf')      # template file used for FastFarm input file, need to exist
         outputFSTF   = os.path.join(MyDir, '../examples/SampleFiles/_TestCase_mod.fstf') # new file that will be written
         writeFastFarm(outputFSTF, templateFSTF, xWT, yWT, zWT, FFTS=FFTS)
         #import matplotlib.pyplot as plt
