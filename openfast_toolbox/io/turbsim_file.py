@@ -442,10 +442,7 @@ class TurbSimFile(File):
         """ Compute lateral cross spectral density
         If no index is provided, computed at mid box 
         """
-        try:
-            import scipy.signal as sig
-        except:
-            import pydatview.tools.spectral as sig
+        import scipy.signal as sig
         u, v, w = ts._latline(ix0=ix0, iz0=iz0, removeMean=True)
         t       = ts['t']
         dt      = t[1]-t[0]
@@ -459,10 +456,7 @@ class TurbSimFile(File):
         """ Compute vertical cross spectral density
         If no index is provided, computed at mid box 
         """
-        try:
-            import scipy.signal as sig
-        except:
-            import pydatview.tools.spectral as sig
+        import scipy.signal as sig
         t       = ts['t']
         dt      = t[1]-t[0]
         fs      = 1/dt
@@ -480,10 +474,7 @@ class TurbSimFile(File):
         """ Coherence on a longitudinal line for different delta y and delta z
         compared to a given point with index iy0,iz0
         """
-        try:
-            import scipy.signal as sig
-        except:
-            import pydatview.tools.spectral as sig
+        import scipy.signal as sig
         if iy0 is None:
             iy0,iz0 = ts.iMid
         u, v, w = ts._longiline(iy0=iy0, iz0=iz0, removeMean=True)
@@ -544,7 +535,7 @@ class TurbSimFile(File):
             print('New std : {:7.3f}  (target: {:7.3f}, old: {:7.3f})'.format(new_std2 , new_std , old_std))
 
     def makePeriodic(self):
-        """ Make the box periodic in the streamwise direction by mirroring it """
+        """ Make the box periodic in the streamwise direction by mirroring it - Periodic is ID=8"""
         nDim, nt0, ny, nz = self['u'].shape
         u = self['u'].copy()
         del self['u']
@@ -850,7 +841,7 @@ class TurbSimFile(File):
             height to be written to turbsim as the reference height. if none is given, it is taken as the vertical centerpoint of the slice
         """
         try:
-            from welib.wio.amrwind_file import AMRWindFile
+            from openfast_toolbox.io.amrwind_file import AMRWindFile
         except:
             try:
                 from .amrwind_file import AMRWindFile

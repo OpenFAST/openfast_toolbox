@@ -380,10 +380,10 @@ def beamDyn2Hawc2FPM_raw(r_bar, kp_x, kp_y, kp_z, twist,
     x_g   = x_g_h2
     y_g   = y_g_h2
     m     = m_h2
-    if np.mean(pitch)>0:
-        print('Pitch (delta) is mostly positive')
-    else:
-        print('Pitch (delta) is mostly negative')
+    #if np.mean(pitch)>0:
+    #    print('Pitch (delta) is mostly positive')
+    #else:
+    #    print('Pitch (delta) is mostly negative')
 
 
     K11 = KH2[0,0]

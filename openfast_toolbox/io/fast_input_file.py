@@ -669,11 +669,7 @@ class FASTInputFileBase(File):
                 else:
                     nTabLines = self[d['tabDimVar']]
                 #print('Reading table {} Dimension {} (based on {})'.format(d['label'],nTabLines,d['tabDimVar']));
-                try:
-                    d['value'], d['tabColumnNames'], d['tabUnits'] = parseFASTNumTable(self.filename,lines[i:i+nTabLines+nHeaders], nTabLines, i, nHeaders, tableType=tab_type, varNumLines=d['tabDimVar'])
-                except:
-                    import pdb; pdb.set_trace()
-
+                d['value'], d['tabColumnNames'], d['tabUnits'] = parseFASTNumTable(self.filename,lines[i:i+nTabLines+nHeaders], nTabLines, i, nHeaders, tableType=tab_type, varNumLines=d['tabDimVar'])
                 _, d['descr'] = splitAfterChar(lines[i], '!')
                 i += nTabLines+nHeaders-1
 
