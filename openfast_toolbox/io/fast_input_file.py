@@ -846,7 +846,7 @@ class FASTInputFileBase(File):
                 s+='{}'.format(d['value'])
             elif d['tabType']==TABTYPE_NOT_A_TAB:
                 if isinstance(d['value'], list) or isinstance(d['value'],np.ndarray):
-                    sList=', '.join([str(x) for x in d['value']])
+                    sList=', '.join([str(x) for x in np.asarray(d['value']).flatten()])
                     s+=toStringVLD(sList, d['label'], d['descr'])
                 else:
                     s+=toStringVLD(d['value'],d['label'],d['descr'])

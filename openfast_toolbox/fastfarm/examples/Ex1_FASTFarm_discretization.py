@@ -198,7 +198,7 @@ def main(test=False):
 
 
 if __name__ == '__main__':
-    ffcase, ffcase2 = main(test=True)
+    ffcase, ffcase2 = main(test=False)
     # Note you can always print the object and get some information about the farm and the set of cases that will be setup:
     print(ffcase)
     plt.show()
