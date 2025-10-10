@@ -117,7 +117,6 @@ def main(test=False):
     TIvalue    = [10]   # Turbulence intensity [%]
     inflow_deg = [0]    # Wind direction [deg]
 
-
     # ----------- Template files
     # --- Option 1
     templateFSTF = os.path.join(scriptDir, '../../../data/IEA15MW/FF.fstf')
@@ -152,7 +151,7 @@ def main(test=False):
     # SLURM scripts
     slurm_TS_high           = os.path.join(scriptDir, './SampleFiles/runAllHighBox.sh')
     slurm_TS_low            = os.path.join(scriptDir, './SampleFiles/runAllLowBox.sh')
-    # slurm_FF_single         = './SampleFiles/runFASTFarm_cond0_case0_seed0.sh'
+    slurm_FF_single         = './SampleFiles/runFASTFarm_cond0_case0_seed0.sh'
 
 
     # -----------------------------------------------------------------------------
@@ -196,8 +195,8 @@ def main(test=False):
                             refTurb_rot=refTurb_rot, verbose=0)
 
     # ----------- Perform auxiliary steps in preparing the case
-    ffcase.setTemplateFilename(templateFiles=templateFiles, templateFSTF=templateFSTF)
-    #ffcase.setTemplateFilename(templatePath, templateFiles)   
+    ffcase.setTemplateFilename(templateFiles=templateFiles, templateFSTF=templateFSTF) # Option 1
+    #ffcase.setTemplateFilename(templatePath, templateFiles) # Option 2
     ffcase.getDomainParameters()
     ffcase.copyTurbineFilesForEachCase()
     ffcase.plot()  # add showTurbNumber=True to help with potential debugging
@@ -243,7 +242,7 @@ def main(test=False):
 
     # ----------- Prepare script for submission
     ffcase.FF_batch_prepare() # Write batch files with all commands to be run
-    #ffcase.FF_slurm_prepare(slurm_FF_single)
+    #ffcase.FF_slurm_prepare(slurm_FF_single) # Alternative, prepare a slurm batch file
 
     # We can do simple modifications:
     modifyProperty(ffcase.FFFiles[0], 'NX_Low', 100) # Making the domain longer for visualization purposes
@@ -253,7 +252,7 @@ def main(test=False):
 
     # ----------- Submit the FAST.Farm script (can be done from the command line)
     ffcase.FF_batch_run(showOutputs=True, showCommand=True, nBuffer=10, shell_cmd='bash')
-    #ffcase.FF_slurm_submit(p='debug', t='1:00:00')
+    #ffcase.FF_slurm_submit(p='debug', t='1:00:00') # Alternative, submit a slurm batch file
     return ffcase
 
 

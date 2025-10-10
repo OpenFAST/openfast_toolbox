@@ -44,7 +44,7 @@ def main(test=False):
     # -----------------------------------------------------------------------------
 
     # ----------- Case absolute path
-    path = os.path.join(scriptDir, '_ex1')
+    path = os.path.join(scriptDir, '_ex1') # folder (preferably new) where all the simulation files will be written
 
     # ----------- Execution parameters
 
@@ -52,14 +52,12 @@ def main(test=False):
     # -----------------------------------------------------------------------------
     # --------------------------- Farm parameters ---------------------------------
     # -----------------------------------------------------------------------------
-
     # ----------- General turbine parameters
-    cmax     = 5      # Maximum blade chord (m)
-    fmax     = 10/6   # Maximum excitation frequency (Hz)
+    cmax     = 5      # Maximum blade chord (m), affects dr
+    fmax     = 10/6   # Maximum excitation frequency (Hz), affects dt_high
     Cmeander = 1.9    # Meandering constant (-)
     D = 240           # Rotor diameter (m)
     zhub = 150        # Hub height (m)
-
     # ----------- Wind farm
     # The wts dictionary holds information of each wind turbine. The allowed entries
     # are: x, y, z, D, zhub, cmax, fmax, Cmeander, and phi_deg. The phi_deg is the
@@ -83,21 +81,18 @@ def main(test=False):
     # -----------------------------------------------------------------------------
     # ------------------- Inflow conditions and input files -----------------------
     # -----------------------------------------------------------------------------
-
     # ----------- Additional variables
     tmax = 120      # Total simulation time
-    nSeeds = 6      # Number of seeds
     zbot = 1        # Bottom of your domain
     mod_wake = 2    # Wake model. 1: Polar, 2: Curled, 3: Cartesian
-
     # ----------- Inflow parameters
     inflowType = 'TS'
-
-    # ----------- Desired sweeps
-    vhub       = [8]
-    shear      = [0.1]
-    TIvalue    = [10]
-    inflow_deg = [0]
+    # ----------- Desired sweeps, fill array with multiple values if necessary
+    nSeeds      = 6     # Number of seeds
+    vhub       = [8]    # Hub velocity [m/s]
+    shear      = [0.1]  # Power law exponent [-]
+    TIvalue    = [10]   # Turbulence intensity [%]
+    inflow_deg = [0]    # Wind direction [deg]
 
     # ----------- Template files
 
@@ -109,12 +104,12 @@ def main(test=False):
 
     # ----------- Low- and high-res boxes parameters
     # High-res boxes settings
-    dt_high     = None    # sampling frequency of high-res files
-    ds_high     = None    # dx, dy, dz of high-res files
+    dt_high     = None   # sampling time of high-res files [s]
+    ds_high     = None   # dx, dy, dz of high-res files [m]
     extent_high = None   # extent in y and x for each turbine, in D
     # Low-res boxes settings
-    dt_low      = None   # sampling frequency of low-res files
-    ds_low      = None   # dx, dy, dz of low-res files
+    dt_low      = None   # sampling time of low-res files [s]
+    ds_low      = None   # dx, dy, dz of low-res files [m]
     extent_low  = None   # extent in [xmin,xmax,ymin,ymax,zmax], in D
 
 
