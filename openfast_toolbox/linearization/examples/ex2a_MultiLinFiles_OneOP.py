@@ -27,12 +27,12 @@ CDDOP, MBCOP = lin.getCampbellDataOP(fstFile, writeModes=True, verbose=True) # a
 # --- Write Viz file
 vizfile = lin.writeVizFile(fstFile, verbose=True, **vizDict)
 
-# --- Outputs to screen
-Freq,Damp = lin.printCampbellDataOP(CDDOP, nModesMax=10, nCharMaxDesc=50)
 
 if __name__=='__main__':
-    pass
+    # --- Outputs to screen
+    Freq,Damp = lin.printCampbellDataOP(CDDOP, nModesMax=10, nCharMaxDesc=50)
 
 if __name__=='__test__':
+    Freq,Damp = lin.freqDampCampbellDataOP(CDDOP, nModesMax=10)
     np.testing.assert_almost_equal(Freq[:4],     [0.588,  0.722 , 0.842, 0.937],3)
     np.testing.assert_almost_equal(Damp[:4]*100, [63.106, 52.529, 44.01, 1.634],3)

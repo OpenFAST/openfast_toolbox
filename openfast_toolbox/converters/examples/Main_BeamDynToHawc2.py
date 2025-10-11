@@ -16,6 +16,7 @@ import openfast_toolbox.converters.beamdyn as bd
 
 # Get current directory so this script can be called from any location
 MyDir=os.path.dirname(__file__)
+verbose =  __name__ != '__test__'
 
 # --- Parameters
 FPM                 = True # Use fully populated matrix or regular st file
@@ -37,7 +38,7 @@ BD_bladefile   = os.path.join(MyDir,'../../../data/NREL5MW/5MW_Baseline/NRELOffs
 H2_htcfile_new = '_NREL5MW{}.htc'.format(suffix) # will be created
 H2_stfile      = '_blade_st{}.st'.format(suffix) # will be created
 copyfile(htc_template,  H2_htcfile_new) # Backup template
-df_c2, df_st = bd.beamDynToHawc2(BD_mainfile, BD_bladefile, H2_htcfile_new, H2_stfile, 'blade1', A=A, E=E, G=G, theta_p_in = theta_p, FPM=FPM, verbose=True)
+df_c2, df_st = bd.beamDynToHawc2(BD_mainfile, BD_bladefile, H2_htcfile_new, H2_stfile, 'blade1', A=A, E=E, G=G, theta_p_in = theta_p, FPM=FPM, verbose=verbose)
 
 if ConvertBackAndForth:
     # NOTE: beamdyn uses stiffness proportional damping
@@ -56,7 +57,7 @@ if ConvertBackAndForth:
     H2_htcfile_new2 = '_NREL5MW_2.htc'  
     H2_stfile2      = '_blade_st_2.st'
     copyfile(H2_htcfile_new, H2_htcfile_new2)
-    bd.beamDynToHawc2(BD_mainfile, BD_bladefile, H2_htcfile_new2, H2_stfile2, 'blade1', A=A, E=E, G=G, FPM=False, verbose=True)
+    bd.beamDynToHawc2(BD_mainfile, BD_bladefile, H2_htcfile_new2, H2_stfile2, 'blade1', A=A, E=E, G=G, FPM=False, verbose=verbose)
 
 
 if __name__ == '__test__':

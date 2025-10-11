@@ -1,0 +1,3 @@
+This file is for testing purposes. 
+
+You should be using the path to a real FAST.Farm executable.

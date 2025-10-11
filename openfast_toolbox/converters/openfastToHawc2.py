@@ -25,6 +25,8 @@ def FAST2Hawc2(fstIn, htcTemplate, htcOut, OPfile=None, TwrFAFreq=0.1, TwrSSFreq
     ED    = fst.fst_vt['ElastoDyn']
     AD    = fst.fst_vt['AeroDyn15']
     Bld   = fst.fst_vt['AeroDynBlade']
+    if isinstance(Bld, list):
+        Bld = Bld[0]
     AF    = fst.fst_vt['af_data']
     twrOF = fst.fst_vt['ElastoDynTower']
     BD    = fst.fst_vt['BeamDyn']

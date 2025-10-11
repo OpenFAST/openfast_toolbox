@@ -11,6 +11,7 @@ from openfast_toolbox.linearization.campbell import postproCampbell, plotCampbel
 from openfast_toolbox.linearization.campbell_data import IdentifyModes
 from openfast_toolbox.linearization.campbell_data import IdentifiedModesDict
 from openfast_toolbox.linearization.campbell_data import printCampbellDataOP
+from openfast_toolbox.linearization.campbell_data import freqDampCampbellDataOP
 from openfast_toolbox.linearization.campbell_data import campbellData2TXT
 from openfast_toolbox.linearization.campbell_data import extractShortModeDescription
 from openfast_toolbox.linearization.campbell_data import campbell_diagram_data_oneOP

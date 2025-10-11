@@ -22,12 +22,12 @@ lin_file     = os.path.join(scriptDir,'../../../data/example_files/Standstill.1.
 # Performing MBC (NOTE: not stricly necessary without rotation)
 CDDOP, MBC = lin.getCampbellDataOP([lin_file], BladeLen=BladeLen, TowerLen=TowerLen)
 
-# Outputs to screen
-Freq,Damp = lin.printCampbellDataOP(CDDOP, nModesMax=10, nCharMaxDesc=50)
 
 if __name__=='__main__':
-    pass
+    # Outputs to screen
+    Freq,Damp = lin.printCampbellDataOP(CDDOP, nModesMax=10, nCharMaxDesc=50)
 
 if __name__=='__test__':
+    Freq,Damp = lin.freqDampCampbellDataOP(CDDOP, nModesMax=10)
     np.testing.assert_almost_equal(Freq[:3]  ,[0.427, 0.450, 0.669], 3)
     np.testing.assert_almost_equal(Damp[:3]*np.pi*2*100,[1.9505,2.1309,5.0649], 4)

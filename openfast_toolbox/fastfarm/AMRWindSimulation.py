@@ -2,6 +2,7 @@ import numpy as np
 import os
 
 from openfast_toolbox.fastfarm.FASTFarmCaseCreation import getMultipleOf
+from openfast_toolbox.tools.strings import INFO, FAIL, OK, WARN, print_bold
 
 class AMRWindSimulation:
     '''
@@ -180,7 +181,7 @@ class AMRWindSimulation:
         # For convenience, the turbines should not be zero-indexed
         if 'name' in self.wts[0]:
             if self.wts[0]['name'] != 'T1':
-                if self.verbose>0: print(f"WARNING: Recommended turbine numbering should start at 1. Currently it is zero-indexed.")
+                if self.verbose>0: WARN(f"Recommended turbine numbering should start at 1. Currently it is zero-indexed.")
 
 
         # Flags of given/calculated spatial resolution for warning/error printing purposes
@@ -188,12 +189,12 @@ class AMRWindSimulation:
         self.given_ds_lr = False
         warn_msg = ""
         if self.ds_hr is not None:
-            warn_msg += f"WARNING: HIGH-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON HIGH-RES BOXES CHECKS TO WARNINGS."
+            warn_msg += f"HIGH-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON HIGH-RES BOXES CHECKS TO WARNINGS."
             self.given_ds_hr = True
         if self.ds_lr is not None:
-            warn_msg += f"WARNING: LOW-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON LOW-RES BOX CHECKS TO WARNINGS."
+            warn_msg += f"LOW-RES SPATIAL RESOLUTION GIVEN. CONVERTING FATAL ERRORS ON LOW-RES BOX CHECKS TO WARNINGS."
             self.given_ds_lr = True
-        if self.verbose>0: print(f'{warn_msg}\n')
+        if self.verbose>0 and len(warn_msg)>0: WARN(f'{warn_msg}')
         a=1
 
 
@@ -275,6 +276,8 @@ class AMRWindSimulation:
             # Calculate dt of high-res per guidelines
             dt_hr_max = 1 / (2 * self.fmax_max)
             self.dt_high_les = getMultipleOf(dt_hr_max, multipleof=self.dt) # Ensure dt_hr is a multiple of the AMR-Wind timestep
+            if self.dt_high_les ==0:
+                raise ValueError(f"AMR-Wind timestep dt={self.dt} is too coarse for high resolution domain! The time step based on `fmax` is {dt_hr_max}, which is too small to be rounded as a multiple of dt.")
         else:
             # The dt of high-res is given
             self.dt_high_les = self.dt_hr
@@ -339,7 +342,7 @@ class AMRWindSimulation:
             error_msg = f"AMR-Wind grid spacing of {self.ds_max_at_hr_level} m at the high-res box level of {self.level_hr} is too coarse for "\
                         f"the high resolution domain. AMR-Wind grid spacing at level {self.level_hr} must be at least {self.ds_high_les} m."
             if self.given_ds_hr:
-                if self.verbose>0: print(f'WARNING: {error_msg}')
+                if self.verbose>0 and len(error_msg)>0: WARN(f'{error_msg}')
             else:
                 raise ValueError(error_msg)
 
@@ -351,7 +354,7 @@ class AMRWindSimulation:
                         f"to the call to `AMRWindSimulation`. Note that sampled values will no longer be at the cell centers, as you will be requesting "\
                         f"sampling at {self.ds_low_les} m while the underlying grid will be at {self.ds_max_at_lr_level} m.\n --- SUPRESSING FURTHER ERRORS ---"
             if self.given_ds_lr:
-                if self.verbose>0: print(f'WARNING: {error_msg}')
+                if self.verbose>0 and len(error_msg)>0: WARN(f'{error_msg}')
             else:
                 raise ValueError(error_msg)
 
@@ -382,8 +385,8 @@ class AMRWindSimulation:
         # For curled wake model: ds_lr_max = self.cmeander_max * self.dt_low_les * self.vhub**2 / 5
 
         ds_low_les = getMultipleOf(ds_lr_max, multipleof=self.ds_hr) 
-        if self.verbose>0: print(f"Low-res spatial resolution should be at least {ds_lr_max:.2f} m, but since it needs to be a multiple of high-res "\
-              f"resolution of {self.ds_hr}, we pick ds_low to be {ds_low_les} m")
+        if self.verbose>0: INFO(f"Low-res spatial resolution (ds_low) should be >={ds_lr_max:.2f} m.\nTo be a multiple of ds_high"\
+              f"={self.ds_hr} m, we pick ds_low={ds_low_les} m")
 
         #self.ds_lr = self.ds_low_les
         return ds_low_les
@@ -636,7 +639,7 @@ class AMRWindSimulation:
         		f"AMR-Wind grid (subset): {amr_xyzgrid_at_lhr_level_cc[amr_index  ]}, {amr_xyzgrid_at_lhr_level_cc[amr_index+1]}, "\
         		f"{amr_xyzgrid_at_lhr_level_cc[amr_index+2]}, {amr_xyzgrid_at_lhr_level_cc[amr_index+3]}, ..."
             if self.given_ds_lr:
-                if self.verbose>0: print(f'WARNING: {error_msg}')
+                if self.verbose>0 and len(error_msg)>0: WARN(f'{error_msg}')
             else:
                 raise ValueError(error_msg)
 
