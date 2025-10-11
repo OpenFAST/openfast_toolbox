@@ -356,8 +356,6 @@ class FFCaseCreation:
             self._create_dir_structure()
             if self.verbose>0: print(f'Creating directory structure and copying files... Done.')
 
-            self._checkBinaries()
-
 
     def __repr__(self):
         s='<{} object> with the following content:\n'.format(type(self).__name__)
@@ -419,9 +417,9 @@ class FFCaseCreation:
 
         return s
 
-    def _checkBinaries(self):
 
 
+    def _checkFFBinary(self):
         # Check the FAST.Farm binary
         if self.ffbin is None:
             self.ffbin = shutil.which('FAST.Farm')
@@ -432,6 +430,7 @@ class FFCaseCreation:
         elif not os.path.isfile(self.ffbin):
             raise ValueError (f'The FAST.Farm binary given does not exist: {self.ffbin}.')
 
+    def _checkTSBinary(self):
         # Check the TurbSim binary
         if self.inflowType == 'TS':
             if self.tsbin is None:
@@ -1674,7 +1673,7 @@ class FFCaseCreation:
             # --- TODO TODO TODO not clean convention
             elif key == 'libdisconfilepath':
                 ext = os.path.splitext(value)[1].lower()
-                if ext not in ['.so', '.dll', '.dylib']:
+                if ext not in ['.so', '.dll', '.dylib', '.dummy']:
                     raise ValueError(f'The libdiscon file should have extension ".so", ".dll", or ".dylib"')
                 self.DLLext = ext[1:] # No dot
                 if os.path.isabs(value):
@@ -2132,10 +2131,14 @@ class FFCaseCreation:
 
 
 
-    def TS_low_batch_prepare(self, run=False, **kwargs):
+    def TS_low_batch_prepare(self, tsbin=None, run=False, **kwargs):
         """ Writes a flat batch file for TurbSim low"""
 
         from openfast_toolbox.case_generation.runner import writeBatch
+
+        if tsbin is not None:
+            self.tsbin = tsbin
+        self._checkTSBinary()
 
         ext = ".bat" if os.name == "nt" else ".sh"
         batchfile = os.path.join(self.path, f'runAllLowBox{ext}')
@@ -2164,7 +2167,11 @@ class FFCaseCreation:
 
 
 
-    def TS_low_slurm_prepare(self, slurmfilepath, inplace=True, useSed=False):
+    def TS_low_slurm_prepare(self, slurmfilepath, inplace=True, useSed=False, tsbin=None):
+
+        if tsbin is not None:
+            self.tsbin = tsbin
+        self._checkTSBinary()
 
         # --------------------------------------------------
         # ----- Prepare SLURM script for Low-res boxes -----
@@ -3134,9 +3141,13 @@ class FFCaseCreation:
         return d
 
 
-    def FF_batch_prepare(self, run=False, **kwargs):
+    def FF_batch_prepare(self, ffbin=None, run=False, **kwargs):
         """ Writes a flat batch file for FASTFarm cases"""
         from openfast_toolbox.case_generation.runner import writeBatch
+
+        if ffbin is not None:
+            self.ffbin = ffbin
+        self._checkFFBinary()
 
         ext = ".bat" if os.name == "nt" else ".sh"
         batchfile = os.path.join(self.path, f'runAllFASTFarm{ext}')
@@ -3157,12 +3168,15 @@ class FFCaseCreation:
         if stat!=0:
             raise FFException(f'Batch file failed: {self.batchfile_ff}')
 
-    def FF_slurm_prepare(self, slurmfilepath, inplace=True, useSed=True):
+    def FF_slurm_prepare(self, slurmfilepath, inplace=True, useSed=True, ffbin=None):
         # ----------------------------------------------
         # ----- Prepare SLURM script for FAST.Farm -----
         # ------------- ONE SCRIPT PER CASE ------------
         # ----------------------------------------------
-        
+        if ffbin is not None:
+            self.ffbin = ffbin
+        self._checkFFBinary()
+
         if not os.path.isfile(slurmfilepath):
             raise ValueError (f'SLURM script for FAST.Farm {slurmfilepath} does not exist.')
         self.slurmfilename_ff = os.path.basename(slurmfilepath)

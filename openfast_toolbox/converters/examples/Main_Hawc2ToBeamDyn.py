@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 
 # Get current directory so this script can be called from any location
 MyDir=os.path.dirname(__file__)
+verbose = __name__!='__test__'
 
 def main():
     np.set_printoptions(linewidth=300)
@@ -31,7 +32,7 @@ def main():
     BDMainTemplate = os.path.join(MyDir,'../../../data/templates/BeamDyn.dat') # readonly, template file to write main BD file
     BD_mainfile  = '_NREL5MW_BeamDyn_Created.dat'       # Name of BeamDyn file to be writen
     BD_bladefile = '_NREL5MW_BeamDyn_Blade_Created.dat' # Name of BeamDyn blade file to be written
-    fig = bd.htcToBeamDyn(H2_htcfile, 'blade1', BD_bladefile, BD_mainfile, BDMainTemplate, Mu=Mu, poly_exp=[2,3,4,5,6], ref_axis='c2def', bPlot=True, interpCurvilinear=False)
+    fig = bd.htcToBeamDyn(H2_htcfile, 'blade1', BD_bladefile, BD_mainfile, BDMainTemplate, Mu=Mu, poly_exp=[2,3,4,5,6], ref_axis='c2def', bPlot=True, interpCurvilinear=False, verbose=verbose)
 
     return BD_mainfile, BD_bladefile
 

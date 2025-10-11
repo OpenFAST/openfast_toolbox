@@ -14,19 +14,14 @@ scriptDir = os.path.dirname(__file__)
 # --- Open lin File
 linFile = os.path.join(scriptDir, '../../../data/NREL5MW/5MW_Land_Lin_BladeOnly/Main.1.lin')
 lin = FASTLinearizationFile(linFile)
-print('Keys available:',lin.keys())
 
 # --- Perform eigenvalue analysis
 #fd, zeta, Q, f0 = eigA(lin['A'])
 fd, zeta, Q, f0 = lin.eva()
-print('Nat. freq. [Hz], Damping ratio [%]')
-print(np.column_stack((np.around(f0,4),np.around(zeta*100,4))))
 
 # --- Using dataframes instead of numpy arrays for convenient indexing of variables
 dfs = lin.toDataFrame()
-print('Dataframe available:',dfs.keys())
 A = dfs['A']
-print(A.columns)
 
 # --- Extract sub matrix for tower degrees of freedom
 #EDdof = ['qt1FA_[m]' ,'qt1SS_[m]' ,'qt2FA_[m]' ,'qt2SS_[m]']
@@ -36,8 +31,11 @@ print(A.columns)
 
 
 if __name__=='__main__':
-    np.testing.assert_almost_equal(fd[:3],       [0.672, 1.079,1.981],3)
-    np.testing.assert_almost_equal(zeta[:3]*100, [0.474, 0.471,0.489],3)
+    print('Keys available:',lin.keys())
+    print('Nat. freq. [Hz], Damping ratio [%]')
+    print(np.column_stack((np.around(f0,4),np.around(zeta*100,4))))
+    print('Dataframe available:',dfs.keys())
+    print(A.columns)
 
 if __name__=='__test__':
     np.testing.assert_almost_equal(fd[:3],       [0.672, 1.079,1.981],3)

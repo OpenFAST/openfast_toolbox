@@ -21,6 +21,7 @@ import openfast_toolbox.linearization as lin
 
 # Get current directory so this script can be called from any location
 scriptDir = os.path.dirname(__file__)
+verbose = __name__!='__test__'
 
 # --- Script Parameters
 fstFiles = glob.glob(os.path.join(scriptDir,'../../../data/linearization_outputs/*.fst')) # list of fst files where linearization were run, lin file will be looked for
@@ -29,7 +30,7 @@ fstFiles.sort() # Important for unittest
 
 # --- Step 3: Run MBC, identify Modes, generate CSV files, and binary modes
 # Find lin files, perform MBC, and try to identify modes. A csv file is written with the mode IDs.
-OP, Freq, Damp, UnMapped, ModeData, modeID_file = lin.postproCampbell(fstFiles, writeModes=True, verbose=True)
+OP, Freq, Damp, UnMapped, ModeData, modeID_file = lin.postproCampbell(fstFiles, writeModes=True, verbose=verbose)
 
 # Edit the mode ID file manually to better identify/distribute the modes
 print('[TODO] Edit this file manually: ',modeID_file)
@@ -44,7 +45,7 @@ fig, axes, figName =  lin.plotCampbellDataFile(modeID_file, 'ws', ylim=None)
 
 # --- Step 5a: Write viz files (Only useful if OpenFAST was run with WrVTK=3)
 vizDict = {'VTKLinModes':2, 'VTKLinScale':10}  # Options for .viz file. Default values are: VTKLinModes=15, VTKLinScale=10, VTKLinTim=1, VTKLinTimes1=True, VTKLinPhase=0, VTKModes=None
-vizFiles = lin.writeVizFiles(fstFiles, verbose=True, **vizDict)
+vizFiles = lin.writeVizFiles(fstFiles, verbose=verbose, **vizDict)
 
 # --- Step 5b: Run FAST with VIZ files to generate VTKs
 import openfast_toolbox.case_generation.runner as runner

@@ -669,11 +669,7 @@ class FASTInputFileBase(File):
                 else:
                     nTabLines = self[d['tabDimVar']]
                 #print('Reading table {} Dimension {} (based on {})'.format(d['label'],nTabLines,d['tabDimVar']));
-                try:
-                    d['value'], d['tabColumnNames'], d['tabUnits'] = parseFASTNumTable(self.filename,lines[i:i+nTabLines+nHeaders], nTabLines, i, nHeaders, tableType=tab_type, varNumLines=d['tabDimVar'])
-                except:
-                    import pdb; pdb.set_trace()
-
+                d['value'], d['tabColumnNames'], d['tabUnits'] = parseFASTNumTable(self.filename,lines[i:i+nTabLines+nHeaders], nTabLines, i, nHeaders, tableType=tab_type, varNumLines=d['tabDimVar'])
                 _, d['descr'] = splitAfterChar(lines[i], '!')
                 i += nTabLines+nHeaders-1
 
@@ -850,7 +846,7 @@ class FASTInputFileBase(File):
                 s+='{}'.format(d['value'])
             elif d['tabType']==TABTYPE_NOT_A_TAB:
                 if isinstance(d['value'], list) or isinstance(d['value'],np.ndarray):
-                    sList=', '.join([str(x) for x in d['value']])
+                    sList=', '.join([str(x) for x in np.asarray(d['value']).flatten()])
                     s+=toStringVLD(sList, d['label'], d['descr'])
                 else:
                     s+=toStringVLD(d['value'],d['label'],d['descr'])
