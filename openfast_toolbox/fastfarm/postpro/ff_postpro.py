@@ -206,7 +206,13 @@ def readTurbineOutput(caseobj, dt_openfast, dt_processing=1, saveOutput=True, ou
                     turbs_t=[]
                     for t in np.arange(iTurbine, fTurbine, 1):
                         print(f'Processing Condition {cond}, Case {case}, Seed {seed}, turbine {t+1}')
-                        ff_file = os.path.join(caseobj.path, caseobj.condDirList[cond], caseobj.caseDirList[case], f'Seed_{seed}', f'{_get_fstf_filename(caseobj)}.T{t+1}.outb')
+                        ff_file = os.path.join(caseobj.path, caseobj.condDirList[cond], caseobj.caseDirList[case], f'Seed_{seed}', f'{_get_fstf_filename(caseobj)}.T{t+1}')
+                        if os.path.isfile(ff_file+'.outb'):
+                            ff_file = ff_file + '.outb'
+                        elif os.path.isfile(ff_file+'.out'):
+                            ff_file = ff_file + '.out'
+                        else:
+                            raise ValueError(f'ERROR: neither output file {ff_file}.out[b] exists. ')
                         df   = FASTOutputFile(ff_file).toDataFrame()
                         # Won't be able to send to xarray if columns are non-unique
                         if not df.columns.is_unique:

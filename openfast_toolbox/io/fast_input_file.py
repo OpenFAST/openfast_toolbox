@@ -391,11 +391,11 @@ class FASTInputFileBase(File):
 
         # --- Tables that can be detected based on the "Value" (first entry on line)
         # TODO members for  BeamDyn with mutliple key point                                                                                                                                                                                                                                                                                                        ####### TODO PropSetID is Duplicate SubDyn and used in HydroDyn
-        NUMTAB_FROM_VAL_DETECT  = ['HtFract'  , 'TwrElev'   , 'BlFract'  , 'Genspd_TLU' , 'BlSpn'        , 'HvCoefID' , 'AxCoefID' , 'JointID'  , 'Dpth'      , 'FillNumM'    , 'MGDpth'    , 'SimplCd'  , 'RNodes'       , 'kp_xr'      , 'mu1'           , 'TwrHtFr'   , 'TwrRe'  , 'WT_X']
-        NUMTAB_FROM_VAL_DIM_VAR = ['NTwInpSt' , 'NumTwrNds' , 'NBlInpSt' , 'DLL_NumTrq' , 'NumBlNds'     , 'NHvCoef'  , 'NAxCoef'  , 'NJoints'  , 'NCoefDpth' , 'NFillGroups' , 'NMGDepths' , 1          , 'BldNodes'     , 'kp_total'   , 1               , 'NTwrHt'    , 'NTwrRe' , 'NumTurbines']
-        NUMTAB_FROM_VAL_VARNAME = ['TowProp'  , 'TowProp'   , 'BldProp'  , 'DLLProp'    , 'BldAeroNodes' , 'HvCoefs'  , 'AxCoefs'  , 'Joints'   , 'DpthProp'  , 'FillGroups'  , 'MGProp'    , 'SmplProp' , 'BldAeroNodes' , 'MemberGeom' , 'DampingCoeffs' , 'TowerProp' , 'TowerRe', 'WindTurbines']
-        NUMTAB_FROM_VAL_NHEADER = [2          , 2           , 2          , 2            , 2              , 2          , 2          , 2          , 2           , 2             , 2           , 2          , 1              , 2            , 2               , 1           , 1        , 2 ]
-        NUMTAB_FROM_VAL_TYPE    = ['num'      , 'num'       , 'num'      , 'num'        , 'num'          , 'num'      , 'num'      , 'num'      , 'num'       , 'num'         , 'num'       , 'num'      , 'mix'          , 'num'        , 'num'           , 'num'       , 'num'    , 'mix']
+        NUMTAB_FROM_VAL_DETECT  = ['HtFract'  , 'TwrElev'   , 'BlFract'  , 'Genspd_TLU' , 'BlSpn'        , 'HvCoefID' , 'AxCoefID' , 'JointID'  , 'DpthCd'      , 'DpthCdA'     , 'FillNumM'    , 'MGDpth'    , 'SimplCd'  , 'RNodes'       , 'kp_xr'      , 'mu1'           , 'TwrHtFr'   , 'TwrRe'  , 'WT_X']
+        NUMTAB_FROM_VAL_DIM_VAR = ['NTwInpSt' , 'NumTwrNds' , 'NBlInpSt' , 'DLL_NumTrq' , 'NumBlNds'     , 'NHvCoef'  , 'NAxCoef'  , 'NJoints'  , 'NCoefDpthCyl', 'NCoefDpthRec', 'NFillGroups' , 'NMGDepths' , 1          , 'BldNodes'     , 'kp_total'   , 1               , 'NTwrHt'    , 'NTwrRe' , 'NumTurbines']
+        NUMTAB_FROM_VAL_VARNAME = ['TowProp'  , 'TowProp'   , 'BldProp'  , 'DLLProp'    , 'BldAeroNodes' , 'HvCoefs'  , 'AxCoefs'  , 'Joints'   , 'DpthCylProp' , 'DpthRecProp' , 'FillGroups'  , 'MGProp'    , 'SmplProp' , 'BldAeroNodes' , 'MemberGeom' , 'DampingCoeffs' , 'TowerProp' , 'TowerRe', 'WindTurbines']
+        NUMTAB_FROM_VAL_NHEADER = [2          , 2           , 2          , 2            , 2              , 2          , 2          , 2          , 2             , 2             , 2             , 2           , 2          , 1              , 2            , 2               , 1           , 1        , 2 ]
+        NUMTAB_FROM_VAL_TYPE    = ['num'      , 'num'       , 'num'      , 'num'        , 'num'          , 'num'      , 'num'      , 'num'      , 'num'         , 'num'         , 'num'         , 'num'       , 'num'      , 'mix'          , 'num'        , 'num'           , 'num'       , 'num'    , 'mix']
         # SubDyn
         NUMTAB_FROM_VAL_DETECT  += [ 'RJointID'        , 'IJointID'        , 'COSMID'             , 'CMJointID'         ]
         NUMTAB_FROM_VAL_DIM_VAR += [ 'NReact'          , 'NInterf'         , 'NCOSMs'             , 'NCmass'            ]
@@ -411,12 +411,12 @@ class FASTInputFileBase(File):
 
         # --- Tables that can be detected based on the "Label" (second entry on line)
         # NOTE: MJointID1, used by SubDyn and HydroDyn
-        NUMTAB_FROM_LAB_DETECT   = ['NumAlf'  , 'F_X'       , 'MemberCd1'    , 'MJointID1' , 'NOutLoc'    , 'NOutCnt'    , 'PropD'       ]
-        NUMTAB_FROM_LAB_DIM_VAR  = ['NumAlf'  , 'NKInpSt'   , 'NCoefMembers' , 'NMembers'  , 'NMOutputs'  , 'NMOutputs'  , 'NPropSets'   ]
-        NUMTAB_FROM_LAB_VARNAME  = ['AFCoeff' , 'TMDspProp' , 'MemberProp'   , 'Members'   , 'MemberOuts' , 'MemberOuts' , 'SectionProp' ]
-        NUMTAB_FROM_LAB_NHEADER  = [2         , 2           , 2              , 2           , 2            , 2            , 2             ]
-        NUMTAB_FROM_LAB_NOFFSET  = [0         , 0           , 0              , 0           , 0            , 0            , 0             ]
-        NUMTAB_FROM_LAB_TYPE     = ['num'     , 'num'       , 'num'          , 'mix'       , 'num'        , 'sdout'      , 'num'         ]
+        NUMTAB_FROM_LAB_DETECT   = ['NumAlf'  , 'F_X'       , 'MemberCd1'       , 'MemberCdA1'      , 'MJointID1' , 'NOutLoc'    , 'NOutCnt'    , 'PropD'         , 'PropA'          ]
+        NUMTAB_FROM_LAB_DIM_VAR  = ['NumAlf'  , 'NKInpSt'   , 'NCoefMembersCyl' , 'NCoefMembersRec' , 'NMembers'  , 'NMOutputs'  , 'NMOutputs'  , 'NPropSetsCyl'  , 'NPropSetsRec'   ]
+        NUMTAB_FROM_LAB_VARNAME  = ['AFCoeff' , 'TMDspProp' , 'MemberCylProp'   , 'MemberRecProp'   , 'Members'   , 'MemberOuts' , 'MemberOuts' , 'SectionCylProp', 'SectionRecProp' ]
+        NUMTAB_FROM_LAB_NHEADER  = [2         , 2           , 2                 , 2                 , 2           , 2            , 2            , 2               , 2                ]
+        NUMTAB_FROM_LAB_NOFFSET  = [0         , 0           , 0                 , 0                 , 0           , 0            , 0            , 0               , 0                ]
+        NUMTAB_FROM_LAB_TYPE     = ['num'     , 'num'       , 'num'             , 'num'             , 'mix'       , 'num'        , 'sdout'      , 'num'           , 'num'            ]
         # MoorDyn Version 1 and 2 (with AUTO for LAB_DIM_VAR)
         NUMTAB_FROM_LAB_DETECT   += ['Diam'       ,'Type'           ,'LineType'    , 'Attachment']
         NUMTAB_FROM_LAB_DIM_VAR  += ['NTypes:AUTO','NConnects'      ,'NLines:AUTO' , 'AUTO']
@@ -668,7 +668,7 @@ class FASTInputFileBase(File):
                     nTabLines = d['tabDimVar']
                 else:
                     nTabLines = self[d['tabDimVar']]
-                #print('Reading table {} Dimension {} (based on {})'.format(d['label'],nTabLines,d['tabDimVar']));
+                #print('Reading table (based on value) {} Dimension {} (based on {})'.format(d['label'],nTabLines,d['tabDimVar']));
                 d['value'], d['tabColumnNames'], d['tabUnits'] = parseFASTNumTable(self.filename,lines[i:i+nTabLines+nHeaders], nTabLines, i, nHeaders, tableType=tab_type, varNumLines=d['tabDimVar'])
                 _, d['descr'] = splitAfterChar(lines[i], '!')
                 i += nTabLines+nHeaders-1
@@ -735,7 +735,7 @@ class FASTInputFileBase(File):
                                 pass
 
                 d['label']  += labOffset
-                #print('Reading table {} Dimension {} (based on {})'.format(d['label'],nTabLines,d['tabDimVar']));
+                #print('Reading table (based on label) {} Dimension {} (based on {})'.format(d['label'],nTabLines,d['tabDimVar']));
                 d['value'], d['tabColumnNames'], d['tabUnits'] = parseFASTNumTable(self.filename,lines[i:i+nTabLines+nHeaders+nOffset],nTabLines,i, nHeaders, tableType=tab_type, nOffset=nOffset, varNumLines=d['tabDimVar'])
                 d['descr'] = '' #
                 i += nTabLines+1-nOffset
@@ -767,7 +767,6 @@ class FASTInputFileBase(File):
             i += 1
             # --- Safety checks
             if d['isComment']:
-                #print(line)
                 nComments +=1
             else:
                 if hasSpecialChars(d['label']):
