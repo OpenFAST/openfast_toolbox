@@ -1440,7 +1440,7 @@ class FFCaseCreation:
             libdisconfilename = os.path.splitext(os.path.basename(self.libdisconfilepath))[0]
             currLibdiscon = os.path.join(self.path, f'{libdisconfilename}.T{t+1}.so')
             self.DLLfilepath = os.path.join(self.path, f'{libdisconfilename}.T')
-            if not os.path.isfile(currLibdiscon):
+            if True:  # I always want to overwrite libdiscon.so to avoid deleting old versions but here's the condition if you wanna check: not os.path.isfile(currLibdiscon)
                 if self.verbose>0: print(f'    Creating a copy of the controller {libdisconfilename}.so in {currLibdiscon}')
                 shutil.copy2(self.libdisconfilepath, currLibdiscon)
                 copied=True
