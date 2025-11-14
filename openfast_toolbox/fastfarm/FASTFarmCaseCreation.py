@@ -2457,6 +2457,8 @@ class FFCaseCreation:
         # ----- Low
         dT_Low = getMultipleOf(dt_low_desired, multipleof=dT_High)
         dX_Low = getMultipleOf(meanU_Low*dT_Low, multipleof=dX_High)
+        if dX_Low == 0.:
+            dX_Low = dX_High
         dY_Low = lowbts.y[1] - lowbts.y[0]
         dZ_Low = lowbts.z[1] - lowbts.z[0]
     
