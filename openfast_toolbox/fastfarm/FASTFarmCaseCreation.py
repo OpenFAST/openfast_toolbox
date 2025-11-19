@@ -545,7 +545,7 @@ class FFCaseCreation:
         from openfast_toolbox.fastfarm.AMRWindSimulation import AMRWindSimulation
 
         # Create values and keep variable names consistent across interfaces
-        dummy_dt = 0.1
+        dummy_dt = 0.01
         dummy_ds = 1
         prob_lo = (-10005, -10005, 0)     # The 5 m offset is such that we
         prob_hi = ( 10005,  10005, 1000)  # have a cell center at (0,0)
@@ -576,9 +576,9 @@ class FFCaseCreation:
         print(f'         If the values above are okay, you can safely ignore this warning.\n')
 
         self.dt_high = amr.dt_high_les
-        self.ds_high = amr.dt_high_les
+        self.ds_high = amr.ds_high_les
         self.dt_low  = amr.dt_low_les
-        self.ds_low  = amr.dt_low_les
+        self.ds_low  = amr.ds_low_les
 
 
 
@@ -1289,8 +1289,8 @@ class FFCaseCreation:
                 self.turbfilename = value
 
             elif key == 'libdisconfilepath':
-                if not value.endswith('.so'):
-                    raise ValueError(f'The libdiscon file should end in "*.so"')
+                if not value.endswith('.so') and not value.endswith('.dylib'):
+                    raise ValueError(f'The libdiscon file should end in "*.so" or "*.dylib"')
                 if os.path.isabs(value):
                     self.libdisconfilepath = value
                 else:
@@ -2457,6 +2457,8 @@ class FFCaseCreation:
         # ----- Low
         dT_Low = getMultipleOf(dt_low_desired, multipleof=dT_High)
         dX_Low = getMultipleOf(meanU_Low*dT_Low, multipleof=dX_High)
+        if dX_Low == 0.:
+            dX_Low = dX_High
         dY_Low = lowbts.y[1] - lowbts.y[0]
         dZ_Low = lowbts.z[1] - lowbts.z[0]
     
