@@ -363,6 +363,9 @@ class FFCaseCreation:
             t_x        = self.wts[t]['x']
             t_y        = self.wts[t]['y']
             t_z        = self.wts[t]['z']
+            x_i        = self.wts[t].get('xi', 0)
+            y_i        = self.wts[t].get('yi', 0)
+            z_i        = self.wts[t].get('zi', 0)
             t_D        = self.wts[t]['D']
             t_zhub     = self.wts[t]['zhub']
             t_cmax     = self.wts[t]['cmax']
@@ -386,6 +389,12 @@ class FFCaseCreation:
                 raise ValueError (f'The `y` value for the turbine {t+1} should be an integer or float. Received {t_y}.')
             if not isinstance(t_z,(float,int)):
                 raise ValueError (f'The `z` value for the turbine {t+1} should be an integer or float. Received {t_z}.')
+            if not isinstance(x_i,(float,int)):
+                raise ValueError (f'The `xi` value for the turbine {t+1} should be an integer or float. Received {x_i}.')
+            if not isinstance(y_i,(float,int)):
+                raise ValueError (f'The `yi` value for the turbine {t+1} should be an integer or float. Received {y_i}.')
+            if not isinstance(z_i,(float,int)):
+                raise ValueError (f'The `zi` value for the turbine {t+1} should be an integer or float. Received {z_i}.')                
             if not isinstance(t_D,(float,int)):
                 raise ValueError (f'The `D` value for the turbine {t+1} should be an integer or float. Received {t_D}.')
             if not isinstance(t_zhub,(float,int)):
@@ -807,6 +816,9 @@ class FFCaseCreation:
                     yaw_deg_     = self.allCases.sel(case=case, turbine=t)['yaw'].values
                     yaw_mis_deg_ = self.allCases.sel(case=case, turbine=t)['yawmis'].values
                     phi_deg_     = self.allCases.sel(case=case, turbine=t)['phi'].values
+                    xi_          = self.allCases.sel(case=case, turbine=t)['xi'].values
+                    yi_          = self.allCases.sel(case=case, turbine=t)['yi'].values  
+                    zi_          = self.allCases.sel(case=case, turbine=t)['zi'].values
                     ADmodel_     = self.allCases.sel(case=case, turbine=t)['ADmodel'].values
                     EDmodel_     = self.allCases.sel(case=case, turbine=t)['EDmodel'].values
         
@@ -824,10 +836,16 @@ class FFCaseCreation:
                         self.ElastoDynFile['BlPitch(3)'] = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
         
                         self.ElastoDynFile['NacYaw']   = yaw_deg_ + yaw_mis_deg_
+                        self.ElastoDynFile['PtfmSurge'] = xi_
+                        self.ElastoDynFile['PtfmSway']  = yi_
+                        self.ElastoDynFile['PtfmHeave']  = zi_
+                        self.ElastoDynFile['PtfmRoll']  = 0.0
+                        self.ElastoDynFile['PtfmPitch'] = 0.0
                         self.ElastoDynFile['PtfmYaw']  = phi_deg_
                         self.ElastoDynFile['BldFile1'] = self.ElastoDynFile['BldFile2'] = self.ElastoDynFile['BldFile3'] = f'"{self.EDbladefilename}"'
                         self.ElastoDynFile['TwrFile']  = f'"{self.EDtowerfilename}"'
                         self.ElastoDynFile['Azimuth']  = round(np.random.uniform(low=0, high=360)) # start at a random value
+                        
                         if writeFiles:
                             if t==0: shutilcopy2_untilSuccessful(self.EDbladefilepath, os.path.join(currPath,self.EDbladefilename))
                             if t==0: shutilcopy2_untilSuccessful(self.EDtowerfilepath, os.path.join(currPath,self.EDtowerfilename))
@@ -1583,11 +1601,17 @@ class FFCaseCreation:
             phi  = self.wts_rot_ds.sel(inflow_deg=wdir)['phi'].values
             D    = self.wts_rot_ds.sel(inflow_deg=wdir)['D'].values
             zhub = self.wts_rot_ds.sel(inflow_deg=wdir)['zhub'].values
+            xi   = self.wts_rot_ds.sel(inflow_deg=wdir).get('xi', 0).values  # initial platform condition (if they are given)
+            yi   = self.wts_rot_ds.sel(inflow_deg=wdir).get('yi', 0).values
+            zi   = self.wts_rot_ds.sel(inflow_deg=wdir).get('zi', 0).values
 
             oneCase = xr.Dataset({
                                   'Tx':         (['case','turbine'], [x   ]),
                                   'Ty':         (['case','turbine'], [y   ]),
                                   'Tz':         (['case','turbine'], [z   ]),
+                                  'xi':         (['case','turbine'], [xi  ]),
+                                  'yi':         (['case','turbine'], [yi  ]),
+                                  'zi':         (['case','turbine'], [zi  ]),
                                   'phi':        (['case','turbine'], [phi ]),
                                   'D':          (['case','turbine'], [D   ]),
                                   'zhub':       (['case','turbine'], [zhub]),
@@ -1668,15 +1692,20 @@ class FFCaseCreation:
   
                 xori = self.wts[i]['x']
                 yori = self.wts[i]['y']
+                xiori = self.wts[i]['xi']
+                yiori = self.wts[i]['yi']                
                 x    = ref['x'] + (xori - ref['x']) * cosd(inflow) - (yori - ref['y']) * sind(inflow)
                 y    = ref['y'] + (xori - ref['x']) * sind(inflow) + (yori - ref['y']) * cosd(inflow)
+                xi   = ref['xi'] + (xiori - ref['xi']) * cosd(inflow) - (yiori - ref['yi']) * sind(inflow)
+                yi   = ref['yi'] + (xiori - ref['xi']) * sind(inflow) + (yiori - ref['yi']) * cosd(inflow)                
                 z    = turb['z']
+                zi   = ref['zi']
                 phi  = turb['phi_deg'] + inflow
                 D    = turb['D']
                 zhub = turb['zhub']
   
                 wts_rot[inflow,i] = {'x':x, 'y':y, 'z':z, 'phi': phi,
-                                     'D':D, 'zhub':zhub,
+                                     'D':D, 'zhub':zhub, 'xi':xi, 'yi':yi, 'zi':zi
                                     }
 
         self.wts_rot_ds = pd.DataFrame.from_dict(wts_rot, orient='index').to_xarray().rename({'level_0':'inflow_deg','level_1':'turbine'})
