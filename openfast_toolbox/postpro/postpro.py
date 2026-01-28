@@ -4,10 +4,13 @@ import pandas as pd
 import numpy as np
 import re
 try:
-    from scipy.integrate import cumulative_trapezoid 
-    from numpy import trapezoid
-except:
+    from scipy.integrate import cumulative_trapezoid
+except ImportError:
     from scipy.integrate import cumtrapz as cumulative_trapezoid
+
+try:
+    from numpy import trapezoid
+except ImportError:
     from numpy import trapz as trapezoid
 
 import openfast_toolbox.io as weio
