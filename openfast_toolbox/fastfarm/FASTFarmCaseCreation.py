@@ -80,6 +80,7 @@ def checkIfExists(f):
         return False
 
 def shutilcopy2_untilSuccessful(src, dst):
+    # Fail-safe for filesystem issues
     shutil.copy2(src, dst)
     if not checkIfExists(dst):
         print(f'File {dst} not created. Trying again.\n')
@@ -268,6 +269,8 @@ class FFCaseCreation:
             Not fully tested.
         ptfm_rot: bool
             Whether or not platforms have headings or not (False in case of fixed farms or floating with all platforms facing 0deg)
+        flat: bool
+            Whether or not to create a flat directory structure (all cases in the same folder)
         verbose: int
             Verbosity level, given as integers <5
 
@@ -321,7 +324,7 @@ class FFCaseCreation:
         self.condDirList = []
         self.caseDirList = []
         self.DLLfilepath = None
-        self.DLLext = None
+        self.DLLext      = None
         self.batchfile_high = ''
         self.batchfile_low  = ''
         self.batchfile_ff   = ''
@@ -344,7 +347,7 @@ class FFCaseCreation:
                                         
         # 
         # TODO TODO TODO
-        # Creating Cases and Conditions should have it's own function interface for the user can call for a given
+        # Creating Cases and Conditions should have its own function interface so the user can call
         if self.verbose>0: print(f'Creating auxiliary arrays for all conditions and cases...', end='\r')
         self.createAuxArrays()          
         if self.verbose>0: print(f'Creating auxiliary arrays for all conditions and cases... Done.')
@@ -358,7 +361,7 @@ class FFCaseCreation:
 
 
     def __repr__(self):
-        s='<{} object> with the following content:\n'.format(type(self).__name__)
+        s  = f'<{type(self).__name__} object> with the following content:\n'
         s += f'Requested parameters:\n'
         s += f' - Case path: {self.path}\n'
         s += f' - Wake model:              {self.mod_wake} (1:Polar; 2:Curl; 3:Cartesian)\n'
@@ -404,14 +407,14 @@ class FFCaseCreation:
         s += f'   - dt low: {self.dt_low} s\n'
         s += f'   - Extent of low-res box (in D): xmin = {self.extent_low[0]}, xmax = {self.extent_low[1]}, '
         s += f'ymin = {self.extent_low[2]}, ymax = {self.extent_low[3]}, zmax = {self.extent_low[4]}\n'
-        if self.inflowType !='LES':
+        if self.inflowType == 'TS':
             s += f'   Low-res boxes created: {self.TSlowBoxFilesCreatedBool} .\n'
         
         s += f'  High-resolution domain: \n'
         s += f'   - ds high: {self.ds_high} m\n'
         s += f'   - dt high: {self.dt_high} s\n'
         s += f'   - Extent of high-res boxes: {self.extent_high} D total\n'
-        if self.inflowType !='LES':
+        if self.inflowType == 'TS':
             s += f'  High-res boxes created: {self.TShighBoxFilesCreatedBool}.\n'
         s += f"\n" 
 
@@ -656,8 +659,9 @@ class FFCaseCreation:
 
         # Check turbine conditions arrays for consistency
         if len(self.inflow_deg) != len(self.yaw_init):
-            raise ValueError(f'One row for each inflow angle should be given in yaw_init. '\
-                             f'Currently {len(self.inflow_deg)} inflow angle(s) and {len(self.yaw_init)} yaw entrie(s)')
+            raise FFException(f"Asked for {len(self.yaw_init)} yaw condition(s) but provided {len(self.inflow_deg)} inflow angle(s). "\
+                             f"Each yaw_init condition should have a corresponding inflow_deg. Duplicate inflow_deg as needed. Note "\
+                             f"this is irrespective to the the vhub/shear/TIvalue sweeps.")
 
         # Check reduced-order models
         if self.ADmodel is None or self.ADmodel == 'ADyn':
@@ -727,7 +731,7 @@ class FFCaseCreation:
         if None in (self.dt_high, self.ds_high, self.dt_low, self.ds_low):
             WARN(f'One or more temporal or spatial resolution for low- and high-res domains were not given.\n'+
                  f'Estimated values for {_MOD_WAKE_STR[self.mod_wake]} wake model shown below.')
-            self._determine_resolutions_from_dummy_amrwind_grid()
+            self._determine_resolutions_from_dummy_les_grid()
             
         # Check the temporal and spatial resolutions if provided
         if self.dt_low != None and self.dt_high!= None:
@@ -746,7 +750,7 @@ class FFCaseCreation:
 
 
 
-    def _determine_resolutions_from_dummy_amrwind_grid(self):
+    def _determine_resolutions_from_dummy_les_grid(self):
 
         from openfast_toolbox.fastfarm.AMRWindSimulation import AMRWindSimulation
 
@@ -781,12 +785,11 @@ class FFCaseCreation:
         print(f'`ds_high = {2*amr.ds_high_les}`; ', end='')
         print(f'`dt_low  = {2*amr.dt_low_les}`; ', end='')
         print(f'`ds_low  = {2*amr.ds_low_les}`; ')
-        #print(f'         If the values above are okay, you can safely ignore this warning.\n')
 
         self.dt_high = amr.dt_high_les
-        self.ds_high = amr.dt_high_les
+        self.ds_high = amr.ds_high_les
         self.dt_low  = amr.dt_low_les
-        self.ds_low  = amr.dt_low_les
+        self.ds_low  = amr.ds_low_les
 
 
 
@@ -813,7 +816,7 @@ class FFCaseCreation:
         self.condDirList = condDirList
             
         # --- Creating Case List
-        caseDirList_ = []
+        caseDirList = []
         for case in range(self.nCases):
             # Recover information about current case for directory naming purposes
             inflow_deg_   = self.allCases['inflow_deg'     ].sel(case=case).values
@@ -822,27 +825,23 @@ class FFCaseCreation:
             nFED_         = self.allCases['nFulllElastoDyn'].sel(case=case).values
             yawCase_      = self.allCases['yawCase'        ].sel(case=case).values
         
-            # Set current path name string. The case is of the following form: Case00_wdirp10_WSfalse_YMfalse_12fED_12ADyn
+            # Set current path name string. The case is of the following form: Case00_wdirp10_12fED_12ADyn
             ndigits = len(str(self.nCases))
             caseStr = f"Case{case:0{ndigits}d}_wdir{f'{int(inflow_deg_):+03d}'.replace('+','p').replace('-','m')}"
             # Add standard sweeps to the case name
-            if self.sweepYM:
-                caseStr += f"_YM{str(misalignment_).lower()}"
+            #if self.sweepYM:
+            #    caseStr += f"_YM{str(misalignment_).lower()}"
             if self.sweepEDmodel:
                 caseStr += f"_{nFED_}fED"
             if self.sweepADmodel:
                 caseStr += f"_{nADyn_}ADyn"
-
-            #caseStr = f"Case{case:0{ndigits}d}_wdir{f'{int(inflow_deg_):+03d}'.replace('+','p').replace('-','m')}"\
-            #          f"_WS{str(wakeSteering_).lower()}_YM{str(misalignment_).lower()}"\
-            #          f"_{nFED_}fED_{nADyn_}ADyn"
             # If sweeping on yaw, then add yaw case to dir name
             if len(np.unique(self.allCases.yawCase)) > 1:
                 caseStr += f"_yawCase{yawCase_}"
             
-            caseDirList_.append(caseStr)
+            caseDirList.append(caseStr)
 
-        self.caseDirList = caseDirList_
+        self.caseDirList = caseDirList
         
         # --- Creating directories including seed directories
         for cond in range(self.nConditions):
@@ -882,26 +881,35 @@ class FFCaseCreation:
 
 
     def _symlink(self, src, dst, debug=False):
+        # If src is a relative path, reconstruct the absolute path based on dst directory
+        if not os.path.isabs(src):
+            src_abs = os.path.normpath(os.path.join(os.path.dirname(dst), src))
+        else:
+            src_abs = src
+
         if debug:
-            print('SRC:', src, os.path.exists(src))
-            print('DST:', dst, os.path.exists(dst))
-        error = f"Src file not found: {src}"
-        if not os.path.exists(src):
+            print('SRC ABS:', src_abs, os.path.exists(src_abs))
+            print('SRC REL:', src, os.path.exists(src))
+            print('DST    :', dst, os.path.exists(dst))
+        error = f"Src file not found: {src_abs}"
+
+        if not os.path.exists(src_abs):
             raise Exception(error)
-            #return error
         if not os.path.exists(dst):
             if self._can_create_symlinks:
+                # Unix-based
                 try:
                     os.symlink(src, dst)                
                 except FileExistsError:
-                    error = dst
+                    error = f"Dst file already exists: {dst}. Skipping symlink."
             else:
+                # Windows
                 try:
                     shutil.copy2(src, dst)
                 except FileExistsError:
                     if debug:
                         raise Exception(error)
-                    error = dst
+                    error = f"Dst file already exists: {dst}. Skipping copy."
         return error
 
 
