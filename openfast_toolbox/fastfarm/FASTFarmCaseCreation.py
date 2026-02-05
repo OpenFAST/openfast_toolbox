@@ -537,19 +537,38 @@ class FFCaseCreation:
 
     @property
     def high_res_bts(self):
+
+        # Not all individual high-res boxes are unique. If there are cases where the same high-res
+        # boxes are warranted (e.g. different nacelle yaw values), then copies/symlinks are made
+        highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
+        highBoxesCaseIndex   = [self.caseDirList.index(c) for c in highBoxesCaseDirList]
+
         files = []
-        #highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
-        #for condDir in self.condDirList:
-        #    for case in highBoxesCaseDirList:
         for cond in range(self.nConditions):
-            for case in range(self.nCases):
+            for case in highBoxesCaseIndex:
                 for seed in range(self.nSeeds):
                     dirpath = self.getHRTurbSimPath(cond, case, seed)
                     for t in range(self.nTurbines):
-                        #dirpath = os.path.join(self.path, condDir, case, f"Seed_{seed}/TurbSim")
                         files.append(f'{dirpath}/HighT{t+1}.bts')
+
+        return files
+    
+    @property
+    def high_res_log(self):
+
+        highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
+        highBoxesCaseIndex   = [self.caseDirList.index(c) for c in highBoxesCaseDirList]
+
+        files = []
+        for cond in range(self.nConditions):
+            for case in highBoxesCaseIndex:
+                for seed in range(self.nSeeds):
+                    dirpath = self.getHRTurbSimPath(cond, case, seed)
+                    for t in range(self.nTurbines):
+                        files.append(f'{dirpath}/log.high{t+1}.seed{seed}.txt')
         return files
 
+    # TODO create the same properties for the low res
 
     def _checkInputs(self):
         #### check if the turbine in the template FF input exists.
@@ -2275,7 +2294,7 @@ class FFCaseCreation:
 
 
     def TS_low_createSymlinks(self):
-        # Create symbolic links for all of the time-series and the Low.bts files too
+        # Create symbolic links for all of the time-series and the Low.bts files
         for cond in range(self.nConditions):
             for case in range(self.nCases):
                 for seed in range(self.nSeeds):
@@ -2501,8 +2520,9 @@ class FFCaseCreation:
         ext = ".bat" if os.name == "nt" else ".sh"
         batchfile = os.path.join(self.path, f'runAllHighBox{ext}')
 
-        TS_files = [f.replace('.bts', '.inp') for f in self.high_res_bts]
-        writeBatch(batchfile, TS_files, fastExe=self.tsbin, **kwargs)
+        TS_high_files = [f.replace('.bts', '.inp') for f in self.high_res_bts]
+        TS_high_logs  = self.high_res_log
+        writeBatch(batchfile, TS_high_files, fastExe=self.tsbin, flags_after=[f"2>&1 | tee {log}" for log in TS_high_logs], **kwargs)
         self.batchfile_high = batchfile
 
         OK(f"Batch file written to {batchfile}")
@@ -2629,12 +2649,12 @@ class FFCaseCreation:
                 # In order to do the symlink let's check if the current case is source (has bts). If so, skip if. If not, find its equivalent source
                 casematch = self.allHighBoxCases['case'] == case
                 if len(np.where(casematch)) != 1:
-                    raise ValueError (f'Something is wrong with the allHighBoxCases array. Found repeated case number. Stopping')
+                    raise FFException('Something is wrong with the allHighBoxCases array. Found repeated case number. Stopping.')
 
                 src_id = np.where(casematch)[0]
 
                 if len(src_id) == 1:
-                    # Current case is source (contains bts). Skipping
+                    # Current case is source (contains bts). Skipping it.
                     continue
 
                 # If we are here, the case is destination. Let's find the first case with the same wdir for source
@@ -2646,8 +2666,8 @@ class FFCaseCreation:
                 src_case = src_xr['case'].values[0]
                 src_xr = src_xr.sel(case=src_case, drop=True)
                 
-                # Let's make sure the src and destination are the same case, except yaw misalignment and ROM bools, and yaw angles
-                # The xarrays we are comparing here contains all self.nTurbines turbines and no info about seed
+                # Let's make sure the src and destination are the same case, except ROM bool and yaw angles
+                # The xarrays we are comparing here contain all self.nTurbines turbines and no info about seed
                 xr.testing.assert_equal(src_xr, dst_xr)
 
                 # Now that we have the correct arrays, we perform the loop on the turbines and seeds
@@ -2655,9 +2675,12 @@ class FFCaseCreation:
                     for seed in range(self.nSeeds):
                         src = os.path.join(self.getHRTurbSimPath(cond, src_case, seed), f'HighT{t+1}.bts')
                         dst = os.path.join(self.getHRTurbSimPath(cond, case    , seed), f'HighT{t+1}.bts')
+                        #print(f'src is {src}')
+                        #print(f'dst is {dst}')
                         #src = os.path.join('..', '..', '..', '..', self.condDirList[cond], self.caseDirList[src_case], f'Seed_{seed}', 'TurbSim', f'HighT{t+1}.bts')
-                        print('Emmanuel Says: TODO Check the line below')
-                        src = os.path.relpath(src, dst)
+                        #print('Emmanuel Says: TODO Check the line below')
+                        src = os.path.relpath(src, os.path.dirname(dst))
+                        #print(f'rel src{src}\n')
                         self._symlink(src, dst)
 
 
