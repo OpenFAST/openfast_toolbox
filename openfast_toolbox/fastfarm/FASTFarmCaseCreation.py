@@ -3,28 +3,20 @@ import os, sys, shutil
 import subprocess
 from contextlib import contextmanager
 import numpy as np
-np.random.seed(12) # For reproducibility (e.g. random azimuth)
+import xarray as xr
 
 from openfast_toolbox.tools.strings import INFO, FAIL, OK, WARN, print_bold
-
 from openfast_toolbox.io import FASTInputDeck, FASTInputFile, FASTOutputFile, TurbSimFile, VTKFile
 from openfast_toolbox.io.rosco_discon_file import ROSCODISCONFile
 from openfast_toolbox.fastfarm import writeFastFarm
-from openfast_toolbox.fastfarm import plotFastFarmSetup # Make it available 
+from openfast_toolbox.fastfarm import plotFastFarmSetup
 from openfast_toolbox.fastfarm import defaultOutRadii
 from openfast_toolbox.fastfarm.TurbSimCaseCreation import TSCaseCreation, writeTimeSeriesFile
-from openfast_toolbox.modules.servodyn import check_discon_library # Make it available
+from openfast_toolbox.modules.servodyn import check_discon_library
 
-
-try:
-    import xarray as xr
-except ImportError:
-    FAIL('The python package xarray is not installed. FFCaseCreation will not work fully.\nPlease install it using:\n`pip install xarray`')
-
+np.random.seed(12) # For reproducibility (e.g. random azimuth)
 
 _MOD_WAKE_STR = ['','polar', 'curled', 'cartesian']
-
-
 
 def cosd(t): return np.cos(np.deg2rad(t))
 def sind(t): return np.sin(np.deg2rad(t))
@@ -35,6 +27,9 @@ def sind(t): return np.sin(np.deg2rad(t))
 # --------------------------------------------------------------------------------{
 @contextmanager
 def safe_cd(newdir):
+    '''
+    Change directory and return to previous on exit. Use with `with` statement.
+    '''
     prevdir = os.getcwd()
     try:
         os.chdir(newdir)
@@ -502,6 +497,9 @@ class FFCaseCreation:
 
     @property
     def FFFiles(self):
+        '''
+        Create list of all FAST.Farm input files to be executed
+        '''
         files = []
         for cond in range(self.nConditions):
             for case in range(self.nCases):
@@ -571,9 +569,10 @@ class FFCaseCreation:
     # TODO create the same properties for the low res
 
     def _checkInputs(self):
-        #### check if the turbine in the template FF input exists.
 
         # --- Default arguments
+        if self.vhub is None:
+            self.vhub = [8]
         if self.inflow_deg is None:
             self.inflow_deg = [0]*len(self.vhub)
         if self.TIvalue is None:
@@ -1045,7 +1044,7 @@ class FFCaseCreation:
                             self.InflowWindFile.write( os.path.join(seedPath, self.IWfilename))
 
         
-                # Before starting the loop, print once the info about the controller is no controller is present
+                # Before starting the loop, print once the info about the controller if no controller is present
                 if not self.hasSrvD:
                     if self.verbose>=1:
                         if self.ServoDynFile != 'unused':  # to prevent getting an error if ServoDyn is not being used.
@@ -1240,9 +1239,8 @@ class FFCaseCreation:
             elif self.attempt > 5:
                 FAIL(f"Not all turbine files were copied successfully after 5 tries.\n"\
                      "Check them manually. This shouldn't occur.\n"\
-                     "Consider finding fixing the bug and submitting a PR.")
+                     "Consider fixing the bug and submitting a PR.")
             else:
-                #if self.verbose>0: OK(f'All files were copied successfully.')
                 OK(f'All OpenFAST files were copied successfully.')
 
 
@@ -1345,7 +1343,8 @@ class FFCaseCreation:
         Inputs
         ------
         - templateFSTF: 
-        The path, relative or absolute to a FAST.Farm fstf input file.
+        The path, relative or absolute to a FAST.Farm fstf input file. If using this 
+        option, all the other template files will be read from the fstf file.
 
         - templatePath: str
         The path of the directory where teh template files exist.
@@ -1355,9 +1354,9 @@ class FFCaseCreation:
         Keys should correspond to the variable names expected in the function.
         The values should be strings with the filenames or filepaths as appropriate.
         The keys *filename assumes the file exists inside templatePath and only the 
-        filename is needed. The keys *filepath should contain the full path and no
-        assumption is made regarding its location.
-        All values should be explicitly defined. Unused ones should be set as None.
+        filename is needed. The keys *path should contain the full path and no
+        assumption is made regarding its location. Unused keys can be skipped or
+        set as None.
 
         Example call - OPTION 1
         --------------------------------------------------
@@ -1371,7 +1370,7 @@ class FFCaseCreation:
 
         Example call - OPTION 2
         --------------------------------------------------
-        templatePath = 'full/path/to/template/files/'
+        templatePath = '/full/path/to/template/files/'
         templateFiles = {
             'FFfilename'              : 'Model_FFarm.fstf'
             'turbfilename'            : 'Model.T',
@@ -1393,16 +1392,23 @@ class FFCaseCreation:
             'ADbladefilename'         : 'AeroDyn_Blade.dat',
             'controllerInputfilename' : 'DISCON',
             # TODO
-            'coeffTablefilename'      : None,
+            'coeffTablefilename'      : None,  # Needed if ADsk is used
             'hydroDatapath'           : '/full/path/to/hydroData',
-            'libdisconfilepath'       : '/full/path/to/controller/libdiscon.so',
+            'libdisconfilepath'       : '/full/path/to/controller/libdiscon.[so,dylib,dll]',
             'turbsimLowfilepath'      : './SampleFiles/template_Low_InflowXX_SeedY.inp',
             'turbsimHighfilepath'     : './SampleFiles/template_HighT1_InflowXX_SeedY.inp',
         }
-        setTemplateFilename(templatePath, templateFiles)
+        setTemplateFilename(templatePath=templatePath, templateFiles=templateFiles)
 
         """
+        
+        if templatePath is None and templateFSTF is None:
+            raise FFException('Either templatePath or templateFSTF must be provided.')
+        if templatePath is not None and templateFSTF is not None:
+            FFException('Cannot provide both templatePath and templateFSTF at the same time.')
+
         INFO('Reading and checking template files')
+
         if verbose is None:
             verbose=self.verbose
 
@@ -1452,7 +1458,10 @@ class FFCaseCreation:
         # TODO TODO, not all templateFiles have the same convention, this needs to be changed.
         if templatePath is not None:
             if not os.path.isdir(templatePath):
-                raise ValueError(f'Template path {templatePath} does not seem to exist. Current directory is: {os.getcwd()}')
+                    if os.path.isabs(templatePath):
+                        raise ValueError(f'Absolute template path {templatePath} does not seem to exist.')
+                    else: 
+                        raise ValueError(f'Relative template path {templatePath} does not seem to exist. Full path is: {os.path.abspath(templatePath)}.')
             for key, value in templateFiles.items():
                 if key in ['turbsimLowfilepath', 'turbsimHighfilepath', 'libdisconfilepath']:
                     # We skip those keys because there convention is not clear
@@ -1509,8 +1518,9 @@ class FFCaseCreation:
         #    - *filepath: the absolute or relative path wrt caller script
         #    - *filename: os.path.basename(filepath), the filename only
         # --------------------------------------------------------------------------------
-        for key, value in templateFiles.items():
-            if verbose>0: INFO(f'Template {key:23s}={value}')
+        if verbose>0:
+            for key, value in templateFiles.items():
+                INFO(f'Template {key:24s}={value}')
 
         if not valid_keys >= set(templateFiles.keys()):
             raise ValueError(f'Extra entries are present in the dictionary. '\
@@ -1675,29 +1685,28 @@ class FFCaseCreation:
                     raise ValueError(f'FAST.Farm input file should end in ".fstf".')
                 self.FFfilepath = value
                 checkIfExists(self.FFfilepath)
-                #self.FFfilename = os.path.basename(value) # TODO TODO This is not used, and outputFFfilename is used
 
             elif key == 'controllerInputfilename':
                 if not value.lower().endswith('.in'):
-                    print(f'--- WARNING: The controller input file typically ends in "*.IN". Currently {value}. Double check.')
+                    WARN(f'The controller input file typically ends in "*.IN". Currently {value}. Double check.')
                 self.controllerInputfilepath = value
                 checkIfExists(self.controllerInputfilepath)
                 self.controllerInputfilename = os.path.basename(value)
 
             elif key == 'coeffTablefilename':
-                if not value.endswith('.csv'):
+                if not value.lower().endswith('.csv'):
                     raise ValueError(f'The performance table file should end in "*.csv"')
                 self.coeffTablefilepath = value
                 checkIfExists(self.coeffTablefilepath)
                 self.coeffTablefilename = os.path.basename(value)
 
+            # --- Directories and files given with full path
             elif key == 'hydroDatapath':
                 self.hydrodatafilepath = value
                 if not os.path.isdir(self.hydrodatafilepath):
                     raise ValueError(f'The hydroData directory hydroDatapath should be a directory. Received {value}.')
                 self.hydroDatapath = os.path.basename(value)
 
-            # --- TODO TODO TODO not clean convention
             elif key == 'libdisconfilepath':
                 ext = os.path.splitext(value)[1].lower()
                 if ext not in ['.so', '.dll', '.dylib', '.dummy']:
@@ -1708,19 +1717,19 @@ class FFCaseCreation:
                 else:
                     self.libdisconfilepath = os.path.abspath(value).replace('\\','/')
                 checkIfExists(self.libdisconfilepath)
-                self._create_copy_libdiscon()
+                #self._create_copy_libdiscon()
                 self.hasController = True
 
             # --- TODO TODO TODO not clean convention
             elif key == 'turbsimLowfilepath':
-                if not value.endswith('.inp'):
+                if not value.lower().endswith('.inp'):
                     raise ValueError(f'TurbSim file input for low-res box should end in ".inp".')
                 self.turbsimLowfilepath = value
                 checkIfExists(self.turbsimLowfilepath)
 
             # --- TODO TODO TODO not clean convention
             elif key == 'turbsimHighfilepath':
-                if not value.endswith('.inp'):
+                if not value.lower().endswith('.inp'):
                     raise ValueError(f'TurbSim file input for high-res box should end in ".inp".')
                 self.turbsimHighfilepath = value
                 checkIfExists(self.turbsimHighfilepath)
@@ -1765,12 +1774,13 @@ class FFCaseCreation:
             self.DLLfilepath = os.path.join(DLL_parentDir, f'{libdisconfilename}.T') # No extension
             currLibdiscon    = os.path.join(DLL_parentDir, f'{libdisconfilename}.T{t+1}.{self.DLLext}')
             if not os.path.isfile(currLibdiscon):
-                if self.verbose>0: print(f'    Creating a copy of the controller {self.libdisconfilepath} in {currLibdiscon}')
+                if self.verbose>0:
+                    INFO(f'Creating a copy of the controller {self.libdisconfilepath} in {currLibdiscon}')
                 shutil.copy2(self.libdisconfilepath, currLibdiscon)
                 copied=True
         
         if copied == False and self.verbose>0:
-            print(f'    Copies of the controller {libdisconfilename}.T[1-{self.nTurbines}].{self.DLLext} already exists in {os.path.dirname(self.libdisconfilepath)}. Skipped step.')
+            INFO(f'Copies of the controller {libdisconfilename}.T[1-{self.nTurbines}].{self.DLLext} already exists in {os.path.dirname(self.libdisconfilepath)}. Skipped step.')
 
 
     def _open_template_files(self):
@@ -1806,7 +1816,7 @@ class FFCaseCreation:
         self._create_all_cases()
         if self.flat:
             if self.nCases==1 and self.nConditions==1:
-                self.flat
+                pass  # keep flat=True for single case/condition
             else:
                 self.flat = False
 
@@ -1816,8 +1826,8 @@ class FFCaseCreation:
         if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue):
             self.nConditions = len(self.vhub)
 
-            if self.verbose>1: print(f'\nThe length of vhub, shear, and TI are the same. Assuming each position is a condition.', end='\r')
-            if self.verbose>0: print(f'\nCreating {self.nConditions} conditions')
+            if self.verbose>0: INFO(f'The length of vhub, shear, and TI are the same. Assuming each position is a condition.')
+            if self.verbose>0: INFO(f'Creating {self.nConditions} conditions')
 
             self.allCond = xr.Dataset({'vhub':    (['cond'], self.vhub   ),
                                        'shear':   (['cond'], self.shear  ),
@@ -1828,8 +1838,8 @@ class FFCaseCreation:
             import itertools
             self.nConditions = len(self.vhub) * len(self.shear) * len(self.TIvalue)
 
-            if self.verbose>1: print(f'The length of vhub, shear, and TI are different. Assuming sweep on each of them.')
-            if self.verbose>0: print(f'Creating {self.nConditions} condition(s)')
+            if self.verbose>0: INFO(f'The length of vhub, shear, and TI are different. Assuming sweeps on all of them.')
+            if self.verbose>0: INFO(f'Creating {self.nConditions} condition(s)')
     
             # Repeat arrays as necessary to build xarray Dataset
             combination = np.vstack(list(itertools.product(self.vhub,self.shear,self.TIvalue)))
@@ -1844,7 +1854,7 @@ class FFCaseCreation:
 
 
     def _create_all_cases(self):
-        # Generate the different "cases" (inflow angle and yaw misalignment bools).
+        # Generate the different "cases" (inflow angle).
         # If misalignment true, then the actual yaw is yaw[turb]=np.random.uniform(low=-8.0, high=8.0).
 
         # Set sweep bools and multipliers
@@ -2079,7 +2089,6 @@ class FFCaseCreation:
 
     def TS_low_setup(self, writeFiles=True, runOnce=False):
         INFO('Preparing TurbSim low resolution input files.')
-        # Loops on all conditions/seeds creating Low-res TurbSim box  (following openfast_toolbox/openfast_toolbox/fastfarm/examples/Ex1_TurbSimInputSetup.py)
 
         boxType='lowres'
         lowFilesName = []
@@ -2351,10 +2360,6 @@ class FFCaseCreation:
         if self.verbose>0:
             print(f"    The x offset between the turbine ref frame and turbsim is {self.xoffset_turbsOrigin2TSOrigin}")
             print(f"    The y offset between the turbine ref frame and turbsim is {self.yoffset_turbsOrigin2TSOrigin}")
-
-        if self.verbose>2:
-            print(f'allHighBoxCases is:')
-            print(self.allHighBoxCases)
 
 
     def TS_high_get_time_series(self):
@@ -2805,9 +2810,9 @@ class FFCaseCreation:
                 for seed in range(self.seedsToKeep):
                     # Remove TurbSim dir
                     currpath = self.getHRTurbSimPath(cond, case, seed)
-                    seedPath = self.getCaseSeedPath(cond, case, seed)
                     if os.path.isdir(currpath):  shutil.rmtree(currpath)
                     # Create LES boxes dir
+                    seedPath = self.getCaseSeedPath(cond, case, seed)
                     currpath = os.path.join(seedPath, LESboxesDirName)
                     if not os.path.isdir(currpath):  os.makedirs(currpath)
         
@@ -3173,7 +3178,10 @@ class FFCaseCreation:
 
 
     def FF_batch_prepare(self, ffbin=None, run=False, **kwargs):
-        """ Writes a flat batch file for FASTFarm cases"""
+        """
+            Writes a flat batch file for FASTFarm cases.
+            Allows specification of a different binary.
+        """
         from openfast_toolbox.case_generation.runner import writeBatch
 
         if ffbin is not None:
@@ -3212,8 +3220,7 @@ class FFCaseCreation:
             raise ValueError (f'SLURM script for FAST.Farm {slurmfilepath} does not exist.')
         self.slurmfilename_ff = os.path.basename(slurmfilepath)
 
-
-        WARN('Implementation Note: Developper help needed. This function requires sed. Please use regexp similar to what was done for `TS_low_slurm_prepare` or `TS_high_slurm_prepare`.')
+        WARN('Implementation Note: Developer help needed. This function requires sed. Please use regexp similar to what was done for `TS_low_slurm_prepare` or `TS_high_slurm_prepare`.')
 
         for cond in range(self.nConditions):
             for case in range(self.nCases):
@@ -3320,7 +3327,7 @@ class FFCaseCreation:
         # User is passing C_HWkDfl_OY and C_HWkDfl_xY, thus polar wake. Check others.
         if k_VortexDecay is None and k_vCurl is None:
             if self.mod_wake != 1:
-                raise ValueError(f'Passed C_HWkDfl_OY and C_HWkDfl_xY but the wake model requested is not polar.')
+                WARN(f'Passed C_HWkDfl_OY and C_HWkDfl_xY but the wake model requested is not polar. Leaving k_VortexDecay and k_vCurl unmodified')
             if not isinstance(C_HWkDfl_OY, (int, float)):
                 raise ValueError(f'C_HWkDfl_OY should be a scalar. Received {C_HWkDfl_OY}.')
             if not isinstance(C_HWkDfl_xY, (int, float)):
@@ -3331,7 +3338,7 @@ class FFCaseCreation:
         # User is passing k_VortexDecay and k_vCurl, thus curled wake. Check others.
         if C_HWkDfl_OY is None and C_HWkDfl_xY is None:
             if self.mod_wake != 2:
-                raise ValueError(f'Passed k_VortexDecay and k_vCurl but the wake model requested is not curl.')
+                WARN(f'Passed k_VortexDecay and k_vCurl but the wake model requested is not curl. Leaving C_HWkDfl_OY and C_HWkDfl_xY unmodified')
             if not isinstance(k_VortexDecay, (int, float)):
                 raise ValueError(f'k_VortexDecay should be a scalar. Received {k_VortexDecay}.')
             if not isinstance(k_vCurl, (int, float)):
@@ -3365,7 +3372,7 @@ class FFCaseCreation:
         try:
             import dill
         except ImportError:
-            FAIL('The python package fill is not installed. FFCaseCreation cannot be saved to disk.\nPlease install it using:\n`pip install dill`')
+            FAIL('The python package dill is not installed. FFCaseCreation cannot be saved to disk.\nPlease install it using:\n`pip install dill`')
             return
 
         objpath = os.path.join(self.path, dill_filename)
