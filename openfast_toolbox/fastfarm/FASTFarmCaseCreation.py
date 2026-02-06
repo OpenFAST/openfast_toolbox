@@ -2144,19 +2144,22 @@ class FFCaseCreation:
         from openfast_toolbox.case_generation.runner import writeBatch
 
         if tsbin is not None:
+            WARN(f'Overwritting the TurbSim binary from the previously set {self.tsbin} to {tsbin}.')
             self.tsbin = tsbin
         self._checkTSBinary()
 
         ext = ".bat" if os.name == "nt" else ".sh"
         batchfile = os.path.join(self.path, f'runAllLowBox{ext}')
 
-        TS_files = []
+        TS_low_files = []
+        TS_low_logs  = []
         for cond in range(self.nConditions):
             for seed in range(self.nSeeds):
                 seedpath = self.getCondSeedPath(cond, seed)
-                TS_files.append(f'{seedpath}/Low.inp')
+                TS_low_files.append(os.path.join(seedpath, 'Low.inp'))
+                TS_low_logs.append(os.path.join(seedpath, f'log.low.seed{seed}.txt'))
 
-        writeBatch(batchfile, TS_files, fastExe=self.tsbin, **kwargs)
+        writeBatch(batchfile, TS_low_files, fastExe=self.tsbin, flags_after=[f"2>&1 | tee {log}" for log in TS_low_logs], **kwargs)
         self.batchfile_low = batchfile
         OK(f"Batch file written to {batchfile}")
 
