@@ -187,8 +187,6 @@ def main(test=False):
      
     """
 
-
-
     return ffcase, ffcase2
 
 
@@ -200,9 +198,9 @@ if __name__ == '__main__':
 
 if __name__=='__test__':
     ffcase, ffcase2 = main(test=True)
-    np.testing.assert_equal(ffcase.ds_low, 0.9)
+    np.testing.assert_equal(ffcase.ds_low, 20)
     np.testing.assert_equal(ffcase.dt_low, 0.9)
-    np.testing.assert_equal(ffcase.ds_high, 0.3)
+    np.testing.assert_equal(ffcase.ds_high, 5)
     np.testing.assert_equal(ffcase.dt_high, 0.3)
     np.testing.assert_array_equal(ffcase.extent_low, [3, 6, 3, 3, 2] )
     np.testing.assert_equal(ffcase.vhub    , [8])
@@ -211,9 +209,9 @@ if __name__=='__test__':
     np.testing.assert_equal(ffcase.shear   , [0])
     np.testing.assert_equal(ffcase.TIvalue, [10])
 
-    np.testing.assert_equal(ffcase2.ds_low, 2.0)
+    np.testing.assert_equal(ffcase2.ds_low, 25)
     np.testing.assert_equal(ffcase2.dt_low, 2.0)
-    np.testing.assert_equal(ffcase2.ds_high, 0.5)
+    np.testing.assert_equal(ffcase2.ds_high, 5)
     np.testing.assert_equal(ffcase2.dt_high, 0.5)
     np.testing.assert_array_equal(ffcase2.extent_low, [3, 6, 3, 3, 2] )
 
