@@ -2057,35 +2057,6 @@ class FFCaseCreation:
   
 
 
-    def TS_low_dummy(self):
-        boxType='lowres'
-        tmp_dir='_turbsim_temp'
-        seedPath = tmp_dir
-        if not os.path.isdir(seedPath):
-            os.makedirs(seedPath)
-                
-        # ---------------- TurbSim Low boxes setup ------------------ #
-        # Get properties needed for the creation of the low-res turbsim inp file
-        D_       = self.allCases['D'   ].max().values
-        HubHt_   = self.allCases['zhub'].max().values
-        xlocs_   = self.allCases['Tx'  ].values.flatten() # All turbines are needed for proper
-        ylocs_   = self.allCases['Ty'  ].values.flatten() # and consistent extent calculation
-        Vhub_    = self.allCond.sel(cond=0)['vhub'   ].values
-        shear_   = self.allCond.sel(cond=0)['shear'  ].values
-        tivalue_ = self.allCond.sel(cond=0)['TIvalue'].values
-        # Coherence parameters
-        a = 12;  b=0.12                            # IEC 61400-3 ed4, app C, eq C.16
-        Lambda1 = 0.7*HubHt_ if HubHt_<60 else 42  # IEC 61400-3 ed4, sec 6.3.1, eq 5 
-
-        # Create and write new Low.inp files creating the proper box with proper resolution
-        # By passing low_ext, manual mode for the domain size is activated, and by passing ds_low,
-        # manual mode for discretization (and further domain size) is also activated
-        TSlowbox = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xlocs_, y=ylocs_, zbot=self.zbot,
-                                       cmax=self.cmax, fmax=self.fmax, Cmeander=self.Cmeander, boxType='lowres', extent=self.extent_low,
-                                       ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high, mod_wake=self.mod_wake)
-
-        return TSlowbox
-
 
     def TS_low_setup(self, writeFiles=True, runOnce=False):
         INFO('Preparing TurbSim low resolution input files.')
@@ -2335,7 +2306,7 @@ class FFCaseCreation:
         # If the low box setup hasn't been called (e.g. LES run), do it once to get domain extents
         if not self.TSlowBoxFilesCreatedBool:
             if self.verbose>1: print('    Running a TurbSim setup once to get domain extents')
-            self.TSlowbox = self.TS_low_dummy()
+            self.TS_low_setup(writeFiles=False, runOnce=True)
 
         # Figure out how many (and which) high boxes actually need to be executed. Remember that yaw misalignment, SED/ADsk models,
         # and sweep in yaw do not require extra TurbSim runs
@@ -2762,25 +2733,20 @@ class FFCaseCreation:
         elif self.inflowStr == 'TurbSim':
             all_bts = self.high_res_bts
 
+            # Check if the high-res boxes from TurbSim are present and non-zero size
             for bts in all_bts:
                 if not os.path.isfile(bts):
-                    raise FFException(f'File Missing: {bts}\nAll TurbSim boxes need to be completed before this step can be done.')
+                    raise FFException(f'File missing: {bts}\nAll TurbSim boxes need to be completed before this step can be done.')
                 if os.path.getsize(bts)==0:
                     raise FFException(f'File has zero size: {bts}\n All TurbSim boxes need to be completed before this step can be done.')
-
-            # --- Legacy, check log file from TurbSim
-            # We need to make sure the TurbSim boxes have been executed. Let's check the last line of the logfile
-            #highbox_path = os.path.join(self.path, self.condDirList[0], self.caseDirList[0], 'Seed_0', 'TurbSim', 'HighT1.bts')
-            #highboxlog_path = os.path.join(self.path, self.condDirList[0], self.caseDirList[0], 'Seed_0', 'TurbSim', 'log.hight1.seed0.txt')
-            #if not os.path.isfile(highboxlog_path):
-            #    #raise ValueError(f'All TurbSim boxes need to be completed before this step can be done.')
-
-            #with open(highboxlog_path) as f:
-            #    last = None
-            #    for last in (line for line in f if line.rstrip('\n')):  pass
-
-            #if last is None or 'TurbSim terminated normally' not in last:
-            #    raise ValueError(f'All TurbSim boxes need to be completed before this step can be done.')
+    
+            # Now check if the boxes have been executed successfully. Let's check the last line of the logfile.
+            for f in self.high_res_log:
+                last = None
+                with open(f) as file:
+                    for last in (line for line in file if line.rstrip('\n')):  pass
+                if last is None or 'TurbSim terminated normally' not in last:
+                    raise FFException(f'TurbSim not successful: {f}.')
 
             self._FF_setup_TS(**kwargs)
 
