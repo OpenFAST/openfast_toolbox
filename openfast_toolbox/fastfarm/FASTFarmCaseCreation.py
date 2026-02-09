@@ -189,7 +189,6 @@ class FFCaseCreation:
                  seedValues = None,
                  inflowPath = None,
                  inflowType = None,
-                 sweepYawMisalignment = False,
                  refTurb_rot = 0,
                  #ptfm_rot    = False,
                  flat=False,
@@ -258,8 +257,6 @@ class FFCaseCreation:
             Full path of the LES data, if driven by LES. If None, the setup will be for TurbSim inflow.
             inflowPath can be a single path, or a list of paths of the same length as the sweep in conditions.
             For example, if TIvalue=[8,10,12], then inflowPath can be 3 paths, related to each condition.
-        sweepYawMisalignment: bool
-            Whether or not to perform a sweep with and without yaw misalignment perturbations
         refTurb_rot: int
             Index of reference turbine which the rotation of the farm will occur. Default is 0, the first one.
             Not fully tested.
@@ -298,7 +295,6 @@ class FFCaseCreation:
         self.nSeeds      = nSeeds
         self.inflowPath  = inflowPath
         self.inflowType  = inflowType
-        self.sweepYM     = sweepYawMisalignment
         self.seedValues  = seedValues
         self.refTurb_rot = refTurb_rot
         #self.ptfm_rot    = ptfm_rot
@@ -320,10 +316,11 @@ class FFCaseCreation:
         self.hasBD                     = False
         self.multi_HD                  = False
         self.multi_MD                  = False
-        self.condDirList = []
-        self.caseDirList = []
-        self.DLLfilepath = None
-        self.DLLext      = None
+        self.tmax_low       = tmax
+        self.condDirList    = []
+        self.caseDirList    = []
+        self.DLLfilepath    = None
+        self.DLLext         = None
         self.batchfile_high = ''
         self.batchfile_low  = ''
         self.batchfile_ff   = ''
@@ -863,7 +860,6 @@ class FFCaseCreation:
         for case in range(self.nCases):
             # Recover information about current case for directory naming purposes
             inflow_deg_   = self.allCases['inflow_deg'     ].sel(case=case).values
-            misalignment_ = self.allCases['misalignment'   ].sel(case=case).values
             nADyn_        = self.allCases['nFullAeroDyn'   ].sel(case=case).values
             nFED_         = self.allCases['nFulllElastoDyn'].sel(case=case).values
             yawCase_      = self.allCases['yawCase'        ].sel(case=case).values
@@ -872,8 +868,6 @@ class FFCaseCreation:
             ndigits = len(str(self.nCases))
             caseStr = f"Case{case:0{ndigits}d}_wdir{f'{int(inflow_deg_):+03d}'.replace('+','p').replace('-','m')}"
             # Add standard sweeps to the case name
-            #if self.sweepYM:
-            #    caseStr += f"_YM{str(misalignment_).lower()}"
             if self.sweepEDmodel:
                 caseStr += f"_{nFED_}fED"
             if self.sweepADmodel:
@@ -1076,16 +1070,9 @@ class FFCaseCreation:
                 for t in range(self.nTurbines):
                     # Recover info about the current turbine in CondXX_*/CaseYY_
                     yaw_deg_     = self.allCases.sel(case=case, turbine=t)['yaw'].values
-                    yaw_mis_deg_ = self.allCases.sel(case=case, turbine=t)['yawmis'].values
                     phi_deg_     = self.allCases.sel(case=case, turbine=t)['phi'].values
                     ADmodel_     = self.allCases.sel(case=case, turbine=t)['ADmodel'].values
                     EDmodel_     = self.allCases.sel(case=case, turbine=t)['EDmodel'].values
-        
-                    # Quickly check that yaw misaligned value is zero if case does not contain yaw misalignment
-                    if self.allCases.sel(case=case, turbine=t)['misalignment'].values:
-                        assert yaw_mis_deg_ != 0
-                    else:
-                        assert yaw_mis_deg_ == 0
         
                     # Update each turbine's elastic model
                     if EDmodel_ == 'FED':
@@ -1094,7 +1081,7 @@ class FFCaseCreation:
                         self.ElastoDynFile['BlPitch(2)'] = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
                         self.ElastoDynFile['BlPitch(3)'] = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
         
-                        self.ElastoDynFile['NacYaw']   = yaw_deg_ + yaw_mis_deg_
+                        self.ElastoDynFile['NacYaw']   = yaw_deg_
                         self.ElastoDynFile['PtfmYaw']  = phi_deg_
                         # The blade file entry `BldFile[1-3]` is not actually read. Sometimes we see `BldFile([1-3])`.
                         if 'BldFile1' in self.ElastoDynFile.keys():
@@ -1117,7 +1104,7 @@ class FFCaseCreation:
 
                         self.SElastoDynFile['BlPitch']  = self.bins.sel(wspd=Vhub_, method='nearest').BlPitch.values
                         self.SElastoDynFile['RotSpeed'] = self.bins.sel(wspd=Vhub_, method='nearest').RotSpeed.values
-                        self.SElastoDynFile['NacYaw']   = yaw_deg_ + yaw_mis_deg_
+                        self.SElastoDynFile['NacYaw']   = yaw_deg_
                         if writeFiles:
                             self.SElastoDynFile.write(os.path.join(currPath,f'{self.SEDfilename}{t+1}_mod.dat'))
         
@@ -1142,7 +1129,7 @@ class FFCaseCreation:
 
                     # Update each turbine's ServoDyn
                     if self.hasSrvD:
-                        self.ServoDynFile['YawNeut']      = yaw_deg_ + yaw_mis_deg_
+                        self.ServoDynFile['YawNeut']      = yaw_deg_
                         self.ServoDynFile['VSContrl']     = 5
                         self.ServoDynFile['DLL_FileName'] = f'"{self.DLLfilepath}{t+1}.{self.DLLext}"'
                         self.ServoDynFile['DLL_InFile']   = f'"{self.controllerInputfilename}"'
@@ -1876,10 +1863,8 @@ class FFCaseCreation:
 
     def _create_all_cases(self):
         # Generate the different "cases" (inflow angle).
-        # If misalignment true, then the actual yaw is yaw[turb]=np.random.uniform(low=-8.0, high=8.0).
 
         # Set sweep bools and multipliers
-        nCasesYMmultiplier = 2 if self.sweepYM else 1
         nCasesROmultiplier = len(self.EDmodel)
         if len(self.ADmodel) == 1:
             self.sweepEDmodel = False
@@ -1960,26 +1945,8 @@ class FFCaseCreation:
 
         allCases = ds.copy()
 
-        # ------------------------------------------------- SWEEP YAW MISALIGNMENT
-        # Get the number of cases at before this current sweep
-        nCases_before_sweep = len(allCases.case)
-
-        # Concat instances of allCases and adjust the case numbering
-        ds = xr.concat([allCases for i in range(nCasesYMmultiplier)], dim='case')
-        ds['case'] = np.arange(len(ds['case']))
-
-        # Create an full no-misalignment array to fill when non-aligned
-        ds['yawmis']       = (('case','turbine'), np.zeros_like(ds['yaw']))
-        ds['misalignment'] = (('case'),           np.full_like(ds['inflow_deg'], False, dtype=bool))
-
-        if self.sweepYM:
-            # Now, we fill the array with the new values on the second half (first half has no misalignment)
-            for c in range(nCases_before_sweep):
-                currCase = nCases_before_sweep + c
-                ds['yawmis'].loc[dict(case=currCase, turbine=slice(None))] = np.random.uniform(size=case.nTurbines,low=-8,high=8)
-                ds['misalignment'].loc[dict(case=currCase)] = True
-
         self.allCases = ds.copy()
+
         self.nCases = len(self.allCases['case'])
 
 
@@ -2335,11 +2302,10 @@ class FFCaseCreation:
             if self.verbose>1: print('    Running a TurbSim setup once to get domain extents')
             self.TS_low_setup(writeFiles=False, runOnce=True)
 
-        # Figure out how many (and which) high boxes actually need to be executed. Remember that yaw misalignment, SED/ADsk models,
+        # Figure out how many (and which) high boxes actually need to be executed. Remember that SED/ADsk models
         # and sweep in yaw do not require extra TurbSim runs
         self.nHighBoxCases = len(np.unique(self.inflow_deg))  # some wind dir might be repeated for sweep on yaws
         
-        # This is a new method, but I'm not sure if it will work always, so let's leave the one above and check it
         uniquewdir = np.unique(self.allCases.inflow_deg)
         allHighBoxCases = []
         for currwdir in uniquewdir:
@@ -2649,7 +2615,7 @@ class FFCaseCreation:
     
     def TS_high_create_symlink(self):
 
-        # Create symlink of all the high boxes for the cases with yaw misalignment. These are the "repeated" boxes
+        # Create symlink of all the high boxes for the cases with different turbine properties (e.g. yaw). These are the "repeated" boxes
 
         if self.verbose>0:
             print(f'Creating symlinks for all the high-resolution boxes')
@@ -2668,7 +2634,7 @@ class FFCaseCreation:
                     continue
 
                 # If we are here, the case is destination. Let's find the first case with the same wdir for source
-                varsToDrop = ['misalignment','yawmis','yaw','yawCase','ADmodel','EDmodel','nFullAeroDyn','nFulllElastoDyn']
+                varsToDrop = ['yaw','yawCase','ADmodel','EDmodel','nFullAeroDyn','nFulllElastoDyn']
                 dst_xr = self.allCases.sel(case=case, drop=True).drop_vars(varsToDrop)
                 currwdir = dst_xr['inflow_deg']
                 
