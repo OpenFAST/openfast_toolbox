@@ -136,7 +136,7 @@ def main(test=False):
     # --- 1.2 Getting the default resolution and plotting the layout
     # --------------------------------------------------------------------------------
     # Below we provide the minimal set of arguments needed to compute the resolution automatically.
-    ffcase = FFCaseCreation(wts=wts, vhub=vhub, 
+    ffcase = FFCaseCreation(path=path, wts=wts, vhub=vhub, 
                           mod_wake=mod_wake,
                           inflowType=inflowType)
 
@@ -151,7 +151,7 @@ def main(test=False):
     dt_high = 0.50 # [s]
     dt_low  = 2.00 # [s]
     ds_low  = 25   # [m]
-    ffcase2 = FFCaseCreation(wts=wts, vhub=vhub,
+    ffcase2 = FFCaseCreation(path=path, wts=wts, vhub=vhub,
                          dt_high=dt_high,
                          dt_low=dt_low,   ds_low=ds_low,
                          mod_wake=mod_wake,
