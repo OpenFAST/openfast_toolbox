@@ -536,7 +536,6 @@ class FFCaseCreation:
 
     @property
     def high_res_bts(self):
-
         # Not all individual high-res boxes are unique. If there are cases where the same high-res
         # boxes are warranted (e.g. different nacelle yaw values), then copies/symlinks are made
         highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
@@ -549,12 +548,10 @@ class FFCaseCreation:
                     dirpath = self.getHRTurbSimPath(cond, case, seed)
                     for t in range(self.nTurbines):
                         files.append(f'{dirpath}/HighT{t+1}.bts')
-
         return files
     
     @property
     def high_res_log(self):
-
         highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
         highBoxesCaseIndex   = [self.caseDirList.index(c) for c in highBoxesCaseDirList]
 
@@ -2168,9 +2165,10 @@ class FFCaseCreation:
 
 
 
-    def TS_low_slurm_prepare(self, slurmfilepath, inplace=True, useSed=False, tsbin=None):
+    def TS_low_slurm_prepare(self, slurmfilepath, tsbin=None):
 
         if tsbin is not None:
+            WARN(f'Overwritting the TurbSim binary from the previously set {self.tsbin} to {tsbin}.')
             self.tsbin = tsbin
         self._checkTSBinary()
 
@@ -2276,22 +2274,17 @@ class FFCaseCreation:
                     turbSimPath = self.getHRTurbSimPath(cond, case, seed)
                     dst = os.path.join(turbSimPath,  'Low.bts')
                     src = os.path.join(condSeedPath, 'Low.bts')
-                    if not os.path.exists(src):
-                        raise FFException(f'BTS file not existing: {src}\nTurbSim must be run on the low-res input files first.')
-                    if self._can_create_symlinks:
-                        # --- Unix based
-                        # We create a symlink at
-                        #    dst = path/cond/case/seed/DISCON.in
-                        # pointing to :
-                        #    src = '../../Seed_0/Low.bts' # We use relative path to help if the whole path directory is moved
-                        src = os.path.join( os.path.relpath(condSeedPath, turbSimPath), 'Low.bts')
-                        try:
-                            os.symlink(src, dst)
-                        except FileExistsError:
-                            print(f'    File {dst} already exists. Skipping symlink.')
-                    else:
-                        # --- Windows
-                        self._copy(src, dst)
+                    if not os.path.exists(src) and not self.skipchecks:
+                        raise FFException(f'BTS file does not exis: {src}\nTurbSim must be run on the low-res input files first.')
+                 
+                    # --- Unix based
+                    # We create a symlink at
+                    #    dst = path/cond/case/seed/Low.bts
+                    # pointing to :
+                    #    src = '../../Seed_0/Low.bts' # We use relative path to help if the whole path directory is moved
+                    src = os.path.join( os.path.relpath(condSeedPath, turbSimPath), 'Low.bts')
+                    self._symlink(src, dst)
+
 
 
     def getDomainParameters(self):
@@ -2318,12 +2311,12 @@ class FFCaseCreation:
             raise ValueError(f'The number of cases do not match as expected. {self.nHighBoxCases} unique wind directions, but {len(self.allHighBoxCases.case)} unique cases.')
         
         # Determine offsets from turbines coordinate frame to TurbSim coordinate frame
-        self.yoffset_turbsOrigin2TSOrigin = -( (self.TSlowbox.ymax - self.TSlowbox.ymin)/2 + self.TSlowbox.ymin )
+        self.yoffset_turbsOrigin2TSOrigin = -( (self.TSlowbox[0].ymax - self.TSlowbox[0].ymin)/2 + self.TSlowbox[0].ymin )
         self.xoffset_turbsOrigin2TSOrigin = -self.extent_low[0]*self.D
         
         if self.verbose>0:
-            print(f"    The x offset between the turbine ref frame and turbsim is {self.xoffset_turbsOrigin2TSOrigin}")
-            print(f"    The y offset between the turbine ref frame and turbsim is {self.yoffset_turbsOrigin2TSOrigin}")
+            INFO(f"    The x offset between the turbine ref frame and turbsim is {self.xoffset_turbsOrigin2TSOrigin}")
+            INFO(f"    The y offset between the turbine ref frame and turbsim is {self.yoffset_turbsOrigin2TSOrigin}")
 
 
     def TS_high_get_time_series(self):
@@ -2731,25 +2724,28 @@ class FFCaseCreation:
             self._FF_setup_LES(**kwargs)
 
         elif self.inflowStr == 'TurbSim':
-            all_bts = self.high_res_bts
-
-            # Check if the high-res boxes from TurbSim are present and non-zero size
-            for bts in all_bts:
-                if not os.path.isfile(bts):
-                    raise FFException(f'File missing: {bts}\nAll TurbSim boxes need to be completed before this step can be done.')
-                if os.path.getsize(bts)==0:
-                    raise FFException(f'File has zero size: {bts}\n All TurbSim boxes need to be completed before this step can be done.')
-    
-            # Now check if the boxes have been executed successfully. Let's check the last line of the logfile.
-            for f in self.high_res_log:
-                last = None
-                with open(f) as file:
-                    for last in (line for line in file if line.rstrip('\n')):  pass
-                if last is None or 'TurbSim terminated normally' not in last:
-                    raise FFException(f'TurbSim not successful: {f}.')
-
+            if not self.skipchecks:
+                self.check_turbsim_success(self.low_res_bts,  self.low_res_log)
+                self.check_turbsim_success(self.high_res_bts, self.high_res_log)
             self._FF_setup_TS(**kwargs)
 
+
+
+    def check_turbsim_success(self, btsfiles, logfiles):
+        for bts in btsfiles:
+            if not os.path.isfile(bts):
+                raise FFException(f'File missing: {bts}\nAll TurbSim boxes need to be completed before this step can be done.')
+            if os.path.getsize(bts)==0:
+                raise FFException(f'File has zero size: {bts}\n All TurbSim boxes need to be completed before this step can be done.')
+
+        for f in logfiles:
+            last = None
+            with open(f) as file:
+                for last in (line for line in file if line.rstrip('\n')):  pass
+            if last is None or 'TurbSim terminated normally' not in last:
+                raise FFException(f'TurbSim not successful: {f}.')
+            
+        return True
 
 
     def _FF_setup_LES(self, seedsToKeep=1):
@@ -3013,6 +3009,7 @@ class FFCaseCreation:
 
 
     def _getBoxesParamsForFF(self, lowbts, highbts, dt_low_desired, D, HubHt, xWT, yt):
+
         # Get mean wind speeds at the half height location (advection speed)
         _, meanU_High =  highbts.midValues()
         _, meanU_Low  =  lowbts.midValues()
