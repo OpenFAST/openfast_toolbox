@@ -193,6 +193,7 @@ class FFCaseCreation:
                  refTurb_rot = 0,
                  #ptfm_rot    = False,
                  flat=False,
+                 skipchecks=False,
                  verbose = 0):
         '''
         Full setup of a FAST.Farm simulations, can create setups for LES- or TurbSim-driven scenarios.
@@ -266,6 +267,8 @@ class FFCaseCreation:
             Whether or not platforms have headings or not (False in case of fixed farms or floating with all platforms facing 0deg)
         flat: bool
             Whether or not to create a flat directory structure (all cases in the same folder)
+        skipchecks: bool
+            Whether or not to skip checks for TurbSim runs andthe existence of files before creating symlinks. Only used for tests.
         verbose: int
             Verbosity level, given as integers <5
 
@@ -301,6 +304,7 @@ class FFCaseCreation:
         #self.ptfm_rot    = ptfm_rot
         self.verbose     = verbose
         self.attempt     = 1
+        self.skipchecks  = skipchecks
         self.flat        = flat
         # Set aux variable
         self.templateFilesCreatedBool  = False
@@ -348,7 +352,7 @@ class FFCaseCreation:
         if self.verbose>0: print(f'Creating auxiliary arrays for all conditions and cases... Done.')
                                         
 
-        if path is not None:
+        if self.path is not None:
             # TODO TODO, this should only be done when user ask for input file creation
             if self.verbose>0: print(f'Creating directory structure and copying files...', end='\r')
             self._create_dir_structure()
@@ -566,7 +570,24 @@ class FFCaseCreation:
                         files.append(f'{dirpath}/log.high{t+1}.seed{seed}.txt')
         return files
 
-    # TODO create the same properties for the low res
+    @property
+    def low_res_bts(self):
+        files = []
+        for cond in range(self.nConditions):
+            for seed in range(self.nSeeds):
+                dirpath = self.getCondSeedPath(cond, seed)
+                files.append(f'{dirpath}/Low.bts')
+        return files
+    
+    @property
+    def low_res_log(self):
+        files = []
+        for cond in range(self.nConditions):
+            for seed in range(self.nSeeds):
+                dirpath = self.getCondSeedPath(cond, seed)
+                files.append(f'{dirpath}/log.low.seed{seed}.txt')
+        return files
+    
 
     def _checkInputs(self):
 
@@ -581,6 +602,10 @@ class FFCaseCreation:
             self.shear = [0]*len(self.vhub)
         if self.tmax is None:
             self.tmax = 0.00001
+            self.tmax_low = self.tmax
+
+        if self.skipchecks:
+            WARN('Skipping checks on TurbSim files and symlinks. This should only be used for testing purposes.')
 
     
         # Check the wind turbine dict
@@ -884,16 +909,16 @@ class FFCaseCreation:
             print('SRC:', src, os.path.exists(src))
             print('DST:', dst, os.path.exists(dst))
         error = f"Src file not found: {src}"
-        if not os.path.exists(src):
+        if not os.path.exists(src) or not self.skipchecks:
             raise Exception(error)
             #return error
         if not os.path.exists(dst):
-            #try:
-            shutil.copy2(src, dst)
-            #except FileExistsError:
-            #    if debug:
-            #        raise Exception(error)
-            #    error = dst
+            try:
+                shutil.copy2(src, dst)
+            except FileExistsError:
+                if debug:
+                    raise Exception(error)
+                error = f"Dst file already exists: {dst}. Skipping copy."
         return error
 
 
@@ -911,7 +936,7 @@ class FFCaseCreation:
             print('DST    :', dst, os.path.exists(dst))
         error = f"Src file not found: {src_abs}"
 
-        if not os.path.exists(src_abs):
+        if not os.path.exists(src_abs) and not self.skipchecks:
             raise Exception(error)
         if not os.path.exists(dst):
             if self._can_create_symlinks:
@@ -922,12 +947,8 @@ class FFCaseCreation:
                     error = f"Dst file already exists: {dst}. Skipping symlink."
             else:
                 # Windows
-                try:
-                    shutil.copy2(src, dst)
-                except FileExistsError:
-                    if debug:
-                        raise Exception(error)
-                    error = f"Dst file already exists: {dst}. Skipping copy."
+                WARN('Windows detected: creating a copies instead of symlinks.')
+                error = self._copy(src, dst, debug=debug)
         return error
 
 
@@ -2063,6 +2084,7 @@ class FFCaseCreation:
 
         boxType='lowres'
         lowFilesName = []
+        self.TSlowbox = []
         for cond in range(self.nConditions):
             for seed in range(self.nSeeds):
                 seedPath = self.getCondSeedPath(cond, seed)
@@ -2086,9 +2108,11 @@ class FFCaseCreation:
                 # Create and write new Low.inp files creating the proper box with proper resolution
                 # By passing low_ext, manual mode for the domain size is activated, and by passing ds_low,
                 # manual mode for discretization (and further domain size) is also activated
-                self.TSlowbox = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xlocs_, y=ylocs_, zbot=self.zbot,
+                currTSlowbox = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xlocs_, y=ylocs_, zbot=self.zbot,
                                                cmax=self.cmax, fmax=self.fmax, Cmeander=self.Cmeander, boxType='lowres', extent=self.extent_low,
                                                ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high, mod_wake=self.mod_wake)
+
+                self.TSlowbox.append(currTSlowbox)
 
                 if runOnce: return
 
@@ -2097,7 +2121,7 @@ class FFCaseCreation:
                 # flowfield is shorter than the requested total simulation time. So if we ask for the low-res
                 # with the exact length we want, the high-res boxes might be shorter than tmax. Note that the 
                 # total FAST.Farm simulation time remains unmodified from what the user requested.
-                self.TSlowbox.writeTSFile(fileIn=self.turbsimLowfilepath, fileOut=currentTSLowFile, tmax=self.tmax+self.dt_low, verbose=self.verbose)
+                currTSlowbox.writeTSFile(fileIn=self.turbsimLowfilepath, fileOut=currentTSLowFile, tmax=self.tmax+self.dt_low, verbose=self.verbose)
 
                 # Modify some values and save file (some have already been set in the call above)
                 Lowinp = FASTInputFile(currentTSLowFile)
@@ -2421,17 +2445,23 @@ class FFCaseCreation:
     def TS_high_setup(self, writeFiles=True):
         INFO('Preparing TurbSim high resolution input files.')
 
-        #todo: Check if the low-res boxes were created successfully
+        # Check low-res box(es)
+        if not self.skipchecks:
+            if not self.TSlowBoxFilesCreatedBool:
+                raise FFException('The low-res boxes files have not been created yet. Please run TS_low_setup first.')
+            self.check_turbsim_success(self.low_res_bts, self.low_res_log)
 
         # Create symbolic links for the low-res boxes
         # TODO TODO TODO Simply store address of files
         self.TS_low_createSymlinks()
 
-        # Open low-res boxes and extract time-series at turbine locations
-        self.TS_high_get_time_series()
+        if not self.skipchecks:
+            # Open low-res boxes and extract time-series at turbine locations
+            self.TS_high_get_time_series()
 
         # Loop on all conditions/cases/seeds setting up the High boxes
         highFilesName = []
+        self.TShighbox = []
         for cond in range(self.nConditions):
             for case in range(self.nHighBoxCases):
                 # Get actual case number given the high-box that need to be saved
@@ -2460,11 +2490,12 @@ class FFCaseCreation:
                         Lambda1 = 0.7*HubHt_ if HubHt_<60 else 42  # IEC 61400-3 ed4, sec 6.3.1, eq 5 
         
                         # Create and write new Low.inp files creating the proper box with proper resolution
-                        currentTS = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xloc_, y=yloc_, zbot=self.zbot,
+                        currTShighbox = TSCaseCreation(D_, HubHt_, Vhub_, tivalue_, shear_, x=xloc_, y=yloc_, zbot=self.zbot,
                                                    cmax=self.cmax, fmax=self.fmax, Cmeander=self.Cmeander, boxType='highres', extent=self.extent_high,
                                                    ds_low=self.ds_low, dt_low=self.dt_low, ds_high=self.ds_high, dt_high=self.dt_high, mod_wake=self.mod_wake)
 
-                        currentTS.writeTSFile(fileIn=self.turbsimHighfilepath, fileOut=currentTSHighFile, tmax=self.tmax_low, turb=t, verbose=self.verbose)
+                        currTShighbox.writeTSFile(fileIn=self.turbsimHighfilepath, fileOut=currentTSHighFile, tmax=self.tmax_low, turb=t, verbose=self.verbose)
+                        self.TShighbox.append(currTShighbox)
         
                         # Modify some values and save file (some have already been set in the call above)
                         Highinp = FASTInputFile(currentTSHighFile)
@@ -2928,12 +2959,16 @@ class FFCaseCreation:
                     templateFSTF = self.FFfilepath
                     outputFSTF   = os.path.join(seedPath, self.outputFFfilename)
         
-                    # Open TurbSim outputs for the Low box and one High box (they are all of the same size)
-                    lowbts = TurbSimFile(os.path.join(seedPath,'TurbSim', 'Low.bts'))   # TODO TODO TODO Get Path
-                    highbts  = TurbSimFile(os.path.join(seedPath,'TurbSim', f'HighT1.bts'))
-        
-                    # Get dictionary with all the D{X,Y,Z,t}, L{X,Y,Z,t}, N{X,Y,Z,t}, {X,Y,Z}0
-                    d = self._getBoxesParamsForFF(lowbts, highbts, self.dt_low, D_, HubHt_, xWT, yt)
+                    if self.skipchecks:
+                        d = None
+                    else:
+                        # Open TurbSim outputs for the Low box and one High box (they are all of the same size)
+                        lowbts = TurbSimFile(os.path.join(seedPath,'TurbSim', 'Low.bts'))   # TODO TODO TODO Get Path
+                        highbts  = TurbSimFile(os.path.join(seedPath,'TurbSim', f'HighT1.bts'))
+            
+                        # Get dictionary with all the D{X,Y,Z,t}, L{X,Y,Z,t}, N{X,Y,Z,t}, {X,Y,Z}0
+                        d = self._getBoxesParamsForFF(lowbts, highbts, self.dt_low, D_, HubHt_, xWT, yt)
+                        self.dtemp = d #todo remove
         
                     # Write the file
                     if self.flat:
