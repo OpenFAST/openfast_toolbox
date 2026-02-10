@@ -46,8 +46,8 @@ import matplotlib.pyplot as plt
 
 from openfast_toolbox.fastfarm.FASTFarmCaseCreation import FFCaseCreation
 
-from openfast_toolbox.fastfarm.FASTFarmCaseCreation import check_files_exist, check_discon_library # Helper functions 
-from openfast_toolbox.fastfarm.fastfarm import plotFastFarmSetup # Low level FAST.Farm functions 
+from openfast_toolbox.fastfarm.FASTFarmCaseCreation import check_files_exist, check_discon_library, modifyProperty
+from openfast_toolbox.fastfarm.fastfarm import plotFastFarmSetup
 
 scriptDir = os.path.dirname(__file__)
 
@@ -177,11 +177,11 @@ def main(test=False):
     # END OF USER INPUT
     # -----------------------------------------------------------------------------
 
-	# Plot turbines locations
+    # Plot turbines locations
     fig = plotFastFarmSetup(wts)
     if not test:
-    	check_files_exist(ffbin, tsbin, templateFSTF, templateFiles)
-    	check_discon_library(libdisconfilepath);
+        check_files_exist(ffbin, tsbin, templateFSTF, templateFiles)
+        check_discon_library(libdiscon)
 
     # -----------------------------------------------------------------------------
     # -------------------- FAST.Farm initial setup --------------------------------

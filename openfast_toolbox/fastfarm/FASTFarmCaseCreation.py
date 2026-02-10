@@ -947,6 +947,9 @@ class FFCaseCreation:
         if not self.templateFilesCreatedBool:
             raise SyntaxError('Template files not set. Call `setTemplateFilename` before calling this function.')
 
+        # Create copies of the controller
+        self._create_copy_libdiscon()
+
         # Loops on all conditions/cases creating DISCON and *Dyn files
         for cond in range(self.nConditions):
             if self.verbose>0: print(f'Processing condition {self.condDirList[cond]}')
@@ -2184,65 +2187,37 @@ class FFCaseCreation:
         if self.nSeeds > 6:
             WARN(f'The memory-per-cpu on the low-res boxes SLURM script might be too low given {self.nSeeds} seeds.')
         
-        if useSed:
-            self.slurmfilename_low = os.path.basename(slurmfilepath)
-            shutil.copy2(slurmfilepath, os.path.join(self.path, self.slurmfilename_low))
-            # Change job name (for convenience only)
-            sed_command = f"sed -i 's|^#SBATCH --job-name=lowBox|#SBATCH --job-name=lowBox_{os.path.basename(self.path)}|g' {self.slurmfilename_low}"
-            self.sed_inplace(sed_command, inplace)
-            # Change logfile name (for convenience only)
-            sed_command = f"sed -i 's|#SBATCH --output log.lowBox|#SBATCH --output log.turbsim_low|g' {self.slurmfilename_low}"
-            self.sed_inplace(sed_command, inplace)
-            # Change memory per cpu
-            sed_command = f"sed -i 's|--mem-per-cpu=25000M|--mem-per-cpu={memory_per_cpu}M|g' {self.slurmfilename_low}"
-            self.sed_inplace(sed_command, inplace)
-            # Change number of nodes values 
-            sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(self.nConditions*self.nSeeds/6))}|g' {self.slurmfilename_low}"
-            self.sed_inplace(sed_command, inplace)
-            # Change the fastfarm binary to be called
-            sed_command = f"""sed -i "s|^turbsimbin.*|turbsimbin='{self.tsbin}'|g" {self.slurmfilename_low}"""
-            self.sed_inplace(sed_command, inplace)
-            # Change the path inside the script to the desired one
-            sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_low}"""
-            self.sed_inplace(sed_command, inplace)
-            # Assemble list of conditions and write it
-            listtoprint = "' '".join(self.condDirList)
-            sed_command = f"""sed -i "s|^condList.*|condList=('{listtoprint}')|g" {self.slurmfilename_low}"""
-            self.sed_inplace(sed_command, inplace)
-            # Change the number of seeds
-            sed_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_low}"
-            self.sed_inplace(sed_command, inplace)
-        else:
-            self.slurmfilename_low =  os.path.join(self.path, os.path.basename(slurmfilepath))
-            shutil.copy2(slurmfilepath, self.slurmfilename_low)
-        
-            # Python version
-            with open(self.slurmfilename_low, "r") as f:
-                lines = f.read()
+        self.slurmfilename_low =  os.path.join(self.path, os.path.basename(slurmfilepath))
+        shutil.copy2(slurmfilepath, self.slurmfilename_low)
+    
+        # Python version
+        with open(self.slurmfilename_low, "r") as f:
+            lines = f.read()
 
-            # Replacements
-            jobname   = f"#SBATCH --job-name=lowBox_{os.path.basename(self.path)}"
-            logfile   = "#SBATCH --output log.turbsim_low"
-            memcpu    = f"--mem-per-cpu={memory_per_cpu}M"
-            nodes     = f"#SBATCH --nodes={int(np.ceil(self.nConditions * self.nSeeds / 6))}"
-            turbsim   = f"turbsimbin='{self.tsbin}'"
-            basepath  = f"basepath='{self.path}'"
-            condlist  = "condList=('{}')".format("' '".join(self.condDirList))
-            seeds     = f"nSeeds={self.nSeeds}"
+        # Replacements
+        jobname   = f"#SBATCH --job-name=lowBox_{os.path.basename(self.path)}"
+        logfile   = "#SBATCH --output log.turbsim_low"
+        memcpu    = f"--mem-per-cpu={memory_per_cpu}M"
+        nodes     = f"#SBATCH --nodes={int(np.ceil(self.nConditions * self.nSeeds / 6))}"
+        turbsim   = f"turbsimbin='{self.tsbin}'"
+        basepath  = f"basepath='{self.path}'"
+        condlist  = "condList=('{}')".format("' '".join(self.condDirList))
+        seeds     = f"nSeeds={self.nSeeds}"
 
-            # Apply substitutions
-            import re
-            lines = re.sub(r"^#SBATCH --job-name=.*", jobname, lines, flags=re.M)
-            lines = re.sub(r"^#SBATCH --output .*",   logfile, lines, flags=re.M)
-            lines = re.sub(r"--mem-per-cpu=\d+M",     memcpu,  lines)
-            lines = re.sub(r"^#SBATCH --nodes=.*",    nodes,   lines, flags=re.M)
-            lines = re.sub(r"^turbsimbin=.*",         turbsim, lines, flags=re.M)
-            lines = re.sub(r"^basepath=.*",           basepath,lines, flags=re.M)
-            lines = re.sub(r"^condList=.*",           condlist,lines, flags=re.M)
-            lines = re.sub(r"^nSeeds=.*",             seeds,   lines, flags=re.M)
+        # Apply substitutions
+        import re
+        lines = re.sub(r"^#SBATCH --job-name=.*", jobname, lines, flags=re.M)
+        lines = re.sub(r"^#SBATCH --output .*",   logfile, lines, flags=re.M)
+        lines = re.sub(r"--mem-per-cpu=\d+M",     memcpu,  lines)
+        lines = re.sub(r"^#SBATCH --nodes=.*",    nodes,   lines, flags=re.M)
+        lines = re.sub(r"^turbsimbin=.*",         turbsim, lines, flags=re.M)
+        lines = re.sub(r"^basepath=.*",           basepath,lines, flags=re.M)
+        lines = re.sub(r"^condList=.*",           condlist,lines, flags=re.M)
+        lines = re.sub(r"^nSeeds=.*",             seeds,   lines, flags=re.M)
 
-            with open(self.slurmfilename_low, "w") as f:
-                f.write(lines)
+        with open(self.slurmfilename_low, "w") as f:
+            f.write(lines)
+
         INFO(f'File written: {self.slurmfilename_low}')
 
 
@@ -2507,7 +2482,7 @@ class FFCaseCreation:
             raise FFException(f'Batch file failed: {self.batchfile_high}')
 
 
-    def TS_high_slurm_prepare(self, slurmfilepath, inplace=True, useSed=False):
+    def TS_high_slurm_prepare(self, slurmfilepath):
         # ---------------------------------------------------
         # ----- Prepare SLURM script for High-res boxes -----
         # ---------------------------------------------------
@@ -2516,75 +2491,40 @@ class FFCaseCreation:
             raise ValueError (f'SLURM script for high-res box {slurmfilepath} does not exist.')
         ntasks = self.nConditions*self.nHighBoxCases*self.nSeeds*self.nTurbines
 
-        
-        if useSed:
-            self.slurmfilename_high = os.path.basename(slurmfilepath)
-            shutil.copy2(slurmfilepath, os.path.join(self.path, self.slurmfilename_high))
+        self.slurmfilename_high = os.path.join(self.path, os.path.basename(slurmfilepath))
+        shutil.copy2(slurmfilepath, self.slurmfilename_high)
 
-            # Change job name (for convenience only)
-            sed_command = f"sed -i 's|^#SBATCH --job-name.*|#SBATCH --job-name=highBox_{os.path.basename(self.path)}|g' {self.slurmfilename_high}"
-            self.sed_inplace(sed_command, inplace)
-            # Change logfile name (for convenience only)
-            sed_command = f"sed -i 's|#SBATCH --output log.highBox|#SBATCH --output log.turbsim_high|g' {self.slurmfilename_high}"
-            self.sed_inplace(sed_command, inplace)
-            # Change number of nodes values
-            sed_command = f"sed -i 's|^#SBATCH --nodes.*|#SBATCH --nodes={int(np.ceil(ntasks/36))}|g' {self.slurmfilename_high}"
-            self.sed_inplace(sed_command, inplace)
-            # Change the fastfarm binary to be called
-            sed_command = f"""sed -i "s|^turbsimbin.*|turbsimbin='{self.tsbin}'|g" {self.slurmfilename_high}"""
-            self.sed_inplace(sed_command, inplace)
-            # Change the path inside the script to the desired one
-            sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {self.slurmfilename_high}"""
-            self.sed_inplace(sed_command, inplace)
-            # Change number of turbines
-            sed_command = f"sed -i 's|^nTurbines.*|nTurbines={self.nTurbines}|g' {self.slurmfilename_high}"
-            self.sed_inplace(sed_command, inplace)
-            # Change number of seeds
-            sed_command = f"sed -i 's|^nSeeds.*|nSeeds={self.nSeeds}|g' {self.slurmfilename_high}"
-            self.sed_inplace(sed_command, inplace)
-            # Assemble list of conditions and write it
-            listtoprint = "' '".join(self.condDirList)
-            sed_command = f"""sed -i "s|^condList.*|condList=('{listtoprint}')|g" {self.slurmfilename_high}"""
-            self.sed_inplace(sed_command, inplace)
-            # Assemble list of cases and write it
-            highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
-            listtoprint = "' '".join(highBoxesCaseDirList)
-            sed_command = f"""sed -i "s|^caseList.*|caseList=('{listtoprint}')|g" {self.slurmfilename_high}"""
-            self.sed_inplace(sed_command, inplace)
-        else:
-            self.slurmfilename_high = os.path.join(self.path, os.path.basename(slurmfilepath))
-            shutil.copy2(slurmfilepath, self.slurmfilename_high)
+        with open(self.slurmfilename_high, "r") as f:
+            lines = f.read()
 
-            with open(self.slurmfilename_high, "r") as f:
-                lines = f.read()
+        # Prepare replacement strings
+        jobname  = f"#SBATCH --job-name=highBox_{os.path.basename(self.path)}"
+        logfile  = "#SBATCH --output log.turbsim_high"
+        nodes    = f"#SBATCH --nodes={int(np.ceil(ntasks/36))}"
+        turbsim  = f"turbsimbin='{self.tsbin}'"
+        basepath = f"basepath='{self.path}'"
+        nTurb    = f"nTurbines={self.nTurbines}"
+        nSeed    = f"nSeeds={self.nSeeds}"
+        condlist = "condList=('{}')".format("' '".join(self.condDirList))
+        highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
+        caselist = "caseList=('{}')".format("' '".join(highBoxesCaseDirList))
 
-            # Prepare replacement strings
-            jobname  = f"#SBATCH --job-name=highBox_{os.path.basename(self.path)}"
-            logfile  = "#SBATCH --output log.turbsim_high"
-            nodes    = f"#SBATCH --nodes={int(np.ceil(ntasks/36))}"
-            turbsim  = f"turbsimbin='{self.tsbin}'"
-            basepath = f"basepath='{self.path}'"
-            nTurb    = f"nTurbines={self.nTurbines}"
-            nSeed    = f"nSeeds={self.nSeeds}"
-            condlist = "condList=('{}')".format("' '".join(self.condDirList))
-            highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
-            caselist = "caseList=('{}')".format("' '".join(highBoxesCaseDirList))
+        # Apply substitutions
+        import re
+        lines = re.sub(r"^#SBATCH --job-name.*", jobname, lines, flags=re.M)
+        lines = re.sub(r"^#SBATCH --output .*",  logfile, lines, flags=re.M)
+        lines = re.sub(r"^#SBATCH --nodes.*",   nodes,   lines, flags=re.M)
+        lines = re.sub(r"^turbsimbin.*",        turbsim, lines, flags=re.M)
+        lines = re.sub(r"^basepath.*",          basepath,lines, flags=re.M)
+        lines = re.sub(r"^nTurbines.*",         nTurb,  lines, flags=re.M)
+        lines = re.sub(r"^nSeeds.*",            nSeed,  lines, flags=re.M)
+        lines = re.sub(r"^condList.*",          condlist,lines, flags=re.M)
+        lines = re.sub(r"^caseList.*",          caselist,lines, flags=re.M)
 
-            # Apply substitutions
-            import re
-            lines = re.sub(r"^#SBATCH --job-name.*", jobname, lines, flags=re.M)
-            lines = re.sub(r"^#SBATCH --output .*",  logfile, lines, flags=re.M)
-            lines = re.sub(r"^#SBATCH --nodes.*",   nodes,   lines, flags=re.M)
-            lines = re.sub(r"^turbsimbin.*",        turbsim, lines, flags=re.M)
-            lines = re.sub(r"^basepath.*",          basepath,lines, flags=re.M)
-            lines = re.sub(r"^nTurbines.*",         nTurb,  lines, flags=re.M)
-            lines = re.sub(r"^nSeeds.*",            nSeed,  lines, flags=re.M)
-            lines = re.sub(r"^condList.*",          condlist,lines, flags=re.M)
-            lines = re.sub(r"^caseList.*",          caselist,lines, flags=re.M)
+        with open(self.slurmfilename_high, "w") as f:
+            f.write(lines)
 
-            with open(self.slurmfilename_high, "w") as f:
-                f.write(lines)
-
+        INFO(f'File written: {self.slurmfilename_high}')
 
 
     def TS_high_slurm_submit(self, qos='normal', A=None, t=None, p=None, inplace=True):
@@ -2694,20 +2634,28 @@ class FFCaseCreation:
 
 
         # Planes to save in FAST.Farm. We want the planes through the original farm, so let's get the position of the turbines at wdir=0
-        alignedTurbs = self.allCases.where(self.allCases['inflow_deg']==0, drop=True).isel(case=0)
-        if self.inflowStr == 'TurbSim':
-            # Turbine location in TurbSim reference frame
-            xWT = alignedTurbs['Tx'].values + self.xoffset_turbsOrigin2TSOrigin
-            yWT = alignedTurbs['Ty'].values + self.yoffset_turbsOrigin2TSOrigin
-        elif self.inflowStr == 'LES':
-            # Turbine location in LES reference frame
-            xWT = alignedTurbs['Tx'].values
-            yWT = alignedTurbs['Ty'].values
+        aligned_cases = self.allCases.where(self.allCases['inflow_deg'] == 0, drop=True)
+        # Ensure at least one case with inflow_deg == 0 exists before selecting
+        if 'case' not in aligned_cases.dims or aligned_cases.sizes.get('case', 0) == 0:
+            WARN("No case with inflow_deg == 0 found; unable to set aligned plane for sampling.")
+            planes_xy = [self.zhub+self.zbot]
+            planes_yz = [0]
+            planes_xz = [0]
+        else:
+            alignedTurbs = aligned_cases.isel(case=0)
+            if self.inflowStr == 'TurbSim':
+                # Turbine location in TurbSim reference frame
+                xWT = alignedTurbs['Tx'].values + self.xoffset_turbsOrigin2TSOrigin
+                yWT = alignedTurbs['Ty'].values + self.yoffset_turbsOrigin2TSOrigin
+            elif self.inflowStr == 'LES':
+                # Turbine location in LES reference frame
+                xWT = alignedTurbs['Tx'].values
+                yWT = alignedTurbs['Ty'].values
         
-        offset=10
-        planes_xy = [self.zhub+self.zbot]
-        planes_yz = np.unique(np.round(xWT+offset, 2))
-        planes_xz = np.unique(np.round(yWT, 2))
+            offset=10
+            planes_xy = [self.zhub+self.zbot]
+            planes_yz = np.unique(np.round(xWT+offset, 2))
+            planes_xz = np.unique(np.round(yWT, 2))
         
         # Number of planes must be at most 9
         self.planes_xy = planes_xy[0:9]
