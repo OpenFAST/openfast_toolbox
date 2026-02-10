@@ -898,7 +898,7 @@ class FFCaseCreation:
             print('SRC:', src, os.path.exists(src))
             print('DST:', dst, os.path.exists(dst))
         error = f"Src file not found: {src}"
-        if not os.path.exists(src) or not self.skipchecks:
+        if not os.path.exists(src) and not self.skipchecks:
             raise Exception(error)
             #return error
         if not os.path.exists(dst):

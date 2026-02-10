@@ -13,13 +13,14 @@ from openfast_toolbox.io.tools.graph import *
 # --- Wrapper to convert a "fast" input file dictionary into a graph
 # --------------------------------------------------------------------------------{
 def fastToGraph(data, **kwargs):
-    if 'BeamProp' in data.keys():
+    keys = data.keys()
+    if 'BeamProp' in keys:
         return subdynToGraph(data, **kwargs)
     
-    if 'SmplProp' in data.keys():
+    if 'SmplProp' in keys or 'SmplPropCyl' in keys:
         return hydrodynToGraph(data, **kwargs)
 
-    if 'DOF2Nodes' in data.keys():
+    if 'DOF2Nodes' in keys:
         return subdynSumToGraph(data, **kwargs)
 
     raise NotImplementedError('Graph for object with keys: {}'.format(data.keys()))
@@ -34,13 +35,16 @@ def subdynToGraph(sd, propToNodes=False, propToElem=False):
     -propToNodes: if True, the element properties are also transferred to the nodes for convenience.
                  NOTE: this is not the default because a same node can have two different diameters in SubDyn (it's by element)
     """
-    type2Color=[
-            (0.1,0.1,0.1), # Watchout based on background
-            (0.753,0.561,0.05),  # 1 Beam
-            (0.541,0.753,0.05),  # 2 Cable
-            (0.753,0.05,0.204),  # 3 Rigid
-            (0.918,0.702,0.125), # 3 Rigid
-        ]
+    type2Color={
+            0: (0.1,0.1,0.1), # Watchout based on background
+           '1': (0.753,0.561,0.05), # 1 Beam
+          '1c': (0.753,0.561,0.05), # 1 Beam
+          '1r': (0.553,0.361,0.05), # 1 Beam Rect
+          '2': (0.541,0.753,0.05),  # 2 Cable
+          '3': (0.753,0.05,0.204),  # 3 Rigid
+          '4': (0.918,0.702,0.125), # 4 Rigid
+          '5': (0.018,0.702,0.125), # 5 Spring
+        }
 
     Graph = GraphModel()
     # --- Properties
@@ -74,19 +78,24 @@ def subdynToGraph(sd, propToNodes=False, propToElem=False):
         Graph.addNode(node)
 
     # --- Elements
-    Members  = sd['Members'].astype(int)
-    PropSets = ['Beam','Cable','Rigid']
+    Members  = sd['Members']# .astype(int)
+    #[MType={1c:beam circ., 1r:beam rect., 2:cable, 3:rigid, 4:beam arb., 5:spring}. COMSID={-1:none}]
+    PropSets = {'1': 'Beam', '1c':'Beam', '1r':'BeamRect', '2': 'Cable', '3':'Rigid', '4':'BeamArb', '5':'Spring'} # NOTE: name must match propset table
     for ie,E in enumerate(Members):
-        Type=1 if len(E)==5 else E[5]
-        #elem= Element(E[0], E[1:3], propset=PropSets[Type-1], propIDs=E[3:5])
-        elem= Element(E[0], E[1:3], Type=PropSets[Type-1], propIDs=E[3:5], propset=PropSets[Type-1])
+        EE = E[0:5].astype(int)
+        Type='1' if len(E)==5 else E[5]
+        try:
+            Type = str(int(Type))
+        except:
+            Type = str(Type)
+        elem= Element(EE[0], EE[1:3], Type=PropSets[Type], propIDs=EE[3:5], propset=PropSets[Type])
         elem.data['object']='cylinder'
         elem.data['color'] = type2Color[Type]
         Graph.addElement(elem)
         # Nodal prop data
         if propToNodes:
             # NOTE: this is disallowed by default because a same node can have two different diameters in SubDyn (it's by element)
-            Graph.setElementNodalProp(elem, propset=PropSets[Type-1], propIDs=E[3:5])
+            Graph.setElementNodalProp(elem, propset=PropSets[Type], propIDs=EE[3:5])
         if propToElem:
             Graph.setElementNodalPropToElem(elem) # TODO, this shouldn't be needed
 
@@ -151,90 +160,53 @@ def hydrodynToGraph(hd, propToNodes=False, propToElem=False, verbose=False):
 
 
     Graph = GraphModel()
+    keys = hd.keys()
 
     # --- Properties
-    #if 'SectionProp' in hd.keys():
-    #    # NOTE: setting it as element property since two memebrs may connect on the same node with different diameters/thicknesses
-    #    Graph.addNodePropertySet('Section')
-    #    for ip,P in enumerate(hd['SectionProp']):
-    #        # PropSetID    PropD         PropThck
-    #        prop= NodeProperty(ID=P[0], D=P[1], t=P[2])
-    #        Graph.addNodeProperty('Section',prop)
-
-    if 'SectionCylProp' in hd.keys():
+    if 'SectionProp' in keys:
         # NOTE: setting it as element property since two memebrs may connect on the same node with different diameters/thicknesses
-        Graph.addNodePropertySet('SectionCyl')
-        for ip,P in enumerate(hd['SectionCylProp']):
+        Graph.addNodePropertySet('Section')
+        for ip,P in enumerate(hd['SectionProp']):
             # PropSetID    PropD         PropThck
             prop= NodeProperty(ID=P[0], D=P[1], t=P[2])
-            Graph.addNodeProperty('SectionCyl',prop)
-
-    if 'SectionRecProp' in hd.keys():
-        # NOTE: setting it as element property since two memebrs may connect on the same node with different diameters/thicknesses
-        Graph.addNodePropertySet('SectionRec')
-        for ip,P in enumerate(hd['SectionRecProp']):
-            # MPropSetID    PropA       ProbB         PropThck
-            prop= NodeProperty(ID=P[0], D=P[1], t=P[2], t=P[3])
-            Graph.addNodeProperty('SectionRec',prop)
+            Graph.addNodeProperty('Section',prop)
 
     # --- Hydro Coefs - will be stored in AxCoefs, SimpleCoefs, DepthCoefs, MemberCoefs
-    if 'AxCoefs' in hd.keys():
+    if 'AxCoefs' in keys:
         Graph.addNodePropertySet('AxCoefs')
         for ip,P in enumerate(hd['AxCoefs']):
             prop= NodeProperty(ID=P[0], JAxCd=P[1], JAxCa=P[2], JAxCp=P[3])
             Graph.addNodeProperty('AxCoefs',prop)
-    if 'SmplProp' in hd.keys():
+
+    SmplPropKey = None 
+    if 'SmplProp' in keys:
+        SmplPropKey = 'SmplProp'
+    elif 'SmplPropCyl' in keys:
+        SmplPropKey = 'SmplPropCyl'
+    # TODO rect prop
+    if SmplPropKey is not None:
+        SmplProp = hd[SmplPropKey]
+        df = hd.getTab(SmplPropKey)
+        df.columns = [col.replace('Simpl', '') for col in df.columns]
         Graph.addNodePropertySet('SimpleCoefs')
-        for ip,P in enumerate(hd['SmplProp']):
-            #      SimplCd    SimplCdMG    SimplCa    SimplCaMG    SimplCp    SimplCpMG   SimplAxCd  SimplAxCdMG   SimplAxCa  SimplAxCaMG  SimplAxCp   SimplAxCpMG
-            if len(P)==12:
-                prop= NodeProperty(ID=ip+1, Cd=P[0], CdMG=P[1], Ca=P[2], CaMG=P[3], Cp=P[4], CpMG=P[5], AxCd=P[6], AxCdMG=P[7], AxCa=P[8], AxCaMG=P[9], AxCp=P[10], AxCpMG=P[11])
-            elif len(P)==10:
-                prop= NodeProperty(ID=ip+1, Cd=P[0], CdMG=P[1], Ca=P[2], CaMG=P[3], Cp=P[4], CpMG=P[5], AxCa=P[6], AxCaMG=P[7], AxCp=P[8], AxCpMG=P[9])
-            else:
-                raise NotImplementedError()
-            Graph.addNodeProperty('SimpleCoefs',prop)
+        #for ip,P in enumerate(SmplProp):
+        dd = df.iloc[0].to_dict()
+        prop = NodeProperty(ID=1, **dd)
+        Graph.addNodeProperty('SimpleCoefs',prop)
 
-    #if 'DpthProp' in hd.keys():
-    #    Graph.addMiscPropertySet('DepthCoefs')
-    #    for ip,P in enumerate(hd['DpthProp']):
-    #        #                            Dpth  DpthCd    DpthCdMG   DpthCa   DpthCaMG  DpthCp   DpthCpMG   DpthAxCd   DpthAxCdMG   DpthAxCa   DpthAxCaMG    DpthAxCp    DpthAxCpMG
-    #        prop= Property(ID=ip+1, Dpth=P[0], Cd=P[1], CdMG=P[2], Ca=P[3], CaMG=P[4], Cp=P[5], CpMG=P[6], AxCd=P[7], AxCdMG=P[8], AxCa=P[9], AxCaMG=P[10], AxCp=P[11], AxCpMG=P[12])
-    #        Graph.addMiscProperty('DepthCoefs',prop)
-    if 'DpthCylProp' in hd.keys():
-        Graph.addMiscPropertySet('DepthCylCoefs')
-        for ip,P in enumerate(hd['DpthCylProp']):
-            #                         Dpth     DpthCd   DpthCdMG   DpthCa   DpthCaMG   DpthCp   DpthCpMG   DpthAxCd   DpthAxCdMG   DpthAxCa   DpthAxCaMG    DpthAxCp    DpthAxCpMG   DpthCb   DpthCbMG
-            prop= Property(ID=ip+1, Dpth=P[0], Cd=P[1], CdMG=P[2], Ca=P[3], CaMG=P[4], Cp=P[5], CpMG=P[6], AxCd=P[7], AxCdMG=P[8], AxCa=P[9], AxCaMG=P[10], AxCp=P[11], AxCpMG=P[12], Cb=P[13], CbMG=P[14])
-            Graph.addMiscProperty('DepthCylCoefs',prop)
-    if 'DpthRecProp' in hd.keys():
-        Graph.addMiscPropertySet('DepthRecCoefs')
-        for ip,P in enumerate(hd['DpthRecProp']):
-            #                       Dpth       DpthCdA   DpthCdAMG   DpthCdB   DpthCdBMG   DpthCaA   DpthCaAMG   DpthCaB   DpthCaBMG   DpthCp   DpthCpMG    DpthAxCd    DpthAxCdMG    DpthAxCa     DpthAxCaMG   DpthAxCp    DpthAxCpMG    DpthCb    DpthCbMG
-            prop= Property(ID=ip+1, Dpth=P[0], CdA=P[1], CdAMG=P[2], CdB=P[3], CdBMG=P[4], CaA=P[5], CaAMG=P[6], CaB=P[7], CaBMG=P[8], Cp=P[9], CpMG=P[10], AxCd=P[11], AxCdMG=P[12], AxCa=P[13], AxCaMg=P[14], AxCp=P[15], AxCpMG=P[16], Cb=P[17], CbMG=P[18])
-            Graph.addMiscProperty('DepthRecCoefs',prop)
-
-    #if 'MemberProp' in hd.keys():
-    #    # Member-based hydro coefficinet
-    #    Graph.addMiscPropertySet('MemberCoefs')
-    #    for ip,P in enumerate(hd['MemberProp']):
-    #        #                            MemberID     MemberCd1  MemberCd2  MemberCdMG1 MemberCdMG2 MemberCa1  MemberCa2  MemberCaMG1 MemberCaMG2  MemberCp1  MemberCp2  MemberCpMG1 MemberCpMG2   MemberAxCd1  MemberAxCd2  MemberAxCdMG1  MemberAxCdMG2  MemberAxCa1  MemberAxCa2  MemberAxCaMG1  MemberAxCaMG2  MemberAxCp1  MemberAxCp2   MemberAxCpMG1  MemberAxCpMG2
-    #        prop = ElemProperty(ID=ip+1, MemberID=P[0], Cd1=P[1], Cd2=P[2], CdMG1=P[3], CdMG2=P[4], Ca1=P[5], Ca2=P[6], CaMG1=P[7],     CaMG2=P[8], Cp1=P[9], Cp2=P[10], CpMG1=P[11], CpMG2=P[12], AxCd1=P[13], AxCd2=P[14], axCdMG1=P[15], axCdMG2=P[16], AxCa1=P[17], AxCa2=P[18], AxCaMG1=P[19], AxCaMG2=P[20], AxCp1=P[21], AxCp2=P[22],  axCpMG1=P[23], AxCpMG2=P[24])
-    #        Graph.addMiscProperty('MemberCoefs',prop)
-    if 'MemberCylProp' in hd.keys():
-        # Member-based hydro coefficinet
-        Graph.addMiscPropertySet('MemberCylCoefs')
-        for ip,P in enumerate(hd['MemberCylProp']):
-            #                            MemberID     MemberCd1  MemberCd2  MemberCdMG1 MemberCdMG2 MemberCa1  MemberCa2  MemberCaMG1 MemberCaMG2  MemberCp1  MemberCp2  MemberCpMG1  MemberCpMG2  MemberAxCd1  MemberAxCd2  MemberAxCdMG1  MemberAxCdMG2  MemberAxCa1  MemberAxCa2  MemberAxCaMG1  MemberAxCaMG2  MemberAxCp1  MemberAxCp2   MemberAxCpMG1  MemberAxCpMG2  MemberCb1  MemberCb2  MemberCbMG1  MemberCbMG2
-            prop = ElemProperty(ID=ip+1, MemberID=P[0], Cd1=P[1], Cd2=P[2], CdMG1=P[3], CdMG2=P[4], Ca1=P[5], Ca2=P[6], CaMG1=P[7],     CaMG2=P[8], Cp1=P[9], Cp2=P[10], CpMG1=P[11], CpMG2=P[12], AxCd1=P[13], AxCd2=P[14], axCdMG1=P[15], axCdMG2=P[16], AxCa1=P[17], AxCa2=P[18], AxCaMG1=P[19], AxCaMG2=P[20], AxCp1=P[21], AxCp2=P[22],  axCpMG1=P[23], AxCpMG2=P[24], Cb1=P[25], Cb2=P[26], CbMG1=P[27], CbMG2=P[28])
-            Graph.addMiscProperty('MemberCylCoefs',prop)
-    if 'MemberRecProp' in hd.keys():
-        # Member-based hydro coefficinet
-        Graph.addMiscPropertySet('MemberRecCoefs')
-        for ip,P in enumerate(hd['MemberRecProp']):
-            #                            MemberID     MemberCdA1 MemberCdA2 MemberCdAMG1 MemberCdAMG2  MemberCdB1  MemberCdB2 MemberCdBMG1 MemberCdBMG2 MemberCaA1 MemberCaA2  MemberCaAMG1   MemberCaAMG2  MemberCaB1  MemberCaB2  MemberCaBMG1  MemberCaBMG2  MemberCp1  MemberCp2  MemberCpMG1  MemberCpMG2  MemberAxCd1  MemberAxCd2  MemberAxCdMG1  MemberAxCdMG2  MemberAxCa1  MemberAxCa2  MemberAxCaMG1  MemberAxCaMG2  MemberAxCp1  MemberAxCp2  MemberAxCpMG1  MemberAxCpMG2  MemberCb1  MemberCb2  MemberCbMG1  MemberCbMG2
-            prop = ElemProperty(ID=ip+1, MemberID=P[1], CdA1=P[2], CdA2=P[3], CdAMG1=P[4], CdAMG2=P[5], CdB1=P[6], CdB2=P[7], CdBMG1=P[8], CdBMG2=P[9], CaA1=P[10], CaA2=P[11], CaAMG1=P[12], CaAMG2=P[13], CaB1=P[14], CaB2=P[15], CaBMG1=P[16], CaBMG2=P[17], Cp1=P[18], Cp2=P[19], CpMG1=P[20], CpMG2=P[21], AxCd1=P[22], AxCd2=P[23], AxCdMG1=P[24], AxCdMG2=P[25], AxCa1=P[26], AxCa2=P[27], AxCaMG1=P[28], AxCaMG2=P[29], AxCp1=P[30], AxCp2=P[31], AxCpMG1=P[32], AxCpMG2=P[33], Cb1=P[34], Cb2=P[35], CbMG1=P[36], CbMG2=P[37] ]
-            Graph.addMiscProperty('MemberRecCoefs',prop)
+    if 'DpthProp' in hd.keys():
+        Graph.addMiscPropertySet('DepthCoefs')
+        for ip,P in enumerate(hd['DpthProp']):
+            # Dpth      DpthCd   DpthCdMG   DpthCa   DpthCaMG       DpthCp   DpthCpMG   DpthAxCd   DpthAxCdMG   DpthAxCa   DpthAxCaMG   DpthAxCp   DpthAxCpMG
+            prop= Property(ID=ip+1, Dpth=P[0], Cd=P[1], CdMG=P[2], Ca=P[3], CaMG=P[4], Cp=P[5], CpMG=P[6], AxCd=P[7], AxCdMG=P[8], AxCa=P[9], AxCaMG=P[10], AxCp=P[11], AxCpMG=P[12])
+            Graph.addMiscProperty('DepthCoefs',prop)
+    if 'MemberProp' in hd.keys():
+        # Member-based hydro coefficient
+        Graph.addMiscPropertySet('MemberCoefs')
+        for ip,P in enumerate(hd['MemberProp']):
+            # MemberID    MemberCd1     MemberCd2    MemberCdMG1   MemberCdMG2    MemberCa1     MemberCa2    MemberCaMG1   MemberCaMG2    MemberCp1     MemberCp2    MemberCpMG1   MemberCpMG2   MemberAxCd1   MemberAxCd2  MemberAxCdMG1 MemberAxCdMG2  MemberAxCa1   MemberAxCa2  MemberAxCaMG1 MemberAxCaMG2  MemberAxCp1  MemberAxCp2   MemberAxCpMG1   MemberAxCpMG2
+            prop = ElemProperty(ID=ip+1, MemberID=P[0], Cd1=P[1], Cd2=P[2], CdMG1=P[3], CdMG2=P[4], Ca1=P[5], Ca2=P[6], CaMG1=P[7], CaMG2=P[8], Cp1=P[9], Cp2=P[10], CpMG1=P[11], CpMG2=P[12], AxCd1=P[14], AxCd2=P[15], axCdMG1=P[16], axCdMG2=P[17], AxCa1=P[18], AxCa2=P[19], AxCaMG1=P[20], AxCaMG2=P[21], AxCp1=P[22], AxCp2=P[23])
+            Graph.addMiscProperty('MemberCoefs',prop)
     # ---
     if 'FillGroups' in hd.keys():
         # Filled members

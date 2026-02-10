@@ -17,14 +17,13 @@ def main(test=False):
 
     FFfilepath = os.path.join(scriptDir, '../../../data/IEA15MW/FF.fstf')
 
-    # Plot Initial Setup
-    if not test:
-        plotFastFarmSetup(fstf, figsize=(10,3))
 
     # --- 0.2 Read and Modify an existing FAST.Farm file
     # In this section, we look at the keys available in a FAST.Farm file, we modify some keys (to fix the issue with the low-res domain), and write to a new file.
     fstf = FASTInputFile(FFfilepath)
+
     if not test:
+        plotFastFarmSetup(fstf, figsize=(10,3))
         print('Keys available in the input file: ', fstf.keys())
         # Let's look at the low resolution inputs:
         print('X0_Low:', fstf['X0_Low'])
@@ -70,6 +69,7 @@ def main(test=False):
 
 
 if __name__ == "__main__":
+    import matplotlib.pyplot as plt
     fstf = main()
     plt.show()
 
