@@ -40,6 +40,7 @@ setup(
         "chardet",
         "xarray",  # for netcdf files
         "pytest",
+        "dill",
     ],
     test_suite="pytest",
     tests_require=["pytest"],

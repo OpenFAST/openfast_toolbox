@@ -368,7 +368,8 @@ def writeBatch(batchfile, fastfiles, fastExe=None, nBatches=1, pause=False, flag
     - nBatches: split into nBatches files.
     - pause: insert a pause statement at the end so that batch file is not closed after execution
     - flags: flags (string) to be placed between the executable and the filename
-    - flags_after: flags (string) to be placed after the filename
+    - flags_after: flags to be placed after the filename (single string if the same for every file,
+                   or a list of strings if different for each file)
     - run_if_ext_missing: add a line in the batch file so that the command is only run if
                           the file `f.EXT` is missing, where .EXT is specified in run_if_ext_missing
                           If None, the command is always run
@@ -394,8 +395,11 @@ def writeBatch(batchfile, fastfiles, fastExe=None, nBatches=1, pause=False, flag
     fastExe_rel   = os.path.relpath(fastExe_abs, batchdir)
     if len(flags)>0:
         flags=' '+flags
-    if len(flags_after)>0:
-        flags_after=' '+flags_after
+    if isinstance(flags_after, str):
+        if len(flags_after)>0:
+            flags_after=' '+flags_after
+    elif isinstance(flags_after, list):
+        flags_after = [' '+f if len(f)>0 else f for f in flags_after]
 
     # Remove commandlines if outputs are already present
     if discard_if_ext_present:
@@ -414,10 +418,11 @@ def writeBatch(batchfile, fastfiles, fastExe=None, nBatches=1, pause=False, flag
                     f.write('@echo off\n')
             if preCommands is not None:
                 f.write(preCommands+'\n')
-            for ff in fastfiles:
+            for i, ff in enumerate(fastfiles):
                 ff_abs = os.path.abspath(ff)
                 ff_rel = os.path.relpath(ff_abs, batchdir)
-                cmd = fastExe_rel + flags + ' '+ ff_rel + flags_after
+                cmd = fastExe_rel + flags + ' '+ ff_rel
+                cmd += flags_after[i] if isinstance(flags_after, list) else flags_after
                 if stdOutToFile:
                     stdout = os.path.splitext(ff_rel)[0]+'.stdout'
                     cmd += ' > ' +stdout

@@ -353,7 +353,7 @@ def writeFastFarm(outputFile, templateFile, xWT, yWT, zWT, FFTS=None, OutListT1=
             if isinstance(FFTS[k],int):
                 fst[k] = FFTS[k] 
             else:
-                fst[k] = np.around(FFTS[k],3)
+                fst[k] = np.around(FFTS[k],5)
         fst['WrDisDT'] = FFTS['DT_Low']
 
     # --- Set turbine names, position, and box extent

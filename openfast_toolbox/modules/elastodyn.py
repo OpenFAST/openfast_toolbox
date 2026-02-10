@@ -108,8 +108,12 @@ PN  = [ DOF_R, DOF_P, DOF_Y, DOF_TFA1, DOF_TSS1, DOF_TFA2, DOF_TSS2, DOF_Yaw ]  
 def RotMat_AxisAngle(u,theta):
     """ Returns the rotation matrix for a rotation around an axis u, with an angle theta """
     R=np.zeros((3,3))
-    ux,uy,uz=u
+    u = np.asarray(u).ravel()  # Ensure 1D array
+    ux,uy,uz = u[0], u[1], u[2]
     c,s=np.cos(theta),np.sin(theta)
+    # Ensure scalar values to avoid numpy deprecation warnings
+    ux, uy, uz = float(ux), float(uy), float(uz)
+    c, s = float(c), float(s)
     R[0,0]=ux**2*(1-c)+c    ; R[0,1]=ux*uy*(1-c)-uz*s; R[0,2]=ux*uz*(1-c)+uy*s;
     R[1,0]=uy*ux*(1-c)+uz*s ; R[1,1]=uy**2*(1-c)+c   ; R[1,2]=uy*uz*(1-c)-ux*s
     R[2,0]=uz*ux*(1-c)-uy*s ; R[2,1]=uz*uy*(1-c)+ux*s; R[2,2]=uz**2*(1-c)+c;
