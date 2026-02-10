@@ -38,6 +38,7 @@ def safe_cd(newdir):
         os.chdir(prevdir)
 
 def check_files_exist(*args):
+    # TODO: this is only called during the turbsim example to check if files exist. consider deleting it
     import os
     b = []
     if len(args)>1:
@@ -165,11 +166,11 @@ def load(fullpath, dill_filename='ffcase_obj.dill'):
 class FFCaseCreation:
 
     def __init__(self,
-                 path=None,
-                 wts=None,
+                 path,
+                 wts,
                  tmax=None,
                  zbot=1,
-                 vhub=None,
+                 vhub=[8],
                  shear=None,
                  TIvalue=None,
                  inflow_deg=None,
@@ -341,16 +342,14 @@ class FFCaseCreation:
         if self.verbose>0: print(f'Setting rotor parameters... Done.')
                                         
                                         
-        # 
-        # TODO TODO TODO
-        # Creating Cases and Conditions should have its own function interface so the user can call
+        # TODO: Creating Cases and Conditions should have its own function interface so the user can call
         if self.verbose>0: print(f'Creating auxiliary arrays for all conditions and cases...', end='\r')
         self.createAuxArrays()          
         if self.verbose>0: print(f'Creating auxiliary arrays for all conditions and cases... Done.')
                                         
 
         if self.path is not None:
-            # TODO TODO, this should only be done when user ask for input file creation
+            # TODO this should only be done when user ask for input file creation
             if self.verbose>0: print(f'Creating directory structure and copying files...', end='\r')
             self._create_dir_structure()
             if self.verbose>0: print(f'Creating directory structure and copying files... Done.')
@@ -588,10 +587,10 @@ class FFCaseCreation:
         # --- Default arguments
         if self.vhub is None:
             self.vhub = [8]
-        if self.inflow_deg is None:
-            self.inflow_deg = [0]*len(self.vhub)
         if self.TIvalue is None:
             self.TIvalue = [10]*len(self.vhub)
+        if self.inflow_deg is None:
+            self.inflow_deg = [0]*len(self.vhub)
         if self.shear is None:
             self.shear = [0]*len(self.vhub)
         if self.tmax is None:
@@ -601,7 +600,6 @@ class FFCaseCreation:
         if self.skipchecks:
             WARN('Skipping checks on TurbSim files and symlinks. This should only be used for testing purposes.')
 
-    
         # Check the wind turbine dict
         if not isinstance(self.wts,dict):
             raise ValueError (f'`wts` needs to be a dictionary with the following entries for each turbine: x, y, ',
@@ -792,7 +790,7 @@ class FFCaseCreation:
         from openfast_toolbox.fastfarm.AMRWindSimulation import AMRWindSimulation
 
         # Create values and keep variable names consistent across interfaces
-        dummy_dt = 0.1 # TODO TODO TODO determine it based on fmax
+        dummy_dt = 0.1 # TODO determine it based on fmax
         dummy_ds = 1
         prob_lo = (-10005, -10005, 0)     # The 5 m offset is such that we
         prob_hi = ( 10005,  10005, 1000)  # have a cell center at (0,0)
@@ -816,12 +814,12 @@ class FFCaseCreation:
         print_bold(f'       High-resolution: ds_high: {amr.ds_high_les} m, dt_high: {amr.dt_high_les} s')
         print_bold(f'       Low-resolution:  ds_low : {amr.ds_low_les} m, dt_low: {amr.dt_low_les} s')
         INFO (f'If the above values are too fine or manual tuning is warranted, specify them manually.')
-        print(f'       To do that, specify the values directly to `FFCaseCreation`, e.g.:')
-        print(f'       ', end='')
-        print(f'`dt_high = {2*amr.dt_high_les}`; ', end='')
-        print(f'`ds_high = {2*amr.ds_high_les}`; ', end='')
-        print(f'`dt_low  = {2*amr.dt_low_les}`; ', end='')
-        print(f'`ds_low  = {2*amr.ds_low_les}`; ')
+        INFO (f'       To do that, specify the values directly to `FFCaseCreation`, e.g.:')
+        INFO(f'       ', end='')
+        INFO(f'`dt_high = {2*amr.dt_high_les}`; ', end='')
+        INFO(f'`ds_high = {2*amr.ds_high_les}`; ', end='')
+        INFO(f'`dt_low  = {2*amr.dt_low_les}`; ', end='')
+        INFO(f'`ds_low  = {2*amr.ds_low_les}`; ')
 
         self.dt_high = amr.dt_high_les
         self.ds_high = amr.ds_high_les
@@ -1112,7 +1110,7 @@ class FFCaseCreation:
                         if 'Skew_Mod' in self.AeroDynFile.keys():
                             self.AeroDynFile['Skew_Mod'] = 1
                             self.AeroDynFile['SkewMomCorr'] = True
-                        #self.AeroDynFile['BEM_Mod'] = 2 # TODO let the user decide. Commented out by Emmanuel
+                        self.AeroDynFile['BEM_Mod'] = 2 
                         self.AeroDynFile['IntegrationMethod'] = 4
                         # Adjust the Airfoil path to point to the templatePath (1:-1 to remove quotes)
                         self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, "Airfoils", i[1:-1].split("Airfoils/", 1)[-1])}"' 
@@ -1418,7 +1416,7 @@ class FFCaseCreation:
             verbose=self.verbose
 
         # Set default values
-        #TODO TODO TODO Replace this by a dictionary so that we can for loop over it more easily
+        #TODO Replace this by a dictionary so that we can for loop over it more easily
         self.EDfilename      = "unused";  self.EDfilepath      = "unused"
         self.SEDfilename     = "unused";  self.SEDfilepath     = "unused"
         self.HDfilename      = "unused";  self.HDfilepath      = "unused"
@@ -1440,8 +1438,8 @@ class FFCaseCreation:
         self.libdisconfilepath       = "unused"
         self.coeffTablefilename      = "unused"
         self.hydroDatapath           = "unused"
-        self.turbsimLowfilepath      = "unused"  # TODO Convention unclear
-        self.turbsimHighfilepath     = "unused"  # TODO Convention unclear
+        self.turbsimLowfilepath      = "unused"
+        self.turbsimHighfilepath     = "unused"
         self.FFfilename              = "unused"; self.FFfilepath = "unused"
 
 
@@ -1460,7 +1458,7 @@ class FFCaseCreation:
         templateFiles = templateFiles.copy() # we create a copy to avoid changing the user input
 
         # Join templatePath to most templateFiles 
-        # TODO TODO, not all templateFiles have the same convention, this needs to be changed.
+        # TODO not all templateFiles have the same convention, this needs to be changed.
         if templatePath is not None:
             if not os.path.isdir(templatePath):
                     if os.path.isabs(templatePath):
@@ -1468,15 +1466,17 @@ class FFCaseCreation:
                     else: 
                         raise ValueError(f'Relative template path {templatePath} does not seem to exist. Full path is: {os.path.abspath(templatePath)}.')
             for key, value in templateFiles.items():
-                if key in ['turbsimLowfilepath', 'turbsimHighfilepath', 'libdisconfilepath']:
-                    # We skip those keys because there convention is not clear
-                    WARN(f'Not adding templatePath to key `{key}`.\nImplementation and behavrio might change in a future release.')
-                    #INFO(f'Template {key:23s}={templateFiles[key]}')
-                    continue
                 if value == 'unused' or value is None:
                     continue
-                templateFiles[key] = os.path.join(templatePath, f"{value}").replace('\\','/')
-                #INFO(f'Template {key:23s}={templateFiles[key]}')
+                if key in ['turbsimLowfilepath', 'turbsimHighfilepath', 'libdisconfilepath']:
+                    # We skip those keys because their convention is not clear
+                    #WARN(f'Not adding templatePath to key `{key}`.\nImplementation and behavior might change in a future release.')
+                    #INFO(f'Template {key:24s}={templateFiles[key]}')
+                    templateFiles[key] = f"{value}".replace('\\','/')
+                    #continue
+                else:
+                    templateFiles[key] = os.path.join(templatePath, f"{value}").replace('\\','/')
+                INFO(f'Template {key:24s}={templateFiles[key]}')
 
         # --- The user provided a FSTF file from which we override the templateFiles
         if templateFSTF is not None:
@@ -1508,11 +1508,10 @@ class FFCaseCreation:
                         if '.T.' in filebase:
                             filebase = fread[key_deck].rsplit('.T.', 1)[0]+'.T'
                         templateFiles[key_tpl] = filebase.replace('\\','/')
-                        #INFO(f'Template {key_tpl:23s}={filebase}')
+                        #INFO(f'Template {key_tpl:24s}={filebase}')
 
-        # TODO In theory, we should need the templatePath beyond this point.
         templatePath = os.path.dirname(templateFiles['FFfilename'])
-        self.templatePathabs = os.path.abspath(templatePath).replace('\\','/') # TODO, in theory, we shouldn't need to store that.
+        self.templatePathabs = os.path.abspath(templatePath).replace('\\','/')
 
         # --------------------------------------------------------------------------------
         # NOTE: BEYOND THIS POINT THE VALUES OF TEMPLATE FILES ARE EITHER: 
@@ -1725,14 +1724,14 @@ class FFCaseCreation:
                 #self._create_copy_libdiscon()
                 self.hasController = True
 
-            # --- TODO TODO TODO not clean convention
+            # --- TODO not clean convention
             elif key == 'turbsimLowfilepath':
                 if not value.lower().endswith('.inp'):
                     raise ValueError(f'TurbSim file input for low-res box should end in ".inp".')
                 self.turbsimLowfilepath = value
                 checkIfExists(self.turbsimLowfilepath)
 
-            # --- TODO TODO TODO not clean convention
+            # --- TODO not clean convention
             elif key == 'turbsimHighfilepath':
                 if not value.lower().endswith('.inp'):
                     raise ValueError(f'TurbSim file input for high-res box should end in ".inp".')
@@ -2411,7 +2410,7 @@ class FFCaseCreation:
             self.check_turbsim_success(self.low_res_bts, self.low_res_log)
 
         # Create symbolic links for the low-res boxes
-        # TODO TODO TODO Simply store address of files
+        # TODO Simply store address of files
         self.TS_low_createSymlinks()
 
         if not self.skipchecks:
@@ -2644,12 +2643,7 @@ class FFCaseCreation:
                     for seed in range(self.nSeeds):
                         src = os.path.join(self.getHRTurbSimPath(cond, src_case, seed), f'HighT{t+1}.bts')
                         dst = os.path.join(self.getHRTurbSimPath(cond, case    , seed), f'HighT{t+1}.bts')
-                        #print(f'src is {src}')
-                        #print(f'dst is {dst}')
-                        #src = os.path.join('..', '..', '..', '..', self.condDirList[cond], self.caseDirList[src_case], f'Seed_{seed}', 'TurbSim', f'HighT{t+1}.bts')
-                        #print('Emmanuel Says: TODO Check the line below')
                         src = os.path.relpath(src, os.path.dirname(dst))
-                        #print(f'rel src{src}\n')
                         self._symlink(src, dst)
 
 
@@ -2925,12 +2919,11 @@ class FFCaseCreation:
                         d = None
                     else:
                         # Open TurbSim outputs for the Low box and one High box (they are all of the same size)
-                        lowbts = TurbSimFile(os.path.join(seedPath,'TurbSim', 'Low.bts'))   # TODO TODO TODO Get Path
+                        lowbts = TurbSimFile(os.path.join(seedPath,'TurbSim', 'Low.bts'))   # TODO Get Path
                         highbts  = TurbSimFile(os.path.join(seedPath,'TurbSim', f'HighT1.bts'))
             
                         # Get dictionary with all the D{X,Y,Z,t}, L{X,Y,Z,t}, N{X,Y,Z,t}, {X,Y,Z}0
                         d = self._getBoxesParamsForFF(lowbts, highbts, self.dt_low, D_, HubHt_, xWT, yt)
-                        self.dtemp = d #todo remove
         
                     # Write the file
                     if self.flat:
@@ -3399,7 +3392,7 @@ class FFCaseCreation:
                             [dst.y.values-(dst.D.values/2)*cosd(yaw+phi), dst.y.values+(dst.D.values/2)*cosd(yaw+phi)], c=color, alpha=alphas[j])
 
 
-                # TODO TODO Plot high-res grid
+                # TODO Plot high-res grid
                 #x_high = X0_High[wt] + np.arange(nX_High+1)*dX_High
                 #y_high = Y0_High[wt] + np.arange(nY_High+1)*dY_High
                 #z_high = Z0_High[wt] + np.arange(nZ_High+1)*dZ_High
@@ -3447,7 +3440,6 @@ class FFCaseCreation:
 
 
 if __name__ == '__main__':
-    from welib.essentials import *
     # -----------------------------------------------------------------------------
     # --------------------------- Farm parameters ---------------------------------
     # -----------------------------------------------------------------------------
