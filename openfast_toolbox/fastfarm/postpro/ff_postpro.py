@@ -13,6 +13,19 @@ def _get_fstf_filename(caseobj):
     else:
         return 'FFarm_mod'
 
+def _getCasePath(caseobj, cond, case):
+    try:
+        return caseobj.getCasePath(cond, case)
+    except:
+        print('>>> get CasePath failed')
+        return os.path.join(caseobj.path, caseobj.condDirList[cond], caseobj.caseDirList[case]) 
+
+def _getCaseSeedPath(caseobj, cond, case, seed):
+    try:
+        return caseobj.getCaseSeedPath(cond, case, seed)
+    except:
+        print('>>> get CaseSeedPath failed')
+        return os.path.join(caseobj.path, caseobj.condDirList[cond], caseobj.caseDirList[case], f'Seed_{seed}')
 
 def readTurbineOutputPar(caseobj, dt_openfast, dt_processing, saveOutput=True, output='zarr',
                          iCondition=0, fCondition=-1, iCase=0, fCase=-1, iSeed=0, fSeed=-1, iTurbine=0, fTurbine=-1,
@@ -190,8 +203,12 @@ def readTurbineOutput(caseobj, dt_openfast, dt_processing=1, saveOutput=True, ou
     # Read or process turbine output
     if os.path.isdir(outputzarr) or os.path.isfile(outputnc):
         # Data already processed. Reading output
-        if output == 'zarr':  turbs = xr.open_zarr(outputzarr) 
-        elif output == 'nc':  turbs = xr.open_dataset(outputnc)
+        if output == 'zarr': 
+            print(f'Output file {outputzarr} exists. Loading it.')
+            turbs = xr.open_zarr(outputzarr) 
+        elif output == 'nc': 
+            print(f'Output file {outputnc} exists. Loading it.')
+            turbs = xr.open_dataset(outputnc)
     else: 
         print(f'{outfilename}.{output} does not exist. Reading output data...')
         # Processed data not saved. Reading it
@@ -206,6 +223,7 @@ def readTurbineOutput(caseobj, dt_openfast, dt_processing=1, saveOutput=True, ou
                     turbs_t=[]
                     for t in np.arange(iTurbine, fTurbine, 1):
                         print(f'Processing Condition {cond}, Case {case}, Seed {seed}, turbine {t+1}')
+
                         ff_file = os.path.join(caseobj.path, caseobj.condDirList[cond], caseobj.caseDirList[case], f'Seed_{seed}', f'{_get_fstf_filename(caseobj)}.T{t+1}')
                         if os.path.isfile(ff_file+'.outb'):
                             ff_file = ff_file + '.outb'
@@ -213,6 +231,7 @@ def readTurbineOutput(caseobj, dt_openfast, dt_processing=1, saveOutput=True, ou
                             ff_file = ff_file + '.out'
                         else:
                             raise ValueError(f'ERROR: neither output file {ff_file}.out[b] exists. ')
+                            
                         df   = FASTOutputFile(ff_file).toDataFrame()
                         # Won't be able to send to xarray if columns are non-unique
                         if not df.columns.is_unique:
@@ -471,7 +490,7 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
                 for case in np.arange(iCase, fCase, 1):
                     Slices_seed = []
                     for seed in np.arange(iSeed, fSeed, 1):
-                        seedPath = os.path.join(caseobj.path, caseobj.condDirList[cond], caseobj.caseDirList[case], f'Seed_{seed}')
+                        seedPath = _getCaseSeedPath(caseobj, cond, case, seed)
 
                         # Read FAST.Farm input to determine outputs
                         ff_file = FASTInputFile(os.path.join(seedPath,f'{_get_fstf_filename(caseobj)}.fstf'))

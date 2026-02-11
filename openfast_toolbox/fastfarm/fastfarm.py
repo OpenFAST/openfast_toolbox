@@ -1,11 +1,17 @@
+import matplotlib.pyplot as plt
 import os
 import glob
 import numpy as np
 import pandas as pd
+
 from openfast_toolbox.io.fast_input_file import FASTInputFile
 from openfast_toolbox.io.fast_output_file import FASTOutputFile
+from openfast_toolbox.io.fast_input_deck import FASTInputDeck
 from openfast_toolbox.io.turbsim_file import TurbSimFile
 import openfast_toolbox.postpro as fastlib
+from openfast_toolbox.tools.strings import INFO, FAIL, OK, WARN, print_bold
+from openfast_toolbox.tools.grids import BoundingBox, RegularGrid
+from openfast_toolbox.modules.elastodyn import rotor_disk_points
 
 # --------------------------------------------------------------------------------}
 # --- Small helper functions
@@ -347,7 +353,7 @@ def writeFastFarm(outputFile, templateFile, xWT, yWT, zWT, FFTS=None, OutListT1=
             if isinstance(FFTS[k],int):
                 fst[k] = FFTS[k] 
             else:
-                fst[k] = np.around(FFTS[k],3)
+                fst[k] = np.around(FFTS[k],5)
         fst['WrDisDT'] = FFTS['DT_Low']
 
     # --- Set turbine names, position, and box extent
@@ -400,117 +406,222 @@ def setFastFarmOutputs(fastFarmFile, OutListT1):
     fst['OutList']=OutList
     fst.write(fastFarmFile)
 
+def defaultOutRadii(dr, nr, R):
+    """
+    Finds OutRadii with good resolution at root and tip
+     - dr = NumRadii 
+    OUTPUTS:
+     - OutRadii
+    """
+    r_plane = dr * np.arange(nr) # TODO, check
+    R  = R*1.1 # Account for some expansion
+    R0 = 0; 
+    R1 = R*0.25
+    R2 = R*0.75
+    R3 = R*1.5
+    R4 = min(2.5*R, r_plane[-1])
+    r1 = np.linspace(R0    , R1, 4)
+    r2 = np.linspace(r1[-1], R2, 6) 
+    r3 = np.linspace(r2[-1], R3, 7)
+    r4 = np.linspace(r3[-1], R4, 4) 
+    r_out = np.unique(np.concatenate((r1,r2,r3,r4)))
+    ir_out_all = np.unique(np.round(r_out/dr).astype(int))
+    if len(ir_out_all)<20:
+        r1 = np.linspace(R0    , R1, 5)
+        r2 = np.linspace(r1[-1], R2, 7) 
+        r3 = np.linspace(r2[-1], R3, 8)
+        r4 = np.linspace(r3[-1], R4, 5) 
+        r_out = np.unique(np.concatenate((r1,r2,r3,r4)))
+        ir_out_all = np.unique(np.round(r_out/dr).astype(int))
 
-def plotFastFarmSetup(fastFarmFile, grid=True, fig=None, D=None, plane='XY', hubHeight=None, showLegend=True):
-    """ """
-    import matplotlib.pyplot as plt
+    ir_out = ir_out_all[:20]
+    ir_out[-1] = ir_out_all[-1]
+    r_out = ir_out * dr
+    ir_out +=1 # Fortran is 1 based
+    return list(ir_out), r_out 
 
-    def col(i): 
-        Colrs=plt.rcParams['axes.prop_cycle'].by_key()['color']
-        return Colrs[ np.mod(i,len(Colrs)) ]
-    def boundingBox(x, y):
-        """ return x and y coordinates to form a box marked by the min and max of x and y"""
-        x_bound = [x[0],x[-1],x[-1],x[0] ,x[0]]
-        y_bound = [y[0],y[0] ,y[-1],y[-1],y[0]]
-        return x_bound, y_bound
+def printWT(fstf):
+    """ Print the table of wind turbines within the FAST.Farm input file"""
+    from openfast_toolbox.tools.strings import prettyMat
+    print('Col:      X         Y         Z       FST   X0_High   Y0_High   Z0_High   dX_High   dY_High   dZ_High')
+    print('Id :      0'+''.join([f"{x:10}" for x in range(1,10)]))
+    WT = fstf['WindTurbines'].copy()
+    for iwt in range(len(WT)):
+        s= WT[iwt,3].strip('"')
+        s='/long/path/to/WT.fst'
+        if len(s)>10:
+            s = s[:4]+'[...]' 
+        s='{:9s}'.format(s)
+        WT[iwt,3]= s
+        WT[iwt,3]= np.nan
+    print(prettyMat(WT, sindent=' ', center0=False, nchar=9, digits=4))
+    #print('WindTurbine Array:\n', fstf['WindTurbines'])
 
 
-    # --- Read FAST.Farm input file
-    fst=FASTInputFile(fastFarmFile)
+def col(i): 
+    """ Colors"""
+    Colrs=plt.rcParams['axes.prop_cycle'].by_key()['color']
+    return Colrs[ np.mod(i,len(Colrs)) ]
 
+
+
+def plotFastFarmWTs(wts, fig=None, figsize=(13,5)):
     if fig is None:
-        fig = plt.figure(figsize=(13.5,8))
+        fig = plt.figure(figsize=figsize)
         ax  = fig.add_subplot(111,aspect="equal")
 
-    WT=fst['WindTurbines']
-    xWT = WT[:,0].astype(float)
-    yWT = WT[:,1].astype(float)
-    zWT = yWT*0 
-    if hubHeight is not None:
-        zWT += hubHeight
+    Dmax = -100
+    for iwt, (k,wt) in enumerate(wts.items()):
+        name = wt['name']  if 'name' in wt else "WT{}".format(iwt+1)
+        ax.plot(wt['x'], wt['y'], 'o', ms=8, mew=2, c=col(iwt), label=name)
+        if 'D' in wt:
+            Dmax = max(Dmax, wt['D'])
+            ax.plot([wt['x'], wt['x']], [wt['y']-wt['D']/2,wt['y']+wt['D']/2], '-', lw=2, c=col(iwt))
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
 
-    if plane == 'XY':
-        pass
-    elif plane == 'XZ':
-        yWT = zWT
-    elif plane == 'YZ':
-        xWT = yWT
-        yWT = zWT
-    else:
-        raise Exception("Plane should be 'XY' 'XZ' or 'YZ'")
-
-    if fst['Mod_AmbWind'] == 2:
-        x_low = fst['X0_Low'] + np.arange(fst['NX_Low']+1)*fst['DX_Low']
-        y_low = fst['Y0_Low'] + np.arange(fst['NY_Low']+1)*fst['DY_Low']
-        z_low = fst['Z0_Low'] + np.arange(fst['NZ_Low']+1)*fst['DZ_Low']
-        if plane == 'XZ':
-            y_low = z_low
-        elif plane == 'YZ':
-            x_low = y_low
-            y_low = z_low
-        # Plot low-res box
-        x_bound_low, y_bound_low =  boundingBox(x_low, y_low)
-        ax.plot(x_bound_low, y_bound_low ,'--k',lw=2,label='Low-res')
-        # Plot Low res grid lines
-        if grid:
-            ax.vlines(x_low, ymin=y_low[0], ymax=y_low[-1], ls='-', lw=0.3, color=(0.3,0.3,0.3))
-            ax.hlines(y_low, xmin=x_low[0], xmax=x_low[-1], ls='-', lw=0.3, color=(0.3,0.3,0.3))
-
-        X0_High = WT[:,4].astype(float)
-        Y0_High = WT[:,5].astype(float)
-        Z0_High = WT[:,6].astype(float)
-        dX_High = WT[:,7].astype(float)[0]
-        dY_High = WT[:,8].astype(float)[0]
-        dZ_High = WT[:,9].astype(float)[0]
-        nX_High = fst['NX_High']
-        nY_High = fst['NY_High']
-        nZ_High = fst['NZ_High']
-
-        # high-res boxes
-        for wt in range(len(xWT)):
-            x_high = X0_High[wt] + np.arange(nX_High+1)*dX_High
-            y_high = Y0_High[wt] + np.arange(nY_High+1)*dY_High
-            z_high = Z0_High[wt] + np.arange(nZ_High+1)*dZ_High
-            if plane == 'XZ':
-                y_high = z_high
-            elif plane == 'YZ':
-                x_high = y_high
-                y_high = z_high
-
-            x_bound_high, y_bound_high =  boundingBox(x_high, y_high)
-            ax.plot(x_bound_high, y_bound_high, '-', lw=2, c=col(wt))
-            # Plot High res grid lines
-            if grid:
-                ax.vlines(x_high, ymin=y_high[0], ymax=y_high[-1], ls='--', lw=0.4, color=col(wt))
-                ax.hlines(y_high, xmin=x_high[0], xmax=x_high[-1], ls='--', lw=0.4, color=col(wt))
-
-    # Plot turbines
-    for wt in range(len(xWT)):
-        ax.plot(xWT[wt], yWT[wt], 'x', ms=8, mew=2, c=col(wt),label="WT{}".format(wt+1))
-        if plane=='XY' and D is not None:
-            ax.plot([xWT[wt],xWT[wt]], [yWT[wt]-D/2,yWT[wt]+D/2], '-', lw=2, c=col(wt))
-        elif plane=='XZ' and D is not None and hubHeight is not None:
-            ax.plot([xWT[wt],xWT[wt]], [yWT[wt]-D/2,yWT[wt]+D/2], '-', lw=2, c=col(wt))
-        elif plane=='YZ' and D is not None and hubHeight is not None:
-            theta = np.linspace(0,2*np.pi, 40)
-            x = xWT[wt] + D/2*np.cos(theta)
-            y = yWT[wt] + D/2*np.sin(theta)
-            ax.plot(x, y, '-', lw=2, c=col(wt))
-
-    #plt.legend(bbox_to_anchor=(1.05,1.015),frameon=False)
-    if showLegend:
-        ax.legend()
-    if plane=='XY':
-        ax.set_xlabel("x [m]")
-        ax.set_ylabel("y [m]")
-    elif plane=='XZ':
-        ax.set_xlabel("x [m]")
-        ax.set_ylabel("z [m]")
-    elif plane=='YZ':
-        ax.set_xlabel("y [m]")
-        ax.set_ylabel("z [m]")
+    D = np.abs(Dmax)
+    ax.set_xlim(xmin - D, xmax + D)
+    ax.set_ylim(ymin - D, ymax + D)
+    ax.legend()
+    ax.grid(ls=':', lw=0.5)
+    ax.set_xlabel("x [m]")
+    ax.set_ylabel("y [m]")
     fig.tight_layout
-    # fig.savefig('FFarmLayout.pdf',bbox_to_inches='tight',dpi=500)
+
+    return fig
+
+def plotFastFarmSetup(ff, grid=True, fig=None, D=None, plane=None, hubHeight=None, showLegend=True, figsize=(13.5,8)):
+    """ 
+    Plot a FAST.Farm setup.
+    INPUTS:
+     - ff: may have different type:
+       - a string indicating the fastFarm input file
+       - a FASTInputFile object, containing a FASTFarm file
+       - a dict of wts
+       - an object of FASTFarmCaseCreation
+     - plane: if None, plots a figure in all three planes, otherwise plane in ['XY','YZ','XY']
+    """
+    from openfast_toolbox.fastfarm.FASTFarmCaseCreation import FFCaseCreation
+
+    # --- accept differnt kind of inputs
+    if isinstance(ff, str):
+        # --- Read FAST.Farm input file
+        fst=FASTInputFile(ff)
+    elif isinstance(ff, FASTInputFile):
+        fst = ff
+    elif isinstance(ff, FFCaseCreation):
+        ffcase = fastfarm_input
+        return 
+    elif isinstance(ff, dict):
+        if 'x' in ff[list(ff.keys())[0]].keys():
+            return plotFastFarmWTs(ff, figsize=figsize)
+    else:
+        raise NotImplementedError('Unsopported input type for argument ff')
+
+
+    parentDir = os.path.dirname(fst.filename)
+
+
+    # --- Getting geometry
+    WT = fst['WindTurbines']
+
+    # Creating low and high res grid objects
+    if fst['Mod_AmbWind'] in [2, 3]:
+        x_low = fst['X0_Low'] + np.arange(fst['NX_Low'])*fst['DX_Low']
+        y_low = fst['Y0_Low'] + np.arange(fst['NY_Low'])*fst['DY_Low']
+        z_low = fst['Z0_Low'] + np.arange(fst['NZ_Low'])*fst['DZ_Low']
+        low = RegularGrid(x0=fst['X0_Low'], nx=fst['NX_Low'], dx=fst['DX_Low'],
+                          y0=fst['Y0_Low'], ny=fst['NY_Low'], dy=fst['DY_Low'],
+                          z0=fst['Z0_Low'], nz=fst['NZ_Low'], dz=fst['DZ_Low'])
+        X0_DX = WT[:,4:].astype(float)
+        high = []
+        for iwt in range(len(WT)):
+            high.append(RegularGrid(x0=X0_DX[iwt,0], nx=fst['NX_High'], dx=X0_DX[iwt,3],
+                                    y0=X0_DX[iwt,1], ny=fst['NY_High'], dy=X0_DX[iwt,4],
+                                    z0=X0_DX[iwt,2], nz=fst['NZ_High'], dz=X0_DX[iwt,5]))
+            if not low.contains_grid(high[iwt]):
+                FAIL(f'plotFastFarmSetup: Bounding box of high-res grid for turbine {iwt+1} not fully contained in low-res grid.')
+
+    # Getting turbine locations and disk points
+    disk_points = [None]*len(WT)
+    pWT         = np.zeros((len(WT), 3)) 
+    pHub        = np.zeros((len(WT), 3)) 
+    for iwt in range(len(WT)):
+        pWT[iwt] = [float(WT[iwt,0]), float(WT[iwt,1]), 0 ] # Turbine coordinates
+
+        # --- See if we can get more information from the turbine
+        fstFile = os.path.join(parentDir, WT[iwt,3].strip('"'))
+        if not os.path.exists(fstFile):
+            WARN('Unable to read OpenFAST file {fstFile}, drawing will be approximate.')
+        try:
+            # Get dimensions and disk points from ElastoDyn 
+            dck = FASTInputDeck(fstFile, readlist=['ED'])
+            ED = dck.fst_vt['ElastoDyn']
+            pHub[iwt], disk_points[iwt] = rotor_disk_points(ED, nP=30, origin=pWT[iwt])
+            bbTurb = BoundingBox(disk_points[iwt][0,:], disk_points[iwt][1,:], disk_points[iwt][2,:])
+            if not high[iwt].contains_bb(bbTurb):
+                FAIL(f'plotFastFarmSetup: Bounding box of rotor for turbine {iwt+1} not fully contained in high-res grid')
+        except:
+            WARN('Unable to read ElastoDyn file, disk points will be approximate.')
+        if disk_points[iwt] is None:
+            if D is None and hubHeight is None:
+                WARN('hubHeight and D not provided, unable to draw rotor disk points')
+                D = np.nan
+                hubHeight = 0
+            elif D is not None and hubHeight is None:
+                WARN('hubHeight is unknown, Assuming hubHeight=1.3 D.')
+                hubHeight=1.3*D
+            elif D is None and hubHeight is not None:
+                WARN('D is unknown, assuming D=0.7*hubHeight.')
+                D=0.7*hubHeight
+            theta = np.linspace(0,2*np.pi, 40)
+            pHub[iwt] = pWT[iwt] 
+            pHub[iwt][2] += hubHeight
+            y = pHub[iwt][1] + D/2*np.cos(theta)
+            z = pHub[iwt][2] + D/2*np.sin(theta)
+            x = pHub[iwt][0] + y*0
+            disk_points[iwt]=np.vstack([x,y,z])
+            WARN('hubHeight is unknown, WT z position will be approximate.')
+
+    # --- Plots
+    if plane is None:
+        planes = ['XY', 'XZ', 'YZ'] 
+    else:
+        planes = [plane]
+
+    labels = ["x [m]", "y [m]", "z [m]"]
+    plane2I= {'XY':(0,1), 'YZ':(1,2), 'XZ':(0,2)}
+
+    for plane in planes:
+        iX, iY = plane2I[plane]
+
+        fig = plt.figure(figsize=figsize)
+        ax  = fig.add_subplot(111,aspect="equal")
+
+        # --- Plot Low and High res
+        if fst['Mod_AmbWind'] in [2, 3]:
+            # Plot low-res box
+            optsBB = dict(ls='--', lw=2, color='k', label='Low-res')
+            optsGd = dict(ls='-', lw=0.3, color=(0.3,0.3,0.3))
+            low.plot(ax, plane=plane, grid=grid, optsBB=optsBB, optsGd=optsGd)
+            for iwt in range(len(WT)):
+                # high-res boxes
+                optsBB = dict(ls='-',  lw=2  , color=col(iwt))
+                optsGd = dict(ls='--', lw=0.4, color=col(iwt))
+                high[iwt].plot(ax, plane=plane, grid=grid, optsBB=optsBB, optsGd=optsGd)
+        # --- Plot Turbine location and disc area 
+        for iwt in range(len(WT)):
+            ax.plot(pWT[iwt][iX], pWT[iwt][iY], 'x', ms=8, mew=2, c=col(iwt),label="WT{}".format(iwt+1))
+            ax.plot(pHub[iwt][iX], pHub[iwt][iY], 'o', ms=8, mew=2, c=col(iwt))
+            if disk_points[iwt] is not None:
+                ax.fill(disk_points[iwt][iX, :], disk_points[iwt][iY, :], facecolor=col(iwt), alpha=0.3, edgecolor=col(iwt), linewidth=2)
+                ax.plot(disk_points[iwt][iX, :], disk_points[iwt][iY, :], '-', c=col(iwt), linewidth=2)
+            if showLegend:
+                ax.legend()
+        ax.set_xlabel(labels[iX])
+        ax.set_ylabel(labels[iY])
+        fig.tight_layout
 
     return fig
 
@@ -654,3 +765,35 @@ def spanwisePostProFF(fastfarm_input,avgMethod='constantwindow',avgParam=30,D=1,
         dfDiam['i/n_[-]'] = np.arange(nDMax)/nDMax
     return dfRad, dfRadialTime, dfDiam
 
+if __name__ == '__main__':
+    import numpy as np
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+
+    #plotFastFarmSetup('../../template/FF.fstf')
+
+
+#     # --- Test ---
+#     # some arbitrary cloud of points
+#     np.random.seed(0)
+#     x = np.random.randn(30)
+#     y = np.random.randn(30)
+#     z = np.random.randn(30)
+# 
+#     # get bounding box line coords
+#     points = boundingBox_points_3D(x, y, z)
+# 
+#     # plot
+#     fig = plt.figure()
+#     ax = fig.add_subplot(111, projection='3d')
+# 
+#     # scatter points
+#     ax.scatter(x, y, z, c='b', marker='o')
+# 
+#     # bounding box edges
+#     ax.plot(points[:,0], points[:,1], points[:,2], 'r-', lw=2)
+# 
+#     ax.set_xlabel('X')
+#     ax.set_ylabel('Y')
+#     ax.set_zlabel('Z')
+#     plt.show()

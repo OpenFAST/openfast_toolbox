@@ -1,9 +1,11 @@
 # --- For cmd.py
 import os
+import sys
 import subprocess
 import multiprocessing
 
 import collections
+from contextlib import contextmanager
 import glob
 import pandas as pd
 import numpy as np
@@ -14,8 +16,18 @@ import re
 # --- Fast libraries
 from openfast_toolbox.io.fast_input_file import FASTInputFile
 from openfast_toolbox.io.fast_output_file import FASTOutputFile
+from openfast_toolbox.tools.strings import FAIL, OK
 
 FAST_EXE='openfast'
+
+@contextmanager
+def safe_cd(newdir):
+    prevdir = os.getcwd()
+    try:
+        os.chdir(newdir)
+        yield
+    finally:
+        os.chdir(prevdir)
 
 # --------------------------------------------------------------------------------}
 # --- Tools for executing FAST
@@ -72,10 +84,10 @@ def run_cmds(inputfiles, exe, parallel=True, showOutputs=True, nCores=None, show
     # --- Giving a summary
     if len(Failed)==0:
         if verbose:
-            print('[ OK ] All simulations run successfully.')
+            OK('All simulations run successfully.')
         return True, Failed
     else:
-        print('[FAIL] {}/{} simulations failed:'.format(len(Failed),len(inputfiles)))
+        FAIL('{}/{} simulations failed:'.format(len(Failed),len(inputfiles)))
         for p in Failed:
             print('      ',p.input_file)
         return False, Failed
@@ -113,34 +125,178 @@ def run_cmd(input_file_or_arglist, exe, wait=True, showOutputs=False, showComman
     p.exe            = exe
     return p
 
-def runBatch(batchfiles, showOutputs=True, showCommand=True, verbose=True):
+def in_jupyter():
+    try:
+        from IPython import get_ipython
+        return 'ipykernel' in str(type(get_ipython()))
+    except:
+        return False
+
+def stream_output(std, buffer_lines=5, prefix='|', line_count=True):
+    if in_jupyter():
+        from IPython.display import display, update_display
+        # --- Jupyter mode ---
+        #handles = [display("DUMMY LINE FOR BUFFER", display_id=True) for _ in range(buffer_lines)]
+        #buffer = []
+        #for line in std:
+        #    line = line.rstrip()
+        #    buffer.append(line)
+        #    if len(buffer) > buffer_lines:
+        #        buffer.pop(0)
+        #    # update all display slots
+        #    for i, handle in enumerate(handles):
+        #        text = buffer[i] if i < len(buffer) else ""
+        #        update_display(text, display_id=handle.display_id)
+
+        # --- alternative using HTML
+        from IPython.display import display, update_display, HTML
+        import html as _html
+
+        # --- Jupyter mode with HTML ---
+        handles = [display(HTML("<pre style='margin:0'>{}DUMMY LINE FOR BUFFER</pre>".format(prefix)), display_id=True)
+                   for _ in range(buffer_lines)]
+        buffer = []
+        iLine=0 
+        for line in std:
+            iLine+=1
+            line = line.rstrip("\r\n")
+            if line_count:
+                line = f"{iLine:>5}: {line}"
+            line = f"{prefix}{line}"
+            buffer.append(line)
+            if len(buffer) > buffer_lines:
+                buffer.pop(0)
+            # update all display slots
+            for i, handle in enumerate(handles):
+                text = buffer[i] if i < len(buffer) else ""
+
+                html_text = "<pre style='margin:0'>{}</pre>".format(_html.escape(text) if text else "&nbsp;")
+                update_display(HTML(html_text), display_id=handle.display_id)
+
+    else:
+        import shutil
+
+        term_width = shutil.get_terminal_size((80, 20)).columns
+        for _ in range(buffer_lines):
+           print('DummyLine')
+        # --- Terminal mode ---
+        buffer = []
+        iLine = 0
+        for line in std:
+            iLine += 1
+            line = line.rstrip()
+            line = line.rstrip()
+            if line_count:
+                line = f"{iLine:>5}: {line}"
+            line = f"{prefix}{line}"
+            line = line[:term_width]  # truncate to fit in one line
+            buffer.append(line)
+            if len(buffer) > buffer_lines:
+                buffer.pop(0)
+            sys.stdout.write("\033[F\033[K" * len(buffer))
+            for l in buffer:
+                print(l)
+            sys.stdout.flush()
+
+def stdHandler(std, method='show'):
+    from collections import deque
+    import sys
+
+    if method =='show':
+        for line in std:
+            print(line, end='')
+        return None
+
+    elif method =='store':
+        return std.read()  # read everything
+
+    elif method.startswith('buffer'):
+        buffer_lines = int(method.split('_')[1])
+        buffer = deque(maxlen=buffer_lines)
+        print('------ Beginning of buffer outputs ----------------------------------')
+        stream_output(std, buffer_lines=buffer_lines)
+        print('------ End of buffer outputs ----------------------------------------')
+        return None
+
+
+
+
+
+def runBatch(batchfiles, showOutputs=True, showCommand=True, verbose=True, newWindow=False, closeWindow=True, shell_cmd='bash', nBuffer=0):
     """ 
     Run one or several batch files
     TODO: error handling, status, parallel
+
+    showOutputs=True => stdout & stderr printed live
+    showOutputs=False => stdout captured internally, stderr printed live
+
+    For output to show in a Jupyter notebook, we cannot use stdout=None, or stderr=None, we need to use Pipe
+
     """
+    import sys
+    windows = (os.name == "nt")
 
     if showOutputs:
         STDOut= None
+        std_method = 'show'
+        if nBuffer>0:
+            std_method=f'buffer_{nBuffer}'
     else:
-        STDOut= open(os.devnull, 'w') 
-
-    curDir = os.getcwd()
-    print('Current directory', curDir)
+        std_method = 'store'
+        #STDOut= open(os.devnull, 'w') 
+        #STDOut= subprocess.DEVNULL
+        STDOut= subprocess.PIPE
 
     def runOneBatch(batchfile):
         batchfile = batchfile.strip()
         batchfile = batchfile.replace('\\','/')
         batchDir  = os.path.dirname(batchfile)
+        batchfileRel = os.path.relpath(batchfile, batchDir)
+        if windows:
+            command = [batchfileRel]
+        else:
+            command = [shell_cmd, batchfileRel]
+
         if showCommand:
-            print('>>>> Running batch file:', batchfile)
-            print('           in directory:', batchDir)
-        try:
-            os.chdir(batchDir)
-            returncode=subprocess.call([batchfile], stdout=STDOut, stderr=subprocess.STDOUT, shell=shell)
-        except:
-            os.chdir(curDir)
-            returncode=-10
-        return returncode
+            print('[INFO] Running batch file:', batchfileRel)
+            print('            using command:', command)
+            print('             in directory:', batchDir)
+
+        if newWindow:
+            # --- Launch a new window (windows only for now)
+            if windows:
+                cmdflag= '/c' if closeWindow else '/k'
+                subprocess.Popen(f'start cmd {cmdflag} {batchfileRel}', shell=True, cwd=batchDir)
+                return 0
+            else:
+                raise NotImplementedError('Running batch in `newWindow` only implemented on Windows.')
+        else:
+            # --- We wait for outputs
+            stdout_data = None
+            with safe_cd(batchDir): # Automatically go back to current directory
+                try:
+                    # --- Option 2
+                    # Use Popen so we can print outputs live
+                    #proc = subprocess.Popen([batchfileRel], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=shell, text=True )
+                    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell, text=True )
+                    # Print or store stdout
+                    stdout_data = stdHandler(proc.stdout, method=std_method)
+                    # Always print errors output line by line
+                    for line in proc.stderr:
+                        print(line, end='')
+                    proc.wait()
+                    returncode = proc.returncode
+                    # Dump stdout if there was an error
+                    if returncode != 0 and stdout_data:
+                        print("\n--- Captured stdout ---")
+                        print(stdout_data)
+                except FileNotFoundError as e:
+                    print('[FAIL] Running Batch failed, a file or command was not found see below:\n'+str(e))
+                    returncode=-10
+                except Exception as e:
+                    print('[FAIL] Running Batch failed, see below:\n'+str(e))
+                    returncode=-10
+            return returncode
 
     shell=False
     if isinstance(batchfiles,list):
@@ -152,20 +308,20 @@ def runBatch(batchfiles, showOutputs=True, showCommand=True, verbose=True):
                 Failed.append(batchfile)
         if len(Failed)>0:
             returncode=1
-            print('[FAIL] {}/{} Batch files failed.'.format(len(Failed),len(batchfiles)))
+            FAIL('{}/{} Batch files failed.'.format(len(Failed),len(batchfiles)))
             print(Failed)
         else:
             returncode=0
             if verbose:
-                print('[ OK ] {} batch filse ran successfully.'.format(len(batchfiles)))
+                OK('{} batch files ran successfully.'.format(len(batchfiles)))
         # TODO
     else:
         returncode = runOneBatch(batchfiles)
         if returncode==0:
             if verbose:
-                print('[ OK ] Batch file ran successfully.')
+                OK('Batch file ran successfully.')
         else:
-            print('[FAIL] Batch file failed:',batchfiles)
+            FAIL('Batch file failed: '+str(batchfiles))
 
     return returncode
 
@@ -200,6 +356,7 @@ def writeBatch(batchfile, fastfiles, fastExe=None, nBatches=1, pause=False, flag
         discard_if_ext_present=None,
         dispatch=False,
         stdOutToFile=False,
+        preCommands=None,
         echo=True):
     """ Write one or several batch file, all paths are written relative to the batch file directory.
     The batch file will consist of lines of the form:
@@ -211,7 +368,8 @@ def writeBatch(batchfile, fastfiles, fastExe=None, nBatches=1, pause=False, flag
     - nBatches: split into nBatches files.
     - pause: insert a pause statement at the end so that batch file is not closed after execution
     - flags: flags (string) to be placed between the executable and the filename
-    - flags_after: flags (string) to be placed after the filename
+    - flags_after: flags to be placed after the filename (single string if the same for every file,
+                   or a list of strings if different for each file)
     - run_if_ext_missing: add a line in the batch file so that the command is only run if
                           the file `f.EXT` is missing, where .EXT is specified in run_if_ext_missing
                           If None, the command is always run
@@ -237,8 +395,11 @@ def writeBatch(batchfile, fastfiles, fastExe=None, nBatches=1, pause=False, flag
     fastExe_rel   = os.path.relpath(fastExe_abs, batchdir)
     if len(flags)>0:
         flags=' '+flags
-    if len(flags_after)>0:
-        flags_after=' '+flags_after
+    if isinstance(flags_after, str):
+        if len(flags_after)>0:
+            flags_after=' '+flags_after
+    elif isinstance(flags_after, list):
+        flags_after = [' '+f if len(f)>0 else f for f in flags_after]
 
     # Remove commandlines if outputs are already present
     if discard_if_ext_present:
@@ -255,10 +416,13 @@ def writeBatch(batchfile, fastfiles, fastExe=None, nBatches=1, pause=False, flag
             if not echo:
                 if os.name == 'nt':
                     f.write('@echo off\n')
-            for ff in fastfiles:
+            if preCommands is not None:
+                f.write(preCommands+'\n')
+            for i, ff in enumerate(fastfiles):
                 ff_abs = os.path.abspath(ff)
                 ff_rel = os.path.relpath(ff_abs, batchdir)
-                cmd = fastExe_rel + flags + ' '+ ff_rel + flags_after
+                cmd = fastExe_rel + flags + ' '+ ff_rel
+                cmd += flags_after[i] if isinstance(flags_after, list) else flags_after
                 if stdOutToFile:
                     stdout = os.path.splitext(ff_rel)[0]+'.stdout'
                     cmd += ' > ' +stdout

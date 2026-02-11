@@ -148,10 +148,11 @@ class File(OrderedDict):
         except Exception as e:
             raise Exception('Error writing what we read\n'+e.args[0])
         # --- Second,  re-read what we wrote
-        try:
-            self.read(filename_out)
-        except Exception as e:
-            raise Exception('Error reading what we wrote\n'+e.args[0])
+        self.read(filename_out)
+        #try:
+        #    self.read(filename_out)
+        #except Exception as e:
+        #    raise Exception('Error reading what we wrote\n'+e.args[0])
         if bDelete:
             os.remove(filename_out)
         return filename_out

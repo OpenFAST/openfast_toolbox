@@ -171,6 +171,11 @@ def getScaleFactors(DescStates, TowerLen, BladeLen):
 
     return ScalingFactor
 
+def freqDampCampbellDataOP(CDDOP, nModesMax=15, nCharMaxDesc=50) :
+    nModesMax = np.min([len(CDDOP['Modes']),nModesMax])
+    Freq = np.array([CDDOP['Modes'][i]['NaturalFreq_Hz'] for i in np.arange(nModesMax)])
+    Damp = np.array([CDDOP['Modes'][i]['DampingRatio']   for i in np.arange(nModesMax)])
+    return Freq, Damp
 
 def printCampbellDataOP(CDDOP, nModesMax=15, nCharMaxDesc=50) :
     """ 

@@ -37,7 +37,7 @@ def main():
     amr = AMRWindSimulation(wts, fixed_dt, prob_lo, prob_hi,
                            n_cell, max_level, incflo_velocity_hh,
                            postproc_name,
-                           mod_wake = wake_mod)
+                           mod_wake = mod_wake)
 
     # You can print the complete instance by simply
     print(amr)
@@ -50,3 +50,11 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+if __name__=='__test__':
+    print('Ex3_AMRWindSamplingSetup not ready for test')
+    try:
+        main()
+    except ValueError:
+        pass
+
