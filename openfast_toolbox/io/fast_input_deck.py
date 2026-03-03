@@ -445,7 +445,7 @@ class FASTInputDeck(dict):
             fst['BDBldFile(3)'] = '"' + os.path.basename(filename_BD) + '"'
             fst['InflowFile']   = '"' + os.path.basename(filename_IW) + '"'
             fst['AeroFile']     = '"' + os.path.basename(filename_AD) + '"'
-            fst['ServoFile']    = '"' + os.path.basename(filename_AD) + '"'
+            fst['ServoFile']    = '"' + os.path.basename(filename_SvD)+ '"'
             fst['HydroFile']    = '"' + os.path.basename(filename_HD) + '"'
             fst['SubFile']      = '"' + os.path.basename(filename_SD) + '"'
             fst['MooringFile']  = '"' + os.path.basename(filename_MD) + '"'
