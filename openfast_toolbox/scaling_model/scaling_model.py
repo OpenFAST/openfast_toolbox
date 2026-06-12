@@ -10,17 +10,8 @@ Workflow:
 
 Tested against the uploaded 5MW_Scaling case layout.
 
-Two inputs : 
-1. LAMBDA: target to baseline rotor diameter ratio
-2. TargetTowerHt: the target tower height in the scaled case. This is used to compute
+Inputs : 
 
-Scaling rules: 
-- Mass ~ LAMBDA^3
-- Mass per unit length ~ LAMBDA^2
-- Inertia ~ LAMBDA^5
-- Bending stiffness ~ LAMBDA^4
-- Axial stiffness ~ LAMBDA^2
-- Torsional stiffness ~ LAMBDA^4
 
 """
 
@@ -30,6 +21,8 @@ import shutil
 import sys
 from pathlib import Path
 from typing import Iterable
+from dataclasses import dataclass
+import math
 
 # -------------------------------------------------------------------------
 # USER SETTINGS
@@ -38,12 +31,174 @@ from typing import Iterable
 OPENFAST_TOOLBOX_DIR = Path(r"../../repo/openfast_toolbox")
 
 SOURCE_DIR = Path(r"./5MW_Scaling")
-TARGET_DIR = Path(r"./Target_scaled")
-FST_NAME = "NREL5MW_Scaling.fst"
+TARGET_DIR = Path(r"./Target_scaled_clean")
+FST_NAME = "NREL5MW_Scaling_Linear.fst"
 
-# Main similarity factor example. Generally rotor diameter ratio. but you can replace/extend this with your own scaling rules.
-LAMBDA = 0.60
-TargetTowerHt = 80.0 # Target tower height (m). 
+
+# -------------------------------------------------------------------------
+# SCALING INPUTS AND FACTOR CALCULATION
+# -------------------------------------------------------------------------
+@dataclass(frozen=True)
+class TurbineScalingInput:
+    """Minimum turbine data needed by the similarity-scaling method."""
+
+    rated_power_mw: float
+    rotor_diameter_m: float
+    hub_height_m: float
+    rotor_mass_kg: float | None = None
+    nacelle_mass_kg: float | None = None
+    blade_mass_kg: float | None = None
+
+    @property
+    def rotor_radius_m(self) -> float:
+        return self.rotor_diameter_m / 2.0
+
+    @property
+    def swept_area_m2(self) -> float:
+        return math.pi * self.rotor_radius_m**2
+
+
+@dataclass(frozen=True)
+class ScalingFactors:
+    """OpenFAST scaling factors derived from the method document."""
+
+    length: float
+    specific_thrust_ratio: float
+
+    blade_mass: float
+    blade_mass_per_length: float
+    blade_stiffness: float
+    blade_axial_stiffness: float
+
+    tower_mass: float
+    tower_mass_per_length: float
+    tower_stiffness: float
+    tower_axial_stiffness: float
+
+
+def blade_scaling_variable(turbine: TurbineScalingInput, specific_thrust_ratio: float = 1.0) -> float:
+    """Blade mass scaling variable: r_st * P^(1/3) * R^(3/2)."""
+    return specific_thrust_ratio * turbine.rated_power_mw ** (1.0 / 3.0) * turbine.rotor_radius_m ** (3.0 / 2.0)
+
+
+def tower_scaling_variable(turbine: TurbineScalingInput) -> float:
+    """Tower mass scaling variable: P^(1/3) * H^(3/2)."""
+    return turbine.rated_power_mw ** (1.0 / 3.0) * turbine.hub_height_m ** (3.0 / 2.0)
+
+
+def mass_per_length_variable(mass_variable: float, length_m: float) -> float:
+    """Convert a mass-like scaling variable to a mass-per-length variable."""
+    return mass_variable / length_m
+
+
+def stiffness_variable(mass_variable: float) -> float:
+    """Bending/torsional stiffness scaling variable, proportional to mass_variable^(4/3)."""
+    return mass_variable ** (4.0 / 3.0)
+
+
+def axial_stiffness_variable(mass_variable: float) -> float:
+    """Axial stiffness scaling variable, proportional to mass_variable^(2/3)."""
+    return mass_variable ** (2.0 / 3.0)
+
+
+def calculate_specific_thrust_ratio(base: TurbineScalingInput, target: TurbineScalingInput) -> float:
+    """Calculate r_st = (P_t^(2/3) / A_t) / (P_b^(2/3) / A_b)."""
+    return (
+        (target.rated_power_mw ** (2.0 / 3.0) / target.swept_area_m2)
+        / (base.rated_power_mw ** (2.0 / 3.0) / base.swept_area_m2)
+    )
+
+
+def calculate_scaling_factors(base: TurbineScalingInput, target: TurbineScalingInput) -> ScalingFactors:
+    """Calculate all scaling factors used later in the OpenFAST edits."""
+    length = target.rotor_diameter_m / base.rotor_diameter_m
+    r_st = calculate_specific_thrust_ratio(base, target)
+
+    base_blade_mass = blade_scaling_variable(base)
+    target_blade_mass = blade_scaling_variable(target, specific_thrust_ratio=r_st)
+
+    base_tower_mass = tower_scaling_variable(base)
+    target_tower_mass = tower_scaling_variable(target)
+
+    return ScalingFactors(
+        length=length,
+        specific_thrust_ratio=r_st,
+        blade_mass=target_blade_mass / base_blade_mass,
+        blade_mass_per_length=mass_per_length_variable(target_blade_mass, target.rotor_radius_m)
+        / mass_per_length_variable(base_blade_mass, base.rotor_radius_m),
+        blade_stiffness=stiffness_variable(target_blade_mass) / stiffness_variable(base_blade_mass),
+        blade_axial_stiffness=axial_stiffness_variable(target_blade_mass)
+        / axial_stiffness_variable(base_blade_mass),
+        tower_mass=target_tower_mass / base_tower_mass,
+        tower_mass_per_length=mass_per_length_variable(target_tower_mass, target.hub_height_m)
+        / mass_per_length_variable(base_tower_mass, base.hub_height_m),
+        tower_stiffness=stiffness_variable(target_tower_mass) / stiffness_variable(base_tower_mass),
+        tower_axial_stiffness=axial_stiffness_variable(target_tower_mass)
+        / axial_stiffness_variable(base_tower_mass),
+    )
+
+
+def point_inertia_scale_from_mass(base_mass_kg: float, target_mass_kg: float) -> float:
+    """Point inertia scale when actual target mass is available: I ~ m^(5/3)."""
+    if base_mass_kg <= 0.0 or target_mass_kg <= 0.0:
+        raise ValueError("Base and target masses must be positive for inertia scaling.")
+    return (target_mass_kg / base_mass_kg) ** (5.0 / 3.0)
+
+
+def point_inertia_scale_from_length(length_scale: float) -> float:
+    """Fallback point inertia scale when target mass is unavailable: I ~ L^5."""
+    return length_scale**5
+
+
+def target_hub_mass(target_rotor_mass_kg: float, target_blade_mass_kg: float, number_of_blades: int = 3) -> float:
+    """Calculate target hub-system mass from rotor mass minus blade masses."""
+    hub_mass = target_rotor_mass_kg - number_of_blades * target_blade_mass_kg
+    if hub_mass <= 0.0:
+        raise ValueError("Calculated target hub mass is not positive. Check rotor and blade masses.")
+    return hub_mass
+
+
+# Base turbine: NREL 5 MW
+BASE_TURBINE = TurbineScalingInput(
+    rated_power_mw=5.0,
+    rotor_diameter_m=126.0,
+    hub_height_m=90.0,
+)
+
+# Target turbine: REpower MM82 HH100 at La Haute Borne
+# Optional inputs : rotor_mass, nacelle_mass, blade_mass
+# when target rotor mass is given, 
+# i.e. Rotor mass= Hub mass + 3*blade mass 
+# target blade mass = S_m * base blade mass.  
+TARGET_TURBINE = TurbineScalingInput(
+    rated_power_mw=2.0,
+    rotor_diameter_m=82.0,
+    hub_height_m=100.0,
+    rotor_mass_kg=36_000.0,
+    nacelle_mass_kg=66_000.0,
+    blade_mass_kg=8_695.0,
+)
+
+SCALE = calculate_scaling_factors(BASE_TURBINE, TARGET_TURBINE)
+
+# Backward-compatible names used in the OpenFAST edit block below.
+LAMBDA = SCALE.length
+r_st = SCALE.specific_thrust_ratio
+TargetHubHt = TARGET_TURBINE.hub_height_m
+TargetRotMass = TARGET_TURBINE.rotor_mass_kg
+TargetNacMass = TARGET_TURBINE.nacelle_mass_kg
+m_bld_t = TARGET_TURBINE.blade_mass_kg
+
+ScaleBladeMass = SCALE.blade_mass
+ScaleBladeMassDen = SCALE.blade_mass_per_length
+ScaleBladeStiff = SCALE.blade_stiffness
+ScaleBladeStiffAxial = SCALE.blade_axial_stiffness
+
+ScaleTowerMass = SCALE.tower_mass
+ScaleTowerMassDen = SCALE.tower_mass_per_length
+ScaleTowerStiff = SCALE.tower_stiffness
+ScaleTowerStiffAxial = SCALE.tower_axial_stiffness
+
 
 # -------------------------------------------------------------------------
 # IMPORT OPENFAST TOOLBOX
@@ -181,16 +336,29 @@ def main() -> None:
         ED["NcIMUyn"] = ED["NcIMUyn"] * LAMBDA
         ED["NcIMUzn"] = ED["NcIMUzn"] * LAMBDA
         ED["Twr2Shft"] = ED["Twr2Shft"] * LAMBDA
-        ED["TowerHt"] = TargetTowerHt-ED["Twr2Shft"]
+        ED["TowerHt"] = TargetHubHt-ED["Twr2Shft"]
         ED["TowerBsHt"] = ED["TowerBsHt"] * LAMBDA
 
-        ED["HubMass"] = ED["HubMass"] * LAMBDA**3
-        ED["HubIner"] = ED["HubIner"] * LAMBDA**5
-        ED["GenIner"] = ED["GenIner"] * LAMBDA**5
-        ED["NacMass"] = ED["NacMass"] * LAMBDA**3
-        ED["NacYIner"] = ED["NacYIner"] * LAMBDA**5
+        # Point masses and inertias. If actual target mass is available, use
+        # mass-based inertia scaling. Otherwise use the length-based fallback.
+        TargetHubMass = target_hub_mass(TargetRotMass, m_bld_t)
+        BaseHubMass = ED["HubMass"]
+        BaseNacMass = ED["NacMass"]
 
-        # Other variables can be edded here for example:
+        ED["HubMass"] = TargetHubMass
+        ED["HubIner"] *= point_inertia_scale_from_mass(BaseHubMass, TargetHubMass)
+        ED["GenIner"] *= point_inertia_scale_from_length(LAMBDA)
+        ED["NacMass"] = TargetNacMass
+        ED["NacYIner"] *= point_inertia_scale_from_mass(BaseNacMass, TargetNacMass)
+
+        # When HubMass, NacMass are not available, use below. 
+        # ED["HubMass"] = ED["HubMass"] * LAMBDA**3
+        # ED["HubIner"] = ED["HubIner"] * LAMBDA**5
+        # ED["GenIner"] = ED["GenIner"] * LAMBDA**5
+        # ED["NacMass"] = ED["NacMass"] * LAMBDA**3
+        # ED["NacYIner"] = ED["NacYIner"] * LAMBDA**5
+
+        # Other variables can be added here, for example:
         # ED["GBRatio"] = 50
 
 
@@ -198,17 +366,17 @@ def main() -> None:
     # BldProp columns in this file are:
     # 0 BlFract, 1 StrcTwst, 2 BMassDen, 3 FlpStff, 4 EdgStff
     if EDbld is not None:
-        EDbld["BldProp"][:, 2] *= LAMBDA**2  # blade mass per length
-        EDbld["BldProp"][:, 3] *= LAMBDA**4  # flapwise EI
-        EDbld["BldProp"][:, 4] *= LAMBDA**4  # edgewise EI
+        EDbld["BldProp"][:, 2] *= ScaleBladeMassDen  # blade mass per length
+        EDbld["BldProp"][:, 3] *= ScaleBladeStiff  # flapwise EI
+        EDbld["BldProp"][:, 4] *= ScaleBladeStiff  # edgewise EI
 
     # Example C: tower distributed properties in ElastoDyn tower file
     # TowProp columns are:
     # 0 HtFract, 1 TMassDen, 2 TwFAStif, 3 TwSSStif
     if EDtwr is not None:
-        EDtwr["TowProp"][:, 1] *= LAMBDA**2  # tower mass per length
-        EDtwr["TowProp"][:, 2] *= LAMBDA**4  # tower fore-aft EI
-        EDtwr["TowProp"][:, 3] *= LAMBDA**4  # tower side-side EI
+        EDtwr["TowProp"][:, 1] *= ScaleTowerMassDen  # tower mass per length
+        EDtwr["TowProp"][:, 2] *= ScaleTowerStiff  # tower fore-aft EI
+        EDtwr["TowProp"][:, 3] *= ScaleTowerStiff  # tower side-side EI
 
     # Example D: aerodynamic blade geometry in AeroDyn blade file
     # BldAeroNodes columns include:
@@ -221,8 +389,8 @@ def main() -> None:
     if AD is not None:
         # TowProp columns:
         # 0 TwrElev 1 TwrDiam 2 TwrCd 3 TwrTI 4 TwrCb 5 TwrCp 6 TwrCa
-        OrgTowerHt=AD["TowProp"][-1, 0]
-        AD["TowProp"][:, 0] *= ED["TowerHt"]/OrgTowerHt   # scale TwrDiam
+        OrgTowerHt = AD["TowProp"][-1, 0]
+        AD["TowProp"][:, 0] *= ED["TowerHt"] / OrgTowerHt   # scale TwrElev
         AD["TowProp"][:, 1] *= LAMBDA   # scale TwrDiam
 
     # ------------------------------------------------------------------
