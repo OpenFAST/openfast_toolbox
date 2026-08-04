@@ -119,7 +119,7 @@ def main(test=False):
 
     # ----------- Template files
     # --- Option 1
-    templateFSTF = os.path.join(scriptDir, '../../../data/IEA15MW/v4/FF.fstf')
+    templateFSTF = os.path.join(scriptDir, '../../../data/template_files_v4.2/IEA15MW/FAST.Farm.fstf')
     templateFiles = {'libdisconfilepath' : libdiscon}    
     # --- Option 2
     #templatePath = '/full/path/where/template/files/are'
