@@ -536,6 +536,22 @@ class FFCaseCreation:
         return files
 
     @property
+    def high_res_inp(self):
+        # Not all individual high-res boxes are unique. If there are cases where the same high-res
+        # boxes are warranted (e.g. different nacelle yaw values), then copies/symlinks are made
+        highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
+        highBoxesCaseIndex   = [self.caseDirList.index(c) for c in highBoxesCaseDirList]
+
+        files = []
+        for cond in range(self.nConditions):
+            for case in highBoxesCaseIndex:
+                for seed in range(self.nSeeds):
+                    dirpath = self.getHRTurbSimPath(cond, case, seed)
+                    for t in range(self.nTurbines):
+                        files.append(f'{dirpath}/HighT{t+1}.inp')
+        return files
+
+    @property
     def high_res_bts(self):
         # Not all individual high-res boxes are unique. If there are cases where the same high-res
         # boxes are warranted (e.g. different nacelle yaw values), then copies/symlinks are made
@@ -563,6 +579,15 @@ class FFCaseCreation:
                     dirpath = self.getHRTurbSimPath(cond, case, seed)
                     for t in range(self.nTurbines):
                         files.append(f'{dirpath}/log.high{t+1}.seed{seed}.txt')
+        return files
+
+    @property
+    def low_res_inp(self):
+        files = []
+        for cond in range(self.nConditions):
+            for seed in range(self.nSeeds):
+                dirpath = self.getCondSeedPath(cond, seed)
+                files.append(f'{dirpath}/Low.inp')
         return files
 
     @property
