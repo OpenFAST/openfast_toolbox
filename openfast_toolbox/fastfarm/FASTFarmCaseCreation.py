@@ -2194,97 +2194,123 @@ class FFCaseCreation:
 
 
 
-    def TS_low_batch_prepare(self, tsbin=None, run=False, **kwargs):
-        """ Writes a flat batch file for TurbSim low"""
+    def TS_low_prepare(self, scheduler, tsbin=None, modules='default', account=None, time=None, partition=None):
+        """ Writes (from scratch) a script to run TurbSim on the low-res box(es).
 
-        from openfast_toolbox.case_generation.runner import writeBatch
+        - scheduler: 'bash' (plain shell, run directly) or 'slurm' (submit via sbatch).
+          Required, no default. The `#SBATCH` header is always written (it is an inert
+          comment under bash) and only used when submitted with sbatch.
+        - modules: 'default' (intel/oneAPI stack), None (no `module load`), or a list of
+          module-name strings. `$HOME/.bash_profile` is always sourced.
+        - account, time, partition: written as `#SBATCH` directives when not None (also
+          settable at submit time through TS_low_slurm_submit's A/t/p).
+        """
+        if scheduler not in ('bash', 'slurm'):
+            raise ValueError(f"`scheduler` is required and must be 'bash' or 'slurm'. Received {scheduler}.")
+
+        if os.name == 'nt':
+            WARN('Windows detected: the generated script is a bash/SLURM script. You may need to '
+                 'remove the SLURM-specific lines (#SBATCH, srun, scontrol) to run it locally.')
+
+        if modules == 'default':
+            modules = ['PrgEnv-intel/8.5.0',
+                       'intel-oneapi-mkl/2024.0.0-intel',
+                       'intel-oneapi',
+                       'binutils',
+                       'hdf5/1.14.3-intel-oneapi-mpi-intel',
+                       'netcdf-c/4.9.2-intel-oneapi-mpi-intel']
+        elif modules is not None and (not isinstance(modules, list) or not all(isinstance(m, str) for m in modules)):
+            raise ValueError("`modules` must be 'default', None, or a list of module-name strings.")
 
         if tsbin is not None:
             WARN(f'Overwritting the TurbSim binary from the previously set {self.tsbin} to {tsbin}.')
             self.tsbin = tsbin
         self._checkTSBinary()
 
-        ext = ".bat" if os.name == "nt" else ".sh"
-        batchfile = os.path.join(self.path, f'runAllLowBox{ext}')
+        if self.nSeeds > 6:
+            WARN(f'The memory-per-cpu on the low-res boxes SLURM script might be too low given {self.nSeeds} seeds.')
 
-        TS_low_files = []
-        TS_low_logs  = []
-        for cond in range(self.nConditions):
-            for seed in range(self.nSeeds):
-                seedpath = self.getCondSeedPath(cond, seed)
-                TS_low_files.append(os.path.join(seedpath, 'Low.inp'))
-                TS_low_logs.append(os.path.join(seedpath, f'log.low.seed{seed}.txt'))
+        nodes          = int(np.ceil(self.nConditions * self.nSeeds / 6))
+        memory_per_cpu = int(150000 / self.nSeeds)
+        condList       = "condList=('{}')".format("' '".join(self.condDirList))
 
-        writeBatch(batchfile, TS_low_files, fastExe=self.tsbin, flags_after=[f"2>&1 | tee {log}" for log in TS_low_logs], **kwargs)
-        self.batchfile_low = batchfile
-        OK(f"Batch file written to {batchfile}")
+        # HPC-only prefix on the run line (srun + per-node placement); empty for plain bash
+        if scheduler == 'slurm':
+            call_prefix = f'srun -n1 -N1 --exclusive --nodelist=$currNode --mem-per-cpu={memory_per_cpu}M '
+        else:
+            call_prefix = ''
 
-        if run:
-            self.TS_low_batch_run()
+        scriptfile = os.path.join(self.path, 'runAllLowBox.sh')
+        with open(scriptfile, 'w') as f:
+            f.write('#!/bin/bash\n')
+            f.write(f'#SBATCH --job-name=lowBox_{os.path.basename(self.path)}\n')
+            f.write('#SBATCH --output log.turbsim_low\n')
+            f.write(f'#SBATCH --nodes={nodes}\n')
+            f.write('#SBATCH --ntasks-per-node=12\n')
+            if time is not None:
+                f.write(f'#SBATCH --time={time}\n')
+            if account is not None:
+                f.write(f'#SBATCH --account={account}\n')
+            if partition is not None:
+                f.write(f'#SBATCH --partition={partition}\n')
+            f.write('\n')
+            f.write('source $HOME/.bash_profile\n\n')
+            if scheduler == 'slurm':
+                f.write('echo "Job ID is " $SLURM_JOBID\n\n')
+            if modules is not None:
+                f.write('module purge\n')
+                for m in modules:
+                    f.write(f'module load {m}\n')
+                f.write('\n')
+            f.write('# ********************************** USER INPUT ********************************** #\n')
+            f.write(f"turbsimbin='{self.tsbin}'\n")
+            f.write(f"basepath='{self.path}'\n\n")
+            f.write(f'{condList}\n\n')
+            f.write(f'nSeeds={self.nSeeds}\n')
+            f.write('# ****************************************************************************** #\n\n')
+            if scheduler == 'slurm':
+                f.write('nodelist=`scontrol show hostname $SLURM_NODELIST`\n')
+                f.write('nodelist=($nodelist)\n\n')
+                f.write('nodeToUse=0\n')
+            f.write('for cond in ${condList[@]}; do\n')
+            if scheduler == 'slurm':
+                f.write('    currNode=${nodelist[$nodeToUse]}\n')
+            f.write('    for((seed=0; seed<$nSeeds; seed++)); do\n')
+            f.write('       dir=$(printf "%s/%s/Seed_%01d" $basepath $cond $seed)\n')
+            if scheduler == 'bash':
+                f.write('       echo "Running $dir/Low.inp"\n')
+            f.write(f'       {call_prefix}$turbsimbin $dir/Low.inp > $dir/log.low.seed$seed.txt 2>&1 &\n')
+            f.write('   done\n')
+            if scheduler == 'slurm':
+                f.write('    (( nodeToUse++ ))\n')
+            f.write('done\n\n')
+            f.write('wait\n')
 
-    def TS_low_batch_run(self,  showOutputs=True, showCommand=True, verbose=True, **kwargs):
-        from openfast_toolbox.case_generation.runner import runBatch
+        self.batchfile_low     = scriptfile
+        self.slurmfilename_low = scriptfile
+        OK(f"Script written to {scriptfile}")
+
+
+    def TS_low_batch_prepare(self, tsbin=None, modules='default'):
+        """ Backward-compatible wrapper for TS_low_prepare('bash', ...). """
+        self.TS_low_prepare('bash', tsbin=tsbin, modules=modules)
+
+    def TS_low_batch_run(self, showCommand=True):
+        """ Run the low-res TurbSim batch script with a plain `bash <script>`. """
         if not os.path.exists(self.batchfile_low):
             raise FFException(f'Batch file does not exist: {self.batchfile_low}.\nMake sure you run TS_low_batch_prepare first.')
-        stat = runBatch(self.batchfile_low, showOutputs=showOutputs, showCommand=showCommand, verbose=verbose, **kwargs)
-        if stat!=0:
+        if showCommand:
+            INFO(f'Running batch file {self.batchfile_low}')
+        stat = subprocess.call(['bash', self.batchfile_low])
+        if stat != 0:
             raise FFException(f'Batch file failed: {self.batchfile_low}')
 
 
 
 
-    def TS_low_slurm_prepare(self, slurmfilepath, tsbin=None):
-
-        if tsbin is not None:
-            WARN(f'Overwritting the TurbSim binary from the previously set {self.tsbin} to {tsbin}.')
-            self.tsbin = tsbin
-        self._checkTSBinary()
-
-        # --------------------------------------------------
-        # ----- Prepare SLURM script for Low-res boxes -----
-        # --------------------------------------------------
-
-        if not os.path.isfile(slurmfilepath):
-            raise ValueError (f'SLURM script for low-res box {slurmfilepath} does not exist.')
-        
-        # Determine memory-per-cpu
-        memory_per_cpu = int(150000/self.nSeeds)
-       
-        if self.nSeeds > 6:
-            WARN(f'The memory-per-cpu on the low-res boxes SLURM script might be too low given {self.nSeeds} seeds.')
-        
-        self.slurmfilename_low =  os.path.join(self.path, os.path.basename(slurmfilepath))
-        shutil.copy2(slurmfilepath, self.slurmfilename_low)
-    
-        # Python version
-        with open(self.slurmfilename_low, "r") as f:
-            lines = f.read()
-
-        # Replacements
-        jobname   = f"#SBATCH --job-name=lowBox_{os.path.basename(self.path)}"
-        logfile   = "#SBATCH --output log.turbsim_low"
-        memcpu    = f"--mem-per-cpu={memory_per_cpu}M"
-        nodes     = f"#SBATCH --nodes={int(np.ceil(self.nConditions * self.nSeeds / 6))}"
-        turbsim   = f"turbsimbin='{self.tsbin}'"
-        basepath  = f"basepath='{self.path}'"
-        condlist  = "condList=('{}')".format("' '".join(self.condDirList))
-        seeds     = f"nSeeds={self.nSeeds}"
-
-        # Apply substitutions
-        import re
-        lines = re.sub(r"^#SBATCH --job-name=.*", jobname, lines, flags=re.M)
-        lines = re.sub(r"^#SBATCH --output .*",   logfile, lines, flags=re.M)
-        lines = re.sub(r"--mem-per-cpu=\d+M",     memcpu,  lines)
-        lines = re.sub(r"^#SBATCH --nodes=.*",    nodes,   lines, flags=re.M)
-        lines = re.sub(r"^turbsimbin=.*",         turbsim, lines, flags=re.M)
-        lines = re.sub(r"^basepath=.*",           basepath,lines, flags=re.M)
-        lines = re.sub(r"^condList=.*",           condlist,lines, flags=re.M)
-        lines = re.sub(r"^nSeeds=.*",             seeds,   lines, flags=re.M)
-
-        with open(self.slurmfilename_low, "w") as f:
-            f.write(lines)
-
-        INFO(f'File written: {self.slurmfilename_low}')
+    def TS_low_slurm_prepare(self, tsbin=None, modules='default', account=None, time=None, partition=None):
+        """ Backward-compatible wrapper for TS_low_prepare('slurm', ...). """
+        self.TS_low_prepare('slurm', tsbin=tsbin, modules=modules, account=account, time=time, partition=partition)
 
 
     def TS_low_slurm_submit(self, qos='normal', A=None, t=None, p=None, inplace=True):
@@ -2521,75 +2547,123 @@ class FFCaseCreation:
 
         
 
-    def TS_high_batch_prepare(self, run=False, **kwargs):
-        """ Writes a flat batch file for TurbSim low"""
-        from openfast_toolbox.case_generation.runner import writeBatch
+    def TS_high_prepare(self, scheduler, tsbin=None, modules='default', account=None, time=None, partition=None):
+        """ Writes (from scratch) a script to run TurbSim on the high-res boxes.
 
-        ext = ".bat" if os.name == "nt" else ".sh"
-        batchfile = os.path.join(self.path, f'runAllHighBox{ext}')
+        - scheduler: 'bash' (plain shell, run directly) or 'slurm' (submit via sbatch).
+          Required, no default. The `#SBATCH` header is always written (it is an inert
+          comment under bash) and only used when submitted with sbatch.
+        - modules: 'default' (intel/oneAPI stack), None (no `module load`), or a list of
+          module-name strings. `$HOME/.bash_profile` is always sourced.
+        - account, time, partition: written as `#SBATCH` directives when not None (also
+          settable at submit time through TS_high_slurm_submit's A/t/p).
+        """
+        if scheduler not in ('bash', 'slurm'):
+            raise ValueError(f"`scheduler` is required and must be 'bash' or 'slurm'. Received {scheduler}.")
 
-        TS_high_files = [f.replace('.bts', '.inp') for f in self.high_res_bts]
-        TS_high_logs  = self.high_res_log
-        writeBatch(batchfile, TS_high_files, fastExe=self.tsbin, flags_after=[f"2>&1 | tee {log}" for log in TS_high_logs], **kwargs)
-        self.batchfile_high = batchfile
+        if os.name == 'nt':
+            WARN('Windows detected: the generated script is a bash/SLURM script. You may need to '
+                 'remove the SLURM-specific lines (#SBATCH, srun) to run it locally.')
 
-        OK(f"Batch file written to {batchfile}")
+        if modules == 'default':
+            modules = ['PrgEnv-intel/8.5.0',
+                       'intel-oneapi-mkl/2024.0.0-intel',
+                       'intel-oneapi',
+                       'binutils',
+                       'hdf5/1.14.3-intel-oneapi-mpi-intel',
+                       'netcdf-c/4.9.2-intel-oneapi-mpi-intel']
+        elif modules is not None and (not isinstance(modules, list) or not all(isinstance(m, str) for m in modules)):
+            raise ValueError("`modules` must be 'default', None, or a list of module-name strings.")
 
-        if run:
-            self.TS_high_batch_run()
+        if tsbin is not None:
+            WARN(f'Overwritting the TurbSim binary from the previously set {self.tsbin} to {tsbin}.')
+            self.tsbin = tsbin
+        self._checkTSBinary()
 
-    def TS_high_batch_run(self, showOutputs=True, showCommand=True, verbose=True, **kwargs):
-        from openfast_toolbox.case_generation.runner import runBatch
+        ntasks   = self.nConditions * self.nHighBoxCases * self.nSeeds * self.nTurbines
+        nodes    = int(np.ceil(ntasks / 36))
+        condList = "condList=('{}')".format("' '".join(self.condDirList))
+        highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
+        caseList = "caseList=('{}')".format("' '".join(highBoxesCaseDirList))
+
+        # HPC-only prefix on the run line (srun); empty for plain bash
+        if scheduler == 'slurm':
+            call_prefix = 'srun -n1 -N1 --exclusive --mem-per-cpu=$rampercpu '
+        else:
+            call_prefix = ''
+
+        scriptfile = os.path.join(self.path, 'runAllHighBox.sh')
+        with open(scriptfile, 'w') as f:
+            f.write('#!/bin/bash\n')
+            f.write(f'#SBATCH --job-name=highBox_{os.path.basename(self.path)}\n')
+            f.write('#SBATCH --output log.turbsim_high\n')
+            f.write(f'#SBATCH --nodes={nodes}\n')
+            f.write('#SBATCH --ntasks-per-node=104\n')
+            f.write('#SBATCH --mem=250G\n')
+            if time is not None:
+                f.write(f'#SBATCH --time={time}\n')
+            if account is not None:
+                f.write(f'#SBATCH --account={account}\n')
+            if partition is not None:
+                f.write(f'#SBATCH --partition={partition}\n')
+            f.write('\n')
+            f.write('source $HOME/.bash_profile\n\n')
+            if scheduler == 'slurm':
+                f.write('echo "Job ID is " $SLURM_JOBID\n\n')
+            if modules is not None:
+                f.write('module purge\n')
+                for m in modules:
+                    f.write(f'module load {m}\n')
+                f.write('\n')
+            f.write('# ********************************** USER INPUT ********************************** #\n')
+            f.write(f"turbsimbin='{self.tsbin}'\n")
+            f.write(f"basepath='{self.path}'\n\n")
+            f.write(f'{condList}\n\n')
+            f.write(f'{caseList}\n\n')
+            f.write(f'nSeeds={self.nSeeds}\n')
+            f.write(f'nTurbines={self.nTurbines}\n')
+            f.write('# ****************************************************************************** #\n\n')
+            if scheduler == 'slurm':
+                f.write('rampercpu=$((249000/36))\n\n')
+            f.write('for cond in ${condList[@]}; do\n')
+            f.write('    for case in ${caseList[@]}; do\n')
+            f.write('        for ((seed=0; seed<$nSeeds; seed++)); do\n')
+            f.write('            for ((t=1; t<=$nTurbines; t++)); do\n')
+            f.write('                dir=$(printf "%s/%s/%s/Seed_%01d/TurbSim" $basepath $cond $case $seed)\n')
+            if scheduler == 'bash':
+                f.write('                echo "Running $dir/HighT$t.inp"\n')
+            f.write(f'                {call_prefix}$turbsimbin $dir/HighT$t.inp > $dir/log.high$t.seed$seed.txt 2>&1 &\n')
+            if scheduler == 'slurm':
+                f.write('                sleep 0.1\n')
+            f.write('            done\n')
+            f.write('        done\n')
+            f.write('    done\n')
+            f.write('done\n\n')
+            f.write('wait\n')
+
+        self.batchfile_high     = scriptfile
+        self.slurmfilename_high = scriptfile
+        OK(f"Script written to {scriptfile}")
+
+
+    def TS_high_batch_prepare(self, tsbin=None, modules='default'):
+        """ Backward-compatible wrapper for TS_high_prepare('bash', ...). """
+        self.TS_high_prepare('bash', tsbin=tsbin, modules=modules)
+
+    def TS_high_batch_run(self, showCommand=True):
+        """ Run the high-res TurbSim batch script with a plain `bash <script>`. """
         if not os.path.exists(self.batchfile_high):
             raise FFException(f'Batch file does not exist: {self.batchfile_high}.\nMake sure you run TS_high_batch_prepare first.')
-        stat = runBatch(self.batchfile_high, showOutputs=showOutputs, showCommand=showCommand, verbose=verbose, **kwargs)
-        if stat!=0:
+        if showCommand:
+            INFO(f'Running batch file {self.batchfile_high}')
+        stat = subprocess.call(['bash', self.batchfile_high])
+        if stat != 0:
             raise FFException(f'Batch file failed: {self.batchfile_high}')
 
 
-    def TS_high_slurm_prepare(self, slurmfilepath):
-        # ---------------------------------------------------
-        # ----- Prepare SLURM script for High-res boxes -----
-        # ---------------------------------------------------
-        
-        if not os.path.isfile(slurmfilepath):
-            raise ValueError (f'SLURM script for high-res box {slurmfilepath} does not exist.')
-        ntasks = self.nConditions*self.nHighBoxCases*self.nSeeds*self.nTurbines
-
-        self.slurmfilename_high = os.path.join(self.path, os.path.basename(slurmfilepath))
-        shutil.copy2(slurmfilepath, self.slurmfilename_high)
-
-        with open(self.slurmfilename_high, "r") as f:
-            lines = f.read()
-
-        # Prepare replacement strings
-        jobname  = f"#SBATCH --job-name=highBox_{os.path.basename(self.path)}"
-        logfile  = "#SBATCH --output log.turbsim_high"
-        nodes    = f"#SBATCH --nodes={int(np.ceil(ntasks/36))}"
-        turbsim  = f"turbsimbin='{self.tsbin}'"
-        basepath = f"basepath='{self.path}'"
-        nTurb    = f"nTurbines={self.nTurbines}"
-        nSeed    = f"nSeeds={self.nSeeds}"
-        condlist = "condList=('{}')".format("' '".join(self.condDirList))
-        highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
-        caselist = "caseList=('{}')".format("' '".join(highBoxesCaseDirList))
-
-        # Apply substitutions
-        import re
-        lines = re.sub(r"^#SBATCH --job-name.*", jobname, lines, flags=re.M)
-        lines = re.sub(r"^#SBATCH --output .*",  logfile, lines, flags=re.M)
-        lines = re.sub(r"^#SBATCH --nodes.*",   nodes,   lines, flags=re.M)
-        lines = re.sub(r"^turbsimbin.*",        turbsim, lines, flags=re.M)
-        lines = re.sub(r"^basepath.*",          basepath,lines, flags=re.M)
-        lines = re.sub(r"^nTurbines.*",         nTurb,  lines, flags=re.M)
-        lines = re.sub(r"^nSeeds.*",            nSeed,  lines, flags=re.M)
-        lines = re.sub(r"^condList.*",          condlist,lines, flags=re.M)
-        lines = re.sub(r"^caseList.*",          caselist,lines, flags=re.M)
-
-        with open(self.slurmfilename_high, "w") as f:
-            f.write(lines)
-
-        INFO(f'File written: {self.slurmfilename_high}')
+    def TS_high_slurm_prepare(self, tsbin=None, modules='default', account=None, time=None, partition=None):
+        """ Backward-compatible wrapper for TS_high_prepare('slurm', ...). """
+        self.TS_high_prepare('slurm', tsbin=tsbin, modules=modules, account=account, time=time, partition=partition)
 
 
     def TS_high_slurm_submit(self, qos='normal', A=None, t=None, p=None, inplace=True):
@@ -3275,27 +3349,62 @@ class FFCaseCreation:
         return d
 
 
-    def FF_batch_prepare(self, ffbin=None, run=False, **kwargs):
+    def FF_batch_prepare(self, ffbin=None, modules='default'):
+        """ Writes from scratch a single bash script to run all FAST.Farm cases sequentially.
+
+        - modules: 'default' (intel/oneAPI stack), None, or a list of module strings.
+                   Note that `$HOME/.bash_profile` is always sourced.
         """
-            Writes a flat batch file for FASTFarm cases.
-            Allows specification of a different binary.
-        """
-        from openfast_toolbox.case_generation.runner import writeBatch
+        if os.name == 'nt':
+            WARN('Windows detected: the generated script is a bash script and may need adjusting to run locally.')
+
+        if modules == 'default':
+            modules = ['PrgEnv-intel/8.5.0',
+                       'intel-oneapi-mkl/2024.0.0-intel',
+                       'intel-oneapi',
+                       'binutils',
+                       'hdf5/1.14.3-intel-oneapi-mpi-intel',
+                       'netcdf-c/4.9.2-intel-oneapi-mpi-intel']
+        elif modules is not None and (not isinstance(modules, list) or not all(isinstance(m, str) for m in modules)):
+            raise ValueError("`modules` must be 'default', None, or a list of module-name strings.")
 
         if ffbin is not None:
             self.ffbin = ffbin
         self._checkFFBinary()
 
-        ext = ".bat" if os.name == "nt" else ".sh"
-        batchfile = os.path.join(self.path, f'runAllFASTFarm{ext}')
+        condList = "condList=('{}')".format("' '".join(self.condDirList))
+        caseList = "caseList=('{}')".format("' '".join(self.caseDirList))
 
-        writeBatch(batchfile, self.FFFiles, fastExe=self.ffbin, **kwargs)
-        self.batchfile_ff = batchfile
+        scriptfile = os.path.join(self.path, 'runAllFASTFarm.sh')
+        with open(scriptfile, 'w') as f:
+            f.write('#!/bin/bash\n\n')
+            f.write('source $HOME/.bash_profile\n\n')
+            if modules is not None:
+                f.write('module purge\n')
+                for m in modules:
+                    f.write(f'module load {m}\n')
+                f.write('\n')
+            f.write('# ********************************** USER INPUT ********************************** #\n')
+            f.write(f"fastfarmbin='{self.ffbin}'\n")
+            f.write(f"basepath='{self.path}'\n\n")
+            f.write(f'{condList}\n\n')
+            f.write(f'{caseList}\n\n')
+            f.write(f'nSeeds={self.nSeeds}\n')
+            f.write('# ****************************************************************************** #\n\n')
+            f.write('export OMP_STACKSIZE="32 M"\n\n')
+            f.write('for cond in ${condList[@]}; do\n')
+            f.write('    for case in ${caseList[@]}; do\n')
+            f.write('        for((seed=0; seed<$nSeeds; seed++)); do\n')
+            f.write('            dir=$(printf "%s/%s/%s/Seed_%01d" $basepath $cond $case $seed)\n')
+            f.write('            cd $dir\n')
+            f.write('            echo "Running $dir/FF.fstf"\n')
+            f.write('            $fastfarmbin $dir/FF.fstf > $dir/log.fastfarm.seed$seed.txt 2>&1\n')
+            f.write('        done\n')
+            f.write('    done\n')
+            f.write('done\n')
 
-        OK(f"Batch file written to {batchfile}")
-
-        if run:
-            self.FF_batch_run()
+        self.batchfile_ff = scriptfile
+        OK(f"Batch file written to {scriptfile}")
 
     def FF_batch_run(self, showOutputs=True, showCommand=True, verbose=True, **kwargs):
         from openfast_toolbox.case_generation.runner import runBatch
@@ -3305,52 +3414,74 @@ class FFCaseCreation:
         if stat!=0:
             raise FFException(f'Batch file failed: {self.batchfile_ff}')
 
-    def FF_slurm_prepare(self, slurmfilepath, inplace=True, useSed=True, ffbin=None):
-        # ----------------------------------------------
-        # ----- Prepare SLURM script for FAST.Farm -----
-        # ------------- ONE SCRIPT PER CASE ------------
-        # ----------------------------------------------
+    def FF_slurm_prepare(self, ffbin=None, modules='default', account=None, time=None, partition=None, ntasks_per_node=104):
+        """ Writes from scratch one SLURM script per case to run FAST.Farm.
+
+        ONE SCRIPT PER (cond, case, seed): runFASTFarm_cond{c}_case{c}_seed{s}.sh, so cases can be
+        submitted independently and run in parallel across nodes
+
+        - modules: 'default' (intel/oneAPI stack), None (no `module load`), or a list of
+          modules. `$HOME/.bash_profile` is always sourced.
+        - account, time, partition: written as `#SBATCH` directives when not None (also settable
+          at submit time through FF_slurm_submit's A/t/p).
+        - ntasks_per_node: `#SBATCH --ntasks-per-node` value (default 104).
+        """
+        if os.name == 'nt':
+            WARN('Windows detected: the generated scripts are SLURM/bash scripts. You may need to '
+                 'remove the SLURM-specific lines (#SBATCH) to run them locally.')
+
+        if modules == 'default':
+            modules = ['PrgEnv-intel/8.5.0',
+                       'intel-oneapi-mkl/2024.0.0-intel',
+                       'intel-oneapi',
+                       'binutils',
+                       'hdf5/1.14.3-intel-oneapi-mpi-intel',
+                       'netcdf-c/4.9.2-intel-oneapi-mpi-intel']
+        elif modules is not None and (not isinstance(modules, list) or not all(isinstance(m, str) for m in modules)):
+            raise ValueError("`modules` must be 'default', None, or a list of module-name strings.")
+
         if ffbin is not None:
             self.ffbin = ffbin
         self._checkFFBinary()
 
-        if not os.path.isfile(slurmfilepath):
-            raise ValueError (f'SLURM script for FAST.Farm {slurmfilepath} does not exist.')
-        self.slurmfilename_ff = os.path.basename(slurmfilepath)
-
-        WARN('Implementation Note: Developer help needed. This function requires sed. Please use regexp similar to what was done for `TS_low_slurm_prepare` or `TS_high_slurm_prepare`.')
-
         for cond in range(self.nConditions):
             for case in range(self.nCases):
                 for seed in range(self.nSeeds):
-                    
                     fname = f'runFASTFarm_cond{cond}_case{case}_seed{seed}.sh'
-                    shutil.copy2(slurmfilepath, os.path.join(self.path, fname))
-        
-                    # Change job name (for convenience only)
-                    sed_command = f"sed -i 's|#SBATCH --job-name=runFF|#SBATCH --job-name=c{cond}_c{case}_s{seed}_runFF_{os.path.basename(self.path)}|g' {fname}"
-                    self.sed_inplace(sed_command, inplace)
-                    # Change logfile name (for convenience only)
-                    sed_command = f"sed -i 's|#SBATCH --output log.fastfarm_c0_c0_seed0|#SBATCH --output log.fastfarm_c{cond}_c{case}_s{seed}|g' {fname}"
-                    self.sed_inplace(sed_command, inplace)
-                    # Change the fastfarm binary to be called
-                    sed_command = f"""sed -i "s|^fastfarmbin.*|fastfarmbin='{self.ffbin}'|g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
-                    # Change the path inside the script to the desired one
-                    sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
-                    # Write condition
-                    sed_command = f"""sed -i "s|^cond.*|cond='{self.condDirList[cond]}'|g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
-                    # Write case
-                    sed_command = f"""sed -i "s|^case.*|case='{self.caseDirList[case]}'|g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
-                    # Write seed
-                    sed_command = f"""sed -i "s|^seed.*|seed={seed}|g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
-                    # Wirte FAST.Farm filename
-                    sed_command = f"""sed -i "s/FFarm_mod.fstf/FF.fstf/g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
+                    scriptfile = os.path.join(self.path, fname)
+                    with open(scriptfile, 'w') as f:
+                        f.write('#!/bin/bash\n')
+                        f.write(f'#SBATCH --job-name=c{cond}_c{case}_s{seed}_runFF_{os.path.basename(self.path)}\n')
+                        f.write(f'#SBATCH --output log.fastfarm_c{cond}_c{case}_s{seed}\n')
+                        f.write('#SBATCH --nodes=1\n')
+                        f.write(f'#SBATCH --ntasks-per-node={ntasks_per_node}\n')
+                        if time is not None:
+                            f.write(f'#SBATCH --time={time}\n')
+                        if account is not None:
+                            f.write(f'#SBATCH --account={account}\n')
+                        if partition is not None:
+                            f.write(f'#SBATCH --partition={partition}\n')
+                        f.write('\n')
+                        f.write('source $HOME/.bash_profile\n\n')
+                        f.write('echo "Job ID is " $SLURM_JOBID\n\n')
+                        if modules is not None:
+                            f.write('module purge\n')
+                            for m in modules:
+                                f.write(f'module load {m}\n')
+                            f.write('\n')
+                        f.write('# ********************************** USER INPUT ********************************** #\n')
+                        f.write(f"fastfarmbin='{self.ffbin}'\n")
+                        f.write(f"basepath='{self.path}'\n\n")
+                        f.write(f"cond='{self.condDirList[cond]}'\n")
+                        f.write(f"case='{self.caseDirList[case]}'\n")
+                        f.write(f'seed={seed}\n')
+                        f.write('# ****************************************************************************** #\n\n')
+                        f.write('export OMP_STACKSIZE="32 M"\n\n')
+                        f.write('dir=$(printf "%s/%s/%s/Seed_%01d" $basepath $cond $case $seed)\n')
+                        f.write('cd $dir\n')
+                        f.write('$fastfarmbin $dir/FF.fstf > $dir/log.fastfarm.seed$seed.txt 2>&1\n')
+                    self.slurmfilename_ff = scriptfile
+        OK(f"SLURM scripts written to {os.path.join(self.path, 'runFASTFarm_cond*_case*_seed*.sh')}")
 
 
     def FF_slurm_submit(self, qos='normal', A=None, t=None, p=None, delay=4, inplace=True):

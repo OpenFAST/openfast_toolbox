@@ -148,12 +148,6 @@ def main(test=False):
     #    'turbsimLowfilepath'      : './SampleFiles/template_Low_InflowXX_SeedY.inp',
     #    'turbsimHighfilepath'     : './SampleFiles/template_HighT1_InflowXX_SeedY.inp'
     #}
-    # SLURM scripts
-    slurm_TS_high           = os.path.join(scriptDir, './SampleFiles/runAllHighBox.sh')
-    slurm_TS_low            = os.path.join(scriptDir, './SampleFiles/runAllLowBox.sh')
-    slurm_FF_single         = './SampleFiles/runFASTFarm_cond0_case0_seed0.sh'
-
-
     # -----------------------------------------------------------------------------
     # ---------------------- Discretization parameters ----------------------------
     # -----------------------------------------------------------------------------
@@ -208,8 +202,8 @@ def main(test=False):
     # ----------- TurbSim low-res setup
     ffcase.TS_low_setup() # Create TurbSim input files for low res
     # ----------- Prepare script for submission
-    ffcase.TS_low_batch_prepare()
-    #ffcase.TS_low_slurm_prepare(slurm_TS_low)
+    ffcase.TS_low_prepare(scheduler='bash')   # write a plain shell script
+    #ffcase.TS_low_prepare(scheduler='slurm') # Alternative, write a SLURM submission script
     # ----------- Submit the low-res script (can be done from the command line)
     #ffcase.TS_low_batch_run() # Write a batch file to disk
     #ffcase.TS_low_slurm_submit() # Alternative, write a slurm batch file, see below
@@ -225,8 +219,8 @@ def main(test=False):
     # ----------- TurbSim high-res setup
     ffcase.TS_high_setup() # Create TurbSim input files
     # ----------- Prepare script for submission
-    ffcase.TS_high_batch_prepare() # Write a batch file to disk
-    #ffcase.TS_high_slurm_prepare(slurm_TS_high) # Alternative, write a slurm batch file
+    ffcase.TS_high_prepare(scheduler='bash')   # write a plain shell script
+    #ffcase.TS_high_prepare(scheduler='slurm') # Alternative, write a SLURM submission script
     # ----------- Submit the high-res script (can be done from the command line)
     ffcase.TS_high_batch_run(showOutputs=True, showCommand=True, nBuffer=8, shell_cmd='bash')
     #ffcase.TS_high_slurm_submit() # Alternative, submit a slurm batch file
@@ -242,7 +236,7 @@ def main(test=False):
 
     # ----------- Prepare script for submission
     ffcase.FF_batch_prepare() # Write batch files with all commands to be run
-    #ffcase.FF_slurm_prepare(slurm_FF_single) # Alternative, prepare a slurm batch file
+    #ffcase.FF_slurm_prepare() # Alternative, prepare a SLURM submission script
 
     # We can do simple modifications:
     modifyProperty(ffcase.FFFiles[0], 'NX_Low', 100) # Making the domain longer for visualization purposes

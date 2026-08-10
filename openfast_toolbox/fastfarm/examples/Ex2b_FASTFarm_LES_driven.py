@@ -115,10 +115,6 @@ def main(test=False):
     #    'hydroDatapath'           : None,  # '/full/path/to/hydroData',
     #    'FFfilename'              : 'Model_FFarm.fstf',
     #}
-    # SLURM scripts
-    slurm_FF_single         = './SampleFiles/runFASTFarm_cond0_case0_seed0.sh'
-
-
     # -----------------------------------------------------------------------------
     # ------------------------------- LES parameters ------------------------------
     # -----------------------------------------------------------------------------
@@ -215,7 +211,7 @@ def main(test=False):
 
     # ----------- Prepare script for submission
     ffcase.FF_batch_prepare() # Write batch files with all commands to be run
-    #ffcase.FF_slurm_prepare(slurm_FF_single) # Alternative, prepare a slurm batch file
+    #ffcase.FF_slurm_prepare() # Alternative, prepare a SLURM submission script
 
     # ----------- Submit the FAST.Farm script (can be done from the command line)
     ffcase.FF_batch_run(showOutputs=True, showCommand=True, nBuffer=10, shell_cmd='bash')
