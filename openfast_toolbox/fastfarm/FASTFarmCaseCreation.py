@@ -1171,9 +1171,8 @@ class FFCaseCreation:
                             self.AeroDynFile['SkewMomCorr'] = True
                         self.AeroDynFile['BEM_Mod'] = 2 
                         self.AeroDynFile['IntegrationMethod'] = 4
-                        # Adjust the Airfoil path to point to the templatePath (1:-1 to remove quotes)
-                        self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, "Airfoils", i[1:-1].split("Airfoils/", 1)[-1])}"' 
-                                        for i in self.AeroDynFile['AFNames'] ]
+                        # Adjust the Airfoil path to point ot the templatePath (1:-1 to remove quotes). Accepts Airfoils dir with different names
+                        self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, i[1:-1])}"' for i in self.AeroDynFile['AFNames']]
                         if writeFiles:
                             if t==0: shutilcopy2_untilSuccessful(self.ADbladefilepath, os.path.join(currPath,self.ADbladefilename))
                             if t==0: self.AeroDynFile.write(os.path.join(currPath,f'{self.ADfilename}'))
