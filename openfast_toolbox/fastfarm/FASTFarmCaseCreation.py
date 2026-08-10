@@ -2964,6 +2964,9 @@ class FFCaseCreation:
                         self.dr = self.cmax
                     else: # Curled; Cartesian
                         self.dr = round(self.D/15)
+                        if self.dr == 0:
+                            # Likely a small, scaled rotor
+                            self.dr = round(self.D/15, 2)
                     ff_file['dr'] = self.dr
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
                     if 'NumPlanes' in ff_file.keys():
@@ -3083,10 +3086,14 @@ class FFCaseCreation:
                     if self.mod_wake == 1: # Polar model
                         self.dr = self.cmax
                     else: # Curled; Cartesian
-                        self.dr = round(self.D/10)
+                        self.dr = round(self.D/15)
+                        if self.dr == 0:
+                            # Likely a small, scaled rotor
+                            self.dr = round(self.D/15, 2)
                     ff_file['dr'] = self.dr
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
-                    ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
+                    if 'NumPlanes' in ff_file.keys(): # keep backward compatibility
+                        ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
                     ff_file['OutRadii'] = [ff_file['OutRadii']] if isinstance(ff_file['OutRadii'],(float,int)) else ff_file['OutRadii'] 
                     # If NOutRadii is 0 we find some default radii
                     if ff_file['NOutRadii']==0:
@@ -3163,8 +3170,8 @@ class FFCaseCreation:
     
         X0_Low = np.floor( (min(xWT) - self.extent_low[0]*D ))
         X0_Low = getMultipleOf(X0_Low, multipleof=dX_Low)
-        Y0_Low = np.floor( -LY_Low/2                   )   # Starting on integer value for aesthetics
-        Z0_Low = lowbts.z[0]                               # we start at lowest to include tower
+        Y0_Low = -LY_Low/2    # equivalent to lowbts.y[0], the first grid point
+        Z0_Low = lowbts.z[0]  # we start at lowest to include tower
     
         XMax_Low = getMultipleOf(max(xWT) + self.extent_low[1]*D, multipleof=dX_Low)
         LX_Low = XMax_Low-X0_Low

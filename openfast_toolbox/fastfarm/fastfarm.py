@@ -246,8 +246,10 @@ def fastFarmBoxExtent(yBox, zBox, tBox, meanU, hubHeight, D, xWT, yWT,
     #       Also, we need to know the main flow direction to add a buffere with extent_wake
     # Origin
     nD_Before = extent_X/2 # Diameters before the first turbine to start the domain
-    X0_Low = np.floor( (min(xWT)-nD_Before*D-dX_Low)) # Starting on integer value for esthetics. With a dX_Low margin.
-    Y0_Low = np.floor( -LY_Box/2                    ) # Starting on integer value for esthetics
+    X0_Low = np.floor( (min(xWT)-nD_Before*D-dX_Low)) # Starting on integer value for aesthetics. With a dX_Low margin.
+    # the flooring breaks very small cases based on scaled rotors; let's round to 2 decimals instead
+    #Y0_Low = np.floor( -LY_Box/2                    ) # Starting on integer value for aesthetics
+    Y0_Low = -LY_Box/2
     Z0_Low = zBox[0] # we start at lowest to include tower
     if LES:
         if Y0_Low > min(yWT)-3*D:
