@@ -73,31 +73,37 @@ def checkIfExists(f):
     if os.path.isfile(f):
         return True
     else:
-        print(f'File {f} does not exist.')
+        WARN(f'File {f} does not exist.')
         return False
 
 def shutilcopy2_untilSuccessful(src, dst):
     # Fail-safe for filesystem issues
     shutil.copy2(src, dst)
     if not checkIfExists(dst):
-        print(f'File {dst} not created. Trying again.\n')
+        WARN(f'File {dst} not created. Trying again.\n')
         shutilcopy2_untilSuccessful(src,dst)
 
 def hasSymlink():
     # If running on a platform without os.symlink (e.g. very old Python)
     import tempfile
     if not hasattr(os, "symlink"):
-        return False
+        hassym = False
     try:
         with tempfile.TemporaryDirectory() as tmp:
             target = os.path.join(tmp, "target")
             link   = os.path.join(tmp, "link")
             open(target, "w").close()
             os.symlink(target, link)      # attempt creation
-        return True
+        hassym = True
     except (OSError, NotImplementedError):
         # OSError covers Windows privilege errors, NotImplementedError covers unsupported FS
-        return False
+        hassym = False
+
+    if hassym:
+        INFO('System supports symlink')
+    else:
+        WARN('System has no symlink support')
+    return hassym
 
 def getMultipleOf(val, multipleof):
     '''
@@ -333,28 +339,15 @@ class FFCaseCreation:
                                         
         if self.verbose is False: self.verbose = 0
 
-        if self.verbose>0: print(f'Checking inputs...', end='\r')
         self._checkInputs()       
-        if self.verbose>0: print(f'Checking inputs... Done.')
-
-        if self.verbose>0: print(f'Checking if we can create symlinks...', end='\r')
         self._can_create_symlinks = hasSymlink()
-        if self.verbose>0: print(f'Checking if we can create symlinks... {self._can_create_symlinks}')
-
-        if self.verbose>0: print(f'Setting rotor parameters...', end='\r')
         self._setRotorParameters()
-        if self.verbose>0: print(f'Setting rotor parameters... Done.')
-                                        
         # TODO: Creating Cases and Conditions should have its own function interface so the user can call
-        if self.verbose>0: print(f'Creating auxiliary arrays for all conditions and cases...', end='\r')
         self.createAuxArrays()          
-        if self.verbose>0: print(f'Creating auxiliary arrays for all conditions and cases... Done.')
                                         
         if self.path is not None:
             # TODO this should only be done when user ask for input file creation
-            if self.verbose>0: print(f'Creating directory structure and copying files...', end='\r')
             self._create_dir_structure()
-            if self.verbose>0: print(f'Creating directory structure and copying files... Done.')
 
 
     def __repr__(self):
@@ -834,7 +827,7 @@ class FFCaseCreation:
         if self.refTurb_rot >= self.nTurbines:
             raise ValueError(f'The index for the reference turbine for the farm to be rotated around is greater than the number of turbines')
 
-
+        OK('Inputs are valid')
 
 
     def _determine_resolutions_from_dummy_les_grid(self):
@@ -863,11 +856,11 @@ class FFCaseCreation:
                                 mod_wake = self.mod_wake)
 
         INFO(f'Resolution - Calculated values:')
-        print_bold(f'       High-resolution: ds_high: {amr.ds_high_les} m, dt_high: {amr.dt_high_les} s')
-        print_bold(f'       Low-resolution:  ds_low : {amr.ds_low_les} m, dt_low: {amr.dt_low_les} s')
+        print_bold(f'     High-resolution: ds_high: {amr.ds_high_les} m, dt_high: {amr.dt_high_les} s')
+        print_bold(f'     Low-resolution:  ds_low : {amr.ds_low_les} m, dt_low: {amr.dt_low_les} s')
         INFO (f'If the above values are too fine or manual tuning is warranted, specify them manually.')
-        INFO (f'       To do that, specify the values directly to `FFCaseCreation`, e.g.:')
-        INFO(f'       ', end='')
+        INFO (f'     To do that, specify the values directly to `FFCaseCreation`, e.g.:')
+        INFO(f'     ', end='')
         INFO(f'`dt_high = {2*amr.dt_high_les}`; ', end='')
         INFO(f'`ds_high = {2*amr.ds_high_les}`; ', end='')
         INFO(f'`dt_low  = {2*amr.dt_low_les}`; ', end='')
@@ -945,6 +938,8 @@ class FFCaseCreation:
                 seedPath = self.getCondSeedPath(cond, seed)
                 if not os.path.exists(seedPath):  os.makedirs(seedPath)
 
+        OK(f'Directory structure created at {self.path}')
+
     def _copy(self, src, dst, debug=False):
         if debug:
             print('SRC:', src, os.path.exists(src))
@@ -1004,9 +999,9 @@ class FFCaseCreation:
 
         # Loops on all conditions/cases creating DISCON and *Dyn files
         for cond in range(self.nConditions):
-            if self.verbose>0: print(f'Processing condition {self.condDirList[cond]}')
+            if self.verbose>0: INFO(f'Processing condition {self.condDirList[cond]}')
             for case in range(self.nCases):
-                if self.verbose>0: print(f'    Processing case {self.caseDirList[case]}', end='\r')
+                if self.verbose>0: INFO(f'  Processing case {self.caseDirList[case]}', end='\r')
                 currPath = self.getCasePath(cond, case)
         
                 # Recover info about the current CondXX_*/CaseYY_*
@@ -1117,7 +1112,7 @@ class FFCaseCreation:
                 if not self.hasSrvD:
                     if self.verbose>=1:
                         if self.ServoDynFile != 'unused':  # to prevent getting an error if ServoDyn is not being used.
-                            print(f"     No controller given through libdiscon/DLL. ",
+                            WARN(f"     No controller given through libdiscon/DLL. ",
                                 f"Using `VSContrl` {self.ServoDynFile['VSContrl']} from the template files.")
 
                 # Loop through all turbines of current condition and case
@@ -1287,7 +1282,7 @@ class FFCaseCreation:
                     if writeFiles:
                         self.turbineFile.write( os.path.join(currPath,f'{self.turbfilename}{t+1}.fst'))
 
-            if self.verbose>0: print(f'Done processing condition {self.condDirList[cond]}                                              ')
+            if self.verbose>0: OK(f'Done processing condition {self.condDirList[cond]}                                              ')
 
         # Some files, for some reason, do not get copied properly. This leads to a case crashing due to missing file.
         # Let's check if all files have been indded properly copied. If not, the copyTurbineFilesForEachCase will be
@@ -1520,9 +1515,9 @@ class FFCaseCreation:
         if templatePath is not None:
             if not os.path.isdir(templatePath):
                     if os.path.isabs(templatePath):
-                        raise ValueError(f'Absolute template path {templatePath} does not seem to exist.')
+                        raise FAIL(f'Absolute template path {templatePath} does not seem to exist.')
                     else: 
-                        raise ValueError(f'Relative template path {templatePath} does not seem to exist. Full path is: {os.path.abspath(templatePath)}.')
+                        raise FAIL(f'Relative template path {templatePath} does not seem to exist. Full path is: {os.path.abspath(templatePath)}.')
             for key, value in templateFiles.items():
                 if value == 'unused' or value is None:
                     continue
@@ -1534,7 +1529,7 @@ class FFCaseCreation:
                     #continue
                 else:
                     templateFiles[key] = os.path.join(templatePath, f"{value}").replace('\\','/')
-                INFO(f'Template {key:24s}={templateFiles[key]}')
+                INFO(f'  Template {key:24s}={templateFiles[key]}')
 
         # --- The user provided a FSTF file from which we override the templateFiles
         if templateFSTF is not None:
@@ -1560,7 +1555,7 @@ class FFCaseCreation:
             for key_deck, key_tpl in KEY_MAP.items():
                 if key_deck in fread.keys(): 
                     if key_tpl in templateFiles:
-                        WARN(f'Template {key_tpl} is provided in templateFiles, not using value from FSTF file.')
+                        WARN(f'  Template {key_tpl} is provided in templateFiles, not using value from FSTF file.')
                     else:
                         filebase = fread[key_deck]
                         if '.T.' in filebase:
@@ -1582,7 +1577,7 @@ class FFCaseCreation:
         # --------------------------------------------------------------------------------
         if verbose>0:
             for key, value in templateFiles.items():
-                INFO(f'Template {key:24s}={value}')
+                INFO(f'  Template {key:24s}={value}')
 
         if not valid_keys >= set(templateFiles.keys()):
             raise ValueError(f'Extra entries are present in the dictionary. '\
@@ -1890,6 +1885,7 @@ class FFCaseCreation:
                 pass  # keep flat=True for single case/condition
             else:
                 self.flat = False
+        OK('Auxiliary arrays for all conditions and cases created')
 
 
     def _create_all_cond(self):
@@ -1897,8 +1893,8 @@ class FFCaseCreation:
         if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue):
             self.nConditions = len(self.vhub)
 
-            if self.verbose>0: INFO(f'The length of vhub, shear, and TI are the same. Assuming each position is a condition.')
-            if self.verbose>0: INFO(f'Creating {self.nConditions} conditions')
+            if self.verbose>0: WARN(f'The length of vhub, shear, and TI are the same. Assuming each position is a condition.')
+            if self.verbose>0: INFO(f'Creating {self.nConditions} condition(s)')
 
             self.allCond = xr.Dataset({'vhub':    (['cond'], self.vhub   ),
                                        'shear':   (['cond'], self.shear  ),
@@ -1933,7 +1929,7 @@ class FFCaseCreation:
             self.sweepEDmodel = False
             self.sweepADmodel = False
         else:
-            print(f"Sweeps in AD and ED enabled.")
+            INFO(f"Sweeps in AD and ED enabled")
             self.sweepEDmodel = True
             self.sweepADmodel = True
 
@@ -2104,7 +2100,9 @@ class FFCaseCreation:
                                    },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
 
         else:
-            raise ValueError(f'Unknown turbine with diameter {self.D}. Add values to the `_setRotorParameters` function.')
+            FAIL(f'Unknown turbine with diameter {self.D}. Add values to the `_setRotorParameters` function.')
+
+        OK('Rotor parameters set')
   
 
 
@@ -2112,7 +2110,7 @@ class FFCaseCreation:
     def TS_low_setup(self, writeFiles=True, runOnce=False):
         if self.inflowType == 'TS':
             # This function is called once for domain limits even when LES, so only printing the info when relevant
-            INFO('Preparing TurbSim low resolution input files.')
+            INFO('Preparing TurbSim low resolution input files')
 
         boxType='lowres'
         lowFilesName = []
@@ -2327,7 +2325,7 @@ class FFCaseCreation:
             options += f'-p {p} '
 
         sub_command = f"sbatch {options}{self.slurmfilename_low}"
-        print(f'Calling: {sub_command}')
+        INFO(f'Calling: {sub_command}')
         self.sed_inplace(sub_command, inplace)
 
 
@@ -2380,8 +2378,8 @@ class FFCaseCreation:
         self.xoffset_turbsOrigin2TSOrigin = -self.extent_low[0]*self.D
         
         if self.verbose>0:
-            INFO(f"    The x offset between the turbine ref frame and turbsim is {self.xoffset_turbsOrigin2TSOrigin}")
-            INFO(f"    The y offset between the turbine ref frame and turbsim is {self.yoffset_turbsOrigin2TSOrigin}")
+            INFO(f"  The x offset between the turbine ref frame and turbsim is {self.xoffset_turbsOrigin2TSOrigin}")
+            INFO(f"  The y offset between the turbine ref frame and turbsim is {self.yoffset_turbsOrigin2TSOrigin}")
 
 
     def TS_high_get_time_series(self):
@@ -2459,9 +2457,9 @@ class FFCaseCreation:
                         # time-series file will have a y of 2 m.
                         yoffset = bts['y'][jTurb] - yt
                         if yoffset != 0 and self.verbose>1:
-                            print(f"Seed {seed}, Case {case}: Turbine {t+1} is not at a grid point location. Tubine is at y={yloc_}",\
-                                  f"on the turbine reference frame, which is y={yt} on the low-res TurbSim reference frame. The",\
-                                  f"nearest grid point in y is {bts['y'][jTurb]} so printing y={yoffset} to the time-series file.")
+                            WARN(f"Seed {seed}, Case {case}: Turbine {t+1} is not at a grid point location. Tubine is at y={yloc_}",\
+                                 f"on the turbine reference frame, which is y={yt} on the low-res TurbSim reference frame. The",\
+                                 f"nearest grid point in y is {bts['y'][jTurb]} so printing y={yoffset} to the time-series file.")
                         writeTimeSeriesFile(timeSeriesOutputFile, yoffset, Hub_series, uvel_hr, vvel_hr, wvel_hr, time_hr)
 
 
@@ -2680,7 +2678,7 @@ class FFCaseCreation:
             options += f'-p {p} '
 
         sub_command = f"sbatch {options}{self.slurmfilename_high}"
-        print(f'Calling: {sub_command}')
+        INFO(f'Calling: {sub_command}')
         self.sed_inplace(sub_command, inplace)
 
     
@@ -2689,7 +2687,7 @@ class FFCaseCreation:
         # Create symlink of all the high boxes for the cases with different turbine properties (e.g. yaw). These are the "repeated" boxes
 
         if self.verbose>0:
-            print(f'Creating symlinks for all the high-resolution boxes')
+            INFO(f'Creating symlinks for all the high-resolution boxes')
             
         for cond in range(self.nConditions):
             for case in range(self.nCases):
@@ -3091,9 +3089,9 @@ class FFCaseCreation:
         
         # Loops on all conditions/cases and cases for FAST.Farm
         for cond in range(self.nConditions):
-            if self.verbose>0: print(f'Processing condition {self.condDirList[cond]}')
+            if self.verbose>0: INFO(f'Processing condition {self.condDirList[cond]}')
             for case in range(self.nCases):
-                if self.verbose>0: print(f'    Processing all {self.nSeeds} seeds of case {self.caseDirList[case]}', end='\r')
+                if self.verbose>0: INFO(f'  Processing {self.nSeeds} seed(s) of case {self.caseDirList[case]}', end='\r')
                 for seed in range(self.nSeeds):
                     seedPath = self.getCaseSeedPath(cond, case, seed)
         
@@ -3205,7 +3203,7 @@ class FFCaseCreation:
                     ff_file['WindVelZ'] = ', '.join(map(str, zWT[:9]+self.zhub))
         
                     ff_file.write(outputFSTF)
-            if self.verbose>0: print(f'Done processing condition {self.condDirList[cond]}                                              ')
+            if self.verbose>0: OK(f'Done processing condition {self.condDirList[cond]}                                              ')
 
         return
 
@@ -3221,10 +3219,10 @@ class FFCaseCreation:
         # dX_High can sometimes be too high. So get the closest to the cmax, but multiple of what should have been
         dX_High = meanU_High*dT_High
         if self.verbose>1:
-            print(f'original dX_High is {dX_High}')
+            INFO(f'  Original dX_High is {dX_High}')
         dX_High = round(self.cmax/dX_High) * dX_High
         if self.verbose>1:
-            print(f'after adjusting to closes multiple of cmax, dX_High is {dX_High}')
+            INFO(f'  After adjusting to closes multiple of cmax, dX_High is {dX_High}')
         dY_High = highbts.y[1] - highbts.y[0]
         dZ_High = highbts.z[1] - highbts.z[0]
     
@@ -3287,21 +3285,21 @@ class FFCaseCreation:
             Y0_High    = Y0_Low + np.floor((Y0_desired-Y0_Low)/dY_High)*dY_High
     
         if self.verbose>2:
-            print(f'  Low Box  \t\t  High box   ')
-            print(f'dT_Low: {dT_Low}\t\t dT_High: {dT_High}')
-            print(f'dX_Low: {dX_Low}\t\t dX_High: {dX_High}')
-            print(f'dY_Low: {dY_Low}\t\t dY_High: {dY_High}')
-            print(f'dZ_Low: {dZ_Low}\t\t dZ_High: {dZ_High}')
-            print(f'LX_Low: {LX_Low}\t\t LX_High: {LX_High}')
-            print(f'LY_Low: {LY_Low}\t\t LY_High: {LY_High}')
-            print(f'LZ_Low: {LZ_Low}\t\t LZ_High: {LZ_High}')
-            print(f'LT_Low: {LT_Low}\t\t LT_High: {LT_High}')
-            print(f'nX_Low: {nX_Low}\t\t nX_High: {nX_High}')
-            print(f'nY_Low: {nY_Low}\t\t nY_High: {nY_High}')
-            print(f'nZ_Low: {nZ_Low}\t\t nZ_High: {nZ_High}')
-            print(f'X0_Low: {X0_Low}\t\t X0_High: {X0_High}')
-            print(f'Y0_Low: {Y0_Low}  \t Y0_High: {Y0_High}')
-            print(f'Z0_Low: {Z0_Low}\t\t Z0_High: {Z0_High}')
+            INFO(f'  Low Box  \t\t  High box   ')
+            INFO(f'dT_Low: {dT_Low}\t\t dT_High: {dT_High}')
+            INFO(f'dX_Low: {dX_Low}\t\t dX_High: {dX_High}')
+            INFO(f'dY_Low: {dY_Low}\t\t dY_High: {dY_High}')
+            INFO(f'dZ_Low: {dZ_Low}\t\t dZ_High: {dZ_High}')
+            INFO(f'LX_Low: {LX_Low}\t\t LX_High: {LX_High}')
+            INFO(f'LY_Low: {LY_Low}\t\t LY_High: {LY_High}')
+            INFO(f'LZ_Low: {LZ_Low}\t\t LZ_High: {LZ_High}')
+            INFO(f'LT_Low: {LT_Low}\t\t LT_High: {LT_High}')
+            INFO(f'nX_Low: {nX_Low}\t\t nX_High: {nX_High}')
+            INFO(f'nY_Low: {nY_Low}\t\t nY_High: {nY_High}')
+            INFO(f'nZ_Low: {nZ_Low}\t\t nZ_High: {nZ_High}')
+            INFO(f'X0_Low: {X0_Low}\t\t X0_High: {X0_High}')
+            INFO(f'Y0_Low: {Y0_Low}  \t Y0_High: {Y0_High}')
+            INFO(f'Z0_Low: {Z0_Low}\t\t Z0_High: {Z0_High}')
     
     
         # Fill dictionary with all values
@@ -3340,10 +3338,10 @@ class FFCaseCreation:
             dY = Y_rel - np.round(Y_rel) # Should be close to zero
         
             if any(abs(dX)>1e-3):
-                print('Deltas:',dX)
+                WARN('Deltas:',dX)
                 raise Exception('Some X0_High are not on an integer multiple of the high-res grid')
             if any(abs(dY)>1e-3):
-                print('Deltas:',dY)
+                WARN('Deltas:',dY)
                 raise Exception('Some Y0_High are not on an integer multiple of the high-res grid')
             
         return d
@@ -3508,7 +3506,7 @@ class FFCaseCreation:
                         options += f'-p {p} '
 
                     sub_command = f"sbatch {options}{fname}"
-                    print(f'Calling: {sub_command}')
+                    INFO(f'Calling: {sub_command}')
                     self.sed_inplace(sub_command, inplace)
                     time.sleep(delay) # Sometimes the same job gets submitted twice. This gets around it.
 
@@ -3524,26 +3522,25 @@ class FFCaseCreation:
         ff_run_failed = False
         for cond in range(self.nConditions):
             for case in range(self.nCases):
-                if self.verbose>1:  print(f'Checking {self.condDirList[cond]}, {self.caseDirList[case]}')
+                if self.verbose>1:  INFO(f'Checking {self.condDirList[cond]}, {self.caseDirList[case]}')
                 for seed in range(self.nSeeds):
                     # Let's check the last line of the logfile
                     fflog_path = os.path.join(self.path, self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', f'log.fastfarm.seed{seed}.txt')
                     if not os.path.isfile(fflog_path):
-                        print(f'{self.condDirList[cond]}, {self.caseDirList[case]}, seed {seed}: FAST.Farm log file does not exist.')
+                        WARN(f'{self.condDirList[cond]}, {self.caseDirList[case]}, seed {seed}: FAST.Farm log file does not exist.')
                         ff_run_failed=True
 
                     else:
                         tail_command = ['tail', '-n', '2', fflog_path]
                         tail = subprocess.check_output(tail_command).decode('utf-8')
                         if tail.strip() != 'FAST.Farm terminated normally.':
-                            print(f'{self.condDirList[cond]}, {self.caseDirList[case]}, seed {seed}: FAST.Farm did not complete successfully.')
+                            FAIL(f'{self.condDirList[cond]}, {self.caseDirList[case]}, seed {seed}: FAST.Farm did not complete successfully.')
                             ff_run_failed=True
 
         if ff_run_failed:
-            print('')
-            raise ValueError(f'Not all FAST.Farm runs were successful')
+            FAIL(f'Not all FAST.Farm runs were successful')
         else:
-            print(f'All cases finished successfully.')
+            OK(f'All cases finished successfully.')
 
 
     def set_wake_model_params(self, C_HWkDfl_OY=None, C_HWkDfl_xY=None, k_VortexDecay=None, k_vCurl=None):
