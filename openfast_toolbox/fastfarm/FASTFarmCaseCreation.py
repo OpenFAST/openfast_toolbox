@@ -970,10 +970,10 @@ class FFCaseCreation:
             print('SRC ABS:', src_abs, os.path.exists(src_abs))
             print('SRC REL:', src, os.path.exists(src))
             print('DST    :', dst, os.path.exists(dst))
-        error = f"Src file not found: {src_abs}"
+        error = None
 
         if not os.path.exists(src_abs) and not self.skipchecks:
-            raise Exception(error)
+            raise Exception(f"Src file not found: {src_abs}")
         if not os.path.exists(dst):
             if self._can_create_symlinks:
                 # Unix-based
@@ -1831,6 +1831,8 @@ class FFCaseCreation:
 
 
     def _create_copy_libdiscon(self):
+        if not self.hasController:
+            return
         # Make copies of libdiscon for each turbine if they don't exist
         copied = False
         for t in range(self.nTurbines):
@@ -2098,6 +2100,14 @@ class FFCaseCreation:
                                     'RotSpeed':    (['wspd'], [ 5.0, 5.0]),     # from input file
                                     'BlPitch':     (['wspd'], [ -1, -1]),       # from input file
                                    },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
+
+
+        elif _isclose(self.D, 2.38, tol=0.5):   # OC7 WP3.1 model-scale rotor, fixed 240 rpm
+            self.bins = xr.Dataset({'WaveHs':   (['wspd'], [1.0, 1.0]),    # unused (no HydroDyn)
+                                    'WaveTp':   (['wspd'], [7.0, 7.0]),    # unused
+                                    'RotSpeed': (['wspd'], [240.0, 240.0]),
+                                    'BlPitch':  (['wspd'], [0.0, 0.0]),
+                                   }, coords={'wspd': [4.19, 15]})
 
         else:
             FAIL(f'Unknown turbine with diameter {self.D}. Add values to the `_setRotorParameters` function.')
