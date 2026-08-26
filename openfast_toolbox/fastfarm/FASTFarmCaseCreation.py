@@ -190,6 +190,7 @@ class FFCaseCreation:
                  ffbin = None,
                  tsbin = None,
                  mod_wake = 1,
+                 f_c = None,
                  yaw_init = None,
                  ADmodel = None,
                  EDmodel = None,
@@ -247,6 +248,11 @@ class FFCaseCreation:
         mod_wake: int
             Wake model to be used on the computation of high- and low-res boxes temporal and
             spatial resolutions if those are not specified
+        f_c: float
+            Cutoff (corner) frequency of the low-pass time filter for the wake advection, deflection,
+            and meandering model, in Hz. If None (default), computed from the modeling guidance as
+            1.28*Vhub/R. Land-based turbines should use the computed value; floating turbines typically
+            need a lower value, close to the platform surge natural frequency
         yaw_init: list of scalars or single scalar
             List of yaw to sweep on. Given as a 2-D array if len(inflow_deg)>1. One row of yaw
             per wind direction given in inflow_deg. Each row has nTurbines values
@@ -299,6 +305,7 @@ class FFCaseCreation:
         self.ffbin       = ffbin
         self.tsbin       = tsbin
         self.mod_wake    = mod_wake
+        self.f_c         = f_c
         self.yaw_init    = yaw_init
         self.ADmodel     = ADmodel
         self.EDmodel     = EDmodel
@@ -808,6 +815,11 @@ class FFCaseCreation:
         # Check the wake model (1:Polar; 2:Curl; 3:Cartesian)
         if self.mod_wake not in [1,2,3]:
             raise ValueError(f'Wake model `mod_wake` should be 1 (Polar), 2 (Curl), or 3 (Cartesian). Received {self.mod_wake}.')
+
+        # Check wake dynamics parameters
+        if self.f_c is None:
+            WARN('f_c value not given. Automatic computation is appropriate for onshore turbines only. '\
+                 'If this is a floating turbine, pass the desired value of f_c explicitly.')
 
         # Check the ds and dt for the high- and low-res boxes. If not given, call the
         # AMR-Wind auxiliary function with dummy domain limits. 
@@ -3043,6 +3055,8 @@ class FFCaseCreation:
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
                     if 'NumPlanes' in ff_file.keys():
                         ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
+                    # Cutoff frequency of the low-pass time filter. Guidance recommends 1.28*U0/R
+                    ff_file['f_c'] = round(1.28*Vhub_/(D_/2), 4) if self.f_c is None else self.f_c
 
                     ff_file['OutRadii'] = [ff_file['OutRadii']] if isinstance(ff_file['OutRadii'],(float,int)) else ff_file['OutRadii'] 
                     # If NOutRadii is 0 we find some default radii
@@ -3166,6 +3180,8 @@ class FFCaseCreation:
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
                     if 'NumPlanes' in ff_file.keys(): # keep backward compatibility
                         ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
+                    # Cutoff frequency of the low-pass time filter. Guidance recommends 1.28*U0/R
+                    ff_file['f_c'] = round(1.28*Vhub_/(D_/2), 4) if self.f_c is None else self.f_c
                     ff_file['OutRadii'] = [ff_file['OutRadii']] if isinstance(ff_file['OutRadii'],(float,int)) else ff_file['OutRadii'] 
                     # If NOutRadii is 0 we find some default radii
                     if ff_file['NOutRadii']==0:
