@@ -949,6 +949,7 @@ class AMRWindSimulation:
         s += f"{self.postproc_name_lr}.output_time_interval    = {output_time_interval_lr_str}\n"
         if terrain:
             s += f"{self.postproc_name_lr}.derived_fields          = mask_terrain(velocity)\n"
+            s += f"{self.postproc_name_lr}.fields                  = none\n"
         else:
             s += f"{self.postproc_name_lr}.fields                  = velocity\n"
         s += f"{self.postproc_name_lr}.labels                  = {sampling_labels_lr_str}\n\n"
@@ -968,6 +969,7 @@ class AMRWindSimulation:
         s += f"{self.postproc_name_hr}.output_time_interval    = {output_time_interval_hr_str}\n"
         if terrain:
             s += f"{self.postproc_name_hr}.derived_fields          = mask_terrain(velocity)\n"
+            s += f"{self.postproc_name_hr}.fields                  = none\n"
         else:
             s += f"{self.postproc_name_hr}.fields                  = velocity\n"
         s += f"{self.postproc_name_hr}.labels                  = {sampling_labels_hr_str}\n"
