@@ -444,33 +444,36 @@ class AMRWindSimulation:
             zlow_hr_min  = wt_z
             zhigh_hr_max = wt_z + wt_h + self.buffer_hr * wt_D 
 
-            # Calculate the minimum/maximum HR domain coordinate lengths & number of grid cells
-            xdist_hr_min = xhigh_hr_max - xlow_hr_min  # Minumum possible length of x-extent of HR domain
-            xdist_hr = self.ds_high_les * np.ceil(xdist_hr_min/self.ds_high_les)  
-            nx_hr = int(xdist_hr/self.ds_high_les) + 1
+            # Snap the requested extent outward onto the LES sampling grid: floor the low edge and ceil the
+            # high edge (both relative to prob_lo, where the grid lines actually sit), then derive the extent
+            # and point count from what came out. This guarantees the box contains [wt - buffer, wt + buffer]
+            # on every side regardless of where the turbine falls on the grid, at the cost of at most one
+            # extra cell per direction.
+            tol = 1e-6
+            xlow_hr_aligned  = self.prob_lo[0] + self.ds_high_les*np.floor((xlow_hr_min  - self.prob_lo[0])/self.ds_high_les + tol)
+            xhigh_hr_aligned = self.prob_lo[0] + self.ds_high_les*np.ceil( (xhigh_hr_max - self.prob_lo[0])/self.ds_high_les - tol)
+            xdist_hr = xhigh_hr_aligned - xlow_hr_aligned
+            nx_hr = int(round(xdist_hr/self.ds_high_les)) + 1
 
-            ydist_hr_min = yhigh_hr_max - ylow_hr_min
-            ydist_hr = self.ds_high_les * np.ceil(ydist_hr_min/self.ds_high_les)
-            ny_hr = int(ydist_hr/self.ds_high_les) + 1
+            ylow_hr_aligned  = self.prob_lo[1] + self.ds_high_les*np.floor((ylow_hr_min  - self.prob_lo[1])/self.ds_high_les + tol)
+            yhigh_hr_aligned = self.prob_lo[1] + self.ds_high_les*np.ceil( (yhigh_hr_max - self.prob_lo[1])/self.ds_high_les - tol)
+            ydist_hr = yhigh_hr_aligned - ylow_hr_aligned
+            ny_hr = int(round(ydist_hr/self.ds_high_les)) + 1
 
             # Calculate actual HR domain extent
             #  NOTE: Sampling planes should measure at AMR-Wind cell centers, not cell edges
-            xlow_hr = getMultipleOf(xlow_hr_min, multipleof=self.ds_high_les) - 0.5*self.dx_at_hr_level+ self.prob_lo[0]%self.ds_high_les
+            xlow_hr = xlow_hr_aligned - 0.5*self.dx_at_hr_level
             xhigh_hr = xlow_hr + xdist_hr
 
-            ylow_hr = getMultipleOf(ylow_hr_min, multipleof=self.ds_high_les) - 0.5*self.dy_at_hr_level + self.prob_lo[1]%self.ds_high_les
+            ylow_hr = ylow_hr_aligned - 0.5*self.dy_at_hr_level
             yhigh_hr = ylow_hr + ydist_hr
 
-            #zlow_hr = zlow_hr_min + 0.5 * self.dz_at_hr_level
-            # !!!! 2024-07-23: changed to positive the 0.5*gridres below so that z>0 in flat terrain. The wfip files will be off
-            # !!!! 2026-05-30: snap zlow_hr UP (not nearest) so the sample box stays inside
-            #                  the per-turbine refinement region, whose z-floor is ztowerbottom.
-            #                  getMultipleOf rounds to nearest; if it lands below zlow_hr_min,
-            #                  bump up by one ds_high_les.
-            zlow_hr_snapped = getMultipleOf(zlow_hr_min, multipleof=self.ds_high_les)
-            if zlow_hr_snapped < zlow_hr_min:
-                zlow_hr_snapped += self.ds_high_les
-            zlow_hr = zlow_hr_snapped + 0.5*self.dz_at_hr_level + self.prob_lo[2]%self.ds_high_les
+            # The z floor is snapped UP (ceil), unlike x/y: the requested floor is the tower base, and the
+            # per-turbine refinement region does not extend below it, so the sample box must start at or
+            # above it to be contained in that level. The top is snapped up as well (below) so the requested
+            # zhigh_hr_max is always covered.
+            zlow_hr_snapped = self.prob_lo[2] + self.ds_high_les*np.ceil((zlow_hr_min - self.prob_lo[2])/self.ds_high_les - tol)
+            zlow_hr = zlow_hr_snapped + 0.5*self.dz_at_hr_level
 
             # Recompute z-extent from the (now snapped-up) floor so we still cover zhigh_hr_max
             zdist_hr_min = zhigh_hr_max - zlow_hr
