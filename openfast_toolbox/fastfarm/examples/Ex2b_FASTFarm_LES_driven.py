@@ -88,7 +88,7 @@ def main(test=False):
 
     # ----------- Template files
     # --- Option 1
-    templateFSTF = os.path.join(scriptDir, '../../../data/IEA15MW/v4/FF.fstf')
+    templateFSTF = os.path.join(scriptDir, '../../../data/template_files_v4.2/IEA15MW/FAST.Farm.fstf')
     templateFiles = {'libdisconfilepath' : libdiscon}    
     # --- Option 2    
     #templatePath = '/full/path/where/template/files/are'
@@ -115,10 +115,6 @@ def main(test=False):
     #    'hydroDatapath'           : None,  # '/full/path/to/hydroData',
     #    'FFfilename'              : 'Model_FFarm.fstf',
     #}
-    # SLURM scripts
-    slurm_FF_single         = './SampleFiles/runFASTFarm_cond0_case0_seed0.sh'
-
-
     # -----------------------------------------------------------------------------
     # ------------------------------- LES parameters ------------------------------
     # -----------------------------------------------------------------------------
@@ -214,12 +210,11 @@ def main(test=False):
     ffcase.set_wake_model_params(k_VortexDecay=0, k_vCurl=2.8)
 
     # ----------- Prepare script for submission
-    ffcase.FF_batch_prepare() # Write batch files with all commands to be run
-    #ffcase.FF_slurm_prepare(slurm_FF_single) # Alternative, prepare a slurm batch file
+    ffcase.FF_prepare(scheduler='bash')   # write a plain shell script
+    #ffcase.FF_prepare(scheduler='slurm') # Alternative, write a SLURM job-array script
 
     # ----------- Submit the FAST.Farm script (can be done from the command line)
-    ffcase.FF_batch_run(showOutputs=True, showCommand=True, nBuffer=10, shell_cmd='bash')
-    #ffcase.FF_slurm_submit(p='debug', t='1:00:00') # Alternative, submit a slurm batch file
+    #ffcase.FF_execute(scheduler='slurm', p='debug', t='1:00:00')
     return amr, ffcase
 
 

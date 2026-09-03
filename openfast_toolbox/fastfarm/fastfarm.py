@@ -246,8 +246,10 @@ def fastFarmBoxExtent(yBox, zBox, tBox, meanU, hubHeight, D, xWT, yWT,
     #       Also, we need to know the main flow direction to add a buffere with extent_wake
     # Origin
     nD_Before = extent_X/2 # Diameters before the first turbine to start the domain
-    X0_Low = np.floor( (min(xWT)-nD_Before*D-dX_Low)) # Starting on integer value for esthetics. With a dX_Low margin.
-    Y0_Low = np.floor( -LY_Box/2                    ) # Starting on integer value for esthetics
+    X0_Low = np.floor( (min(xWT)-nD_Before*D-dX_Low)) # Starting on integer value for aesthetics. With a dX_Low margin.
+    # the flooring breaks very small cases based on scaled rotors; let's round to 2 decimals instead
+    #Y0_Low = np.floor( -LY_Box/2                    ) # Starting on integer value for aesthetics
+    Y0_Low = -LY_Box/2
     Z0_Low = zBox[0] # we start at lowest to include tower
     if LES:
         if Y0_Low > min(yWT)-3*D:
@@ -404,6 +406,32 @@ def setFastFarmOutputs(fastFarmFile, OutListT1):
         else:
             OutList+='"'+s+'"'
     fst['OutList']=OutList
+    fst.write(fastFarmFile)
+
+def planeSliceRow(name, origin, plane, extent1, extent2):
+    """ One row of the AXIS-ALIGNED PLANE SLICES table (FAST.Farm f/FF_sliceOutput feature).
+    origin is the plane corner (x,y,z); plane is 'XY', 'YZ', or 'XZ'; extents grow from the corner along the two in-plane axes. """
+    return f'"{name}"    ({origin[0]:.2f} {origin[1]:.2f} {origin[2]:.2f})   {plane}   {extent1:.2f}   {extent2:.2f}'
+
+def terrainSliceRow(name, offsets, offsetNormal, sourceType, fileName):
+    """ One row of the TERRAIN-FOLLOWING SAMPLING table (FAST.Farm f/FF_sliceOutput feature).
+    offsets is a scalar or list of offsets (m) along offsetNormal; offsetNormal is 'default' (pure vertical) or a 3-vector; sourceType is 'STL' or 'Point'. """
+    offstr = ' '.join(f'{o:g}' for o in np.atleast_1d(offsets))
+    normstr = offsetNormal if isinstance(offsetNormal, str) else '({:g} {:g} {:g})'.format(*offsetNormal)
+    return f'"{name}"   {offstr}   {normstr}   {sourceType}   "{fileName}"'
+
+def addPlaneSlices(fastFarmFile, rows, WrPlaneDT=None):
+    """ Set the axis-aligned plane slices of a FAST.Farm input file (rows built with planeSliceRow). Updates NumPlaneSlices automatically. """
+    fst = FASTInputFile(fastFarmFile)
+    fst['PlaneSlices'] = rows
+    if WrPlaneDT is not None: fst['WrPlaneDT'] = WrPlaneDT
+    fst.write(fastFarmFile)
+
+def addTerrainSlices(fastFarmFile, rows, WrTerrainDT=None):
+    """ Set the terrain-following slices of a FAST.Farm input file (rows built with terrainSliceRow). Updates NumTerrainSlices automatically. """
+    fst = FASTInputFile(fastFarmFile)
+    fst['TerrainSlices'] = rows
+    if WrTerrainDT is not None: fst['WrTerrainDT'] = WrTerrainDT
     fst.write(fastFarmFile)
 
 def defaultOutRadii(dr, nr, R):

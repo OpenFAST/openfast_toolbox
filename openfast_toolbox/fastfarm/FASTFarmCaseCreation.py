@@ -73,31 +73,37 @@ def checkIfExists(f):
     if os.path.isfile(f):
         return True
     else:
-        print(f'File {f} does not exist.')
+        WARN(f'File {f} does not exist.')
         return False
 
 def shutilcopy2_untilSuccessful(src, dst):
     # Fail-safe for filesystem issues
     shutil.copy2(src, dst)
     if not checkIfExists(dst):
-        print(f'File {dst} not created. Trying again.\n')
+        WARN(f'File {dst} not created. Trying again.\n')
         shutilcopy2_untilSuccessful(src,dst)
 
 def hasSymlink():
     # If running on a platform without os.symlink (e.g. very old Python)
     import tempfile
     if not hasattr(os, "symlink"):
-        return False
+        hassym = False
     try:
         with tempfile.TemporaryDirectory() as tmp:
             target = os.path.join(tmp, "target")
             link   = os.path.join(tmp, "link")
             open(target, "w").close()
             os.symlink(target, link)      # attempt creation
-        return True
+        hassym = True
     except (OSError, NotImplementedError):
         # OSError covers Windows privilege errors, NotImplementedError covers unsupported FS
-        return False
+        hassym = False
+
+    if hassym:
+        INFO('System supports symlink')
+    else:
+        WARN('System has no symlink support')
+    return hassym
 
 def getMultipleOf(val, multipleof):
     '''
@@ -184,6 +190,7 @@ class FFCaseCreation:
                  ffbin = None,
                  tsbin = None,
                  mod_wake = 1,
+                 f_c = None,
                  yaw_init = None,
                  ADmodel = None,
                  EDmodel = None,
@@ -241,6 +248,11 @@ class FFCaseCreation:
         mod_wake: int
             Wake model to be used on the computation of high- and low-res boxes temporal and
             spatial resolutions if those are not specified
+        f_c: float
+            Cutoff (corner) frequency of the low-pass time filter for the wake advection, deflection,
+            and meandering model, in Hz. If None (default), computed from the modeling guidance as
+            1.28*Vhub/R. Land-based turbines should use the computed value; floating turbines typically
+            need a lower value, close to the platform surge natural frequency
         yaw_init: list of scalars or single scalar
             List of yaw to sweep on. Given as a 2-D array if len(inflow_deg)>1. One row of yaw
             per wind direction given in inflow_deg. Each row has nTurbines values
@@ -293,6 +305,7 @@ class FFCaseCreation:
         self.ffbin       = ffbin
         self.tsbin       = tsbin
         self.mod_wake    = mod_wake
+        self.f_c         = f_c
         self.yaw_init    = yaw_init
         self.ADmodel     = ADmodel
         self.EDmodel     = EDmodel
@@ -326,35 +339,25 @@ class FFCaseCreation:
         self.caseDirList    = []
         self.DLLfilepath    = None
         self.DLLext         = None
-        self.batchfile_high = ''
-        self.batchfile_low  = ''
-        self.batchfile_ff   = ''
+        self.scriptfile_low  = ''
+        self.scriptfile_high = ''
+        self.scriptfile_ff   = ''
+        self.scheduler_low   = None
+        self.scheduler_high  = None
+        self.scheduler_ff    = None
 
                                         
         if self.verbose is False: self.verbose = 0
 
-        if self.verbose>0: print(f'Checking inputs...', end='\r')
         self._checkInputs()       
-        if self.verbose>0: print(f'Checking inputs... Done.')
-
-        if self.verbose>0: print(f'Checking if we can create symlinks...', end='\r')
         self._can_create_symlinks = hasSymlink()
-        if self.verbose>0: print(f'Checking if we can create symlinks... {self._can_create_symlinks}')
-
-        if self.verbose>0: print(f'Setting rotor parameters...', end='\r')
         self._setRotorParameters()
-        if self.verbose>0: print(f'Setting rotor parameters... Done.')
-                                        
         # TODO: Creating Cases and Conditions should have its own function interface so the user can call
-        if self.verbose>0: print(f'Creating auxiliary arrays for all conditions and cases...', end='\r')
         self.createAuxArrays()          
-        if self.verbose>0: print(f'Creating auxiliary arrays for all conditions and cases... Done.')
                                         
         if self.path is not None:
             # TODO this should only be done when user ask for input file creation
-            if self.verbose>0: print(f'Creating directory structure and copying files...', end='\r')
             self._create_dir_structure()
-            if self.verbose>0: print(f'Creating directory structure and copying files... Done.')
 
 
     def __repr__(self):
@@ -536,6 +539,22 @@ class FFCaseCreation:
         return files
 
     @property
+    def high_res_inp(self):
+        # Not all individual high-res boxes are unique. If there are cases where the same high-res
+        # boxes are warranted (e.g. different nacelle yaw values), then copies/symlinks are made
+        highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
+        highBoxesCaseIndex   = [self.caseDirList.index(c) for c in highBoxesCaseDirList]
+
+        files = []
+        for cond in range(self.nConditions):
+            for case in highBoxesCaseIndex:
+                for seed in range(self.nSeeds):
+                    dirpath = self.getHRTurbSimPath(cond, case, seed)
+                    for t in range(self.nTurbines):
+                        files.append(f'{dirpath}/HighT{t+1}.inp')
+        return files
+
+    @property
     def high_res_bts(self):
         # Not all individual high-res boxes are unique. If there are cases where the same high-res
         # boxes are warranted (e.g. different nacelle yaw values), then copies/symlinks are made
@@ -563,6 +582,15 @@ class FFCaseCreation:
                     dirpath = self.getHRTurbSimPath(cond, case, seed)
                     for t in range(self.nTurbines):
                         files.append(f'{dirpath}/log.high{t+1}.seed{seed}.txt')
+        return files
+
+    @property
+    def low_res_inp(self):
+        files = []
+        for cond in range(self.nConditions):
+            for seed in range(self.nSeeds):
+                dirpath = self.getCondSeedPath(cond, seed)
+                files.append(f'{dirpath}/Low.inp')
         return files
 
     @property
@@ -788,6 +816,11 @@ class FFCaseCreation:
         if self.mod_wake not in [1,2,3]:
             raise ValueError(f'Wake model `mod_wake` should be 1 (Polar), 2 (Curl), or 3 (Cartesian). Received {self.mod_wake}.')
 
+        # Check wake dynamics parameters
+        if self.f_c is None:
+            WARN('f_c value not given. Automatic computation is appropriate for onshore turbines only. '\
+                 'If this is a floating turbine, pass the desired value of f_c explicitly.')
+
         # Check the ds and dt for the high- and low-res boxes. If not given, call the
         # AMR-Wind auxiliary function with dummy domain limits. 
         if None in (self.dt_high, self.ds_high, self.dt_low, self.ds_low):
@@ -809,7 +842,7 @@ class FFCaseCreation:
         if self.refTurb_rot >= self.nTurbines:
             raise ValueError(f'The index for the reference turbine for the farm to be rotated around is greater than the number of turbines')
 
-
+        OK('Inputs are valid')
 
 
     def _determine_resolutions_from_dummy_les_grid(self):
@@ -838,11 +871,11 @@ class FFCaseCreation:
                                 mod_wake = self.mod_wake)
 
         INFO(f'Resolution - Calculated values:')
-        print_bold(f'       High-resolution: ds_high: {amr.ds_high_les} m, dt_high: {amr.dt_high_les} s')
-        print_bold(f'       Low-resolution:  ds_low : {amr.ds_low_les} m, dt_low: {amr.dt_low_les} s')
+        print_bold(f'     High-resolution: ds_high: {amr.ds_high_les} m, dt_high: {amr.dt_high_les} s')
+        print_bold(f'     Low-resolution:  ds_low : {amr.ds_low_les} m, dt_low: {amr.dt_low_les} s')
         INFO (f'If the above values are too fine or manual tuning is warranted, specify them manually.')
-        INFO (f'       To do that, specify the values directly to `FFCaseCreation`, e.g.:')
-        INFO(f'       ', end='')
+        INFO (f'     To do that, specify the values directly to `FFCaseCreation`, e.g.:')
+        INFO(f'     ', end='')
         INFO(f'`dt_high = {2*amr.dt_high_les}`; ', end='')
         INFO(f'`ds_high = {2*amr.ds_high_les}`; ', end='')
         INFO(f'`dt_low  = {2*amr.dt_low_les}`; ', end='')
@@ -920,6 +953,8 @@ class FFCaseCreation:
                 seedPath = self.getCondSeedPath(cond, seed)
                 if not os.path.exists(seedPath):  os.makedirs(seedPath)
 
+        OK(f'Directory structure created at {self.path}')
+
     def _copy(self, src, dst, debug=False):
         if debug:
             print('SRC:', src, os.path.exists(src))
@@ -950,10 +985,10 @@ class FFCaseCreation:
             print('SRC ABS:', src_abs, os.path.exists(src_abs))
             print('SRC REL:', src, os.path.exists(src))
             print('DST    :', dst, os.path.exists(dst))
-        error = f"Src file not found: {src_abs}"
+        error = None
 
         if not os.path.exists(src_abs) and not self.skipchecks:
-            raise Exception(error)
+            raise Exception(f"Src file not found: {src_abs}")
         if not os.path.exists(dst):
             if self._can_create_symlinks:
                 # Unix-based
@@ -979,9 +1014,9 @@ class FFCaseCreation:
 
         # Loops on all conditions/cases creating DISCON and *Dyn files
         for cond in range(self.nConditions):
-            if self.verbose>0: print(f'Processing condition {self.condDirList[cond]}')
+            if self.verbose>0: INFO(f'Processing condition {self.condDirList[cond]}')
             for case in range(self.nCases):
-                if self.verbose>0: print(f'    Processing case {self.caseDirList[case]}', end='\r')
+                if self.verbose>0: INFO(f'  Processing case {self.caseDirList[case]}', end='\r')
                 currPath = self.getCasePath(cond, case)
         
                 # Recover info about the current CondXX_*/CaseYY_*
@@ -1092,7 +1127,7 @@ class FFCaseCreation:
                 if not self.hasSrvD:
                     if self.verbose>=1:
                         if self.ServoDynFile != 'unused':  # to prevent getting an error if ServoDyn is not being used.
-                            print(f"     No controller given through libdiscon/DLL. ",
+                            WARN(f"     No controller given through libdiscon/DLL. ",
                                 f"Using `VSContrl` {self.ServoDynFile['VSContrl']} from the template files.")
 
                 # Loop through all turbines of current condition and case
@@ -1146,9 +1181,8 @@ class FFCaseCreation:
                             self.AeroDynFile['SkewMomCorr'] = True
                         self.AeroDynFile['BEM_Mod'] = 2 
                         self.AeroDynFile['IntegrationMethod'] = 4
-                        # Adjust the Airfoil path to point to the templatePath (1:-1 to remove quotes)
-                        self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, "Airfoils", i[1:-1].split("Airfoils/", 1)[-1])}"' 
-                                        for i in self.AeroDynFile['AFNames'] ]
+                        # Adjust the Airfoil path to point ot the templatePath (1:-1 to remove quotes). Accepts Airfoils dir with different names
+                        self.AeroDynFile['AFNames'] = [f'"{os.path.join(self.templatePathabs, i[1:-1])}"' for i in self.AeroDynFile['AFNames']]
                         if writeFiles:
                             if t==0: shutilcopy2_untilSuccessful(self.ADbladefilepath, os.path.join(currPath,self.ADbladefilename))
                             if t==0: self.AeroDynFile.write(os.path.join(currPath,f'{self.ADfilename}'))
@@ -1263,7 +1297,7 @@ class FFCaseCreation:
                     if writeFiles:
                         self.turbineFile.write( os.path.join(currPath,f'{self.turbfilename}{t+1}.fst'))
 
-            if self.verbose>0: print(f'Done processing condition {self.condDirList[cond]}                                              ')
+            if self.verbose>0: OK(f'Done processing condition {self.condDirList[cond]}                                              ')
 
         # Some files, for some reason, do not get copied properly. This leads to a case crashing due to missing file.
         # Let's check if all files have been indded properly copied. If not, the copyTurbineFilesForEachCase will be
@@ -1496,9 +1530,9 @@ class FFCaseCreation:
         if templatePath is not None:
             if not os.path.isdir(templatePath):
                     if os.path.isabs(templatePath):
-                        raise ValueError(f'Absolute template path {templatePath} does not seem to exist.')
+                        raise FAIL(f'Absolute template path {templatePath} does not seem to exist.')
                     else: 
-                        raise ValueError(f'Relative template path {templatePath} does not seem to exist. Full path is: {os.path.abspath(templatePath)}.')
+                        raise FAIL(f'Relative template path {templatePath} does not seem to exist. Full path is: {os.path.abspath(templatePath)}.')
             for key, value in templateFiles.items():
                 if value == 'unused' or value is None:
                     continue
@@ -1510,7 +1544,7 @@ class FFCaseCreation:
                     #continue
                 else:
                     templateFiles[key] = os.path.join(templatePath, f"{value}").replace('\\','/')
-                INFO(f'Template {key:24s}={templateFiles[key]}')
+                INFO(f'  Template {key:24s}={templateFiles[key]}')
 
         # --- The user provided a FSTF file from which we override the templateFiles
         if templateFSTF is not None:
@@ -1536,7 +1570,7 @@ class FFCaseCreation:
             for key_deck, key_tpl in KEY_MAP.items():
                 if key_deck in fread.keys(): 
                     if key_tpl in templateFiles:
-                        WARN(f'Template {key_tpl} is provided in templateFiles, not using value from FSTF file.')
+                        WARN(f'  Template {key_tpl} is provided in templateFiles, not using value from FSTF file.')
                     else:
                         filebase = fread[key_deck]
                         if '.T.' in filebase:
@@ -1558,7 +1592,7 @@ class FFCaseCreation:
         # --------------------------------------------------------------------------------
         if verbose>0:
             for key, value in templateFiles.items():
-                INFO(f'Template {key:24s}={value}')
+                INFO(f'  Template {key:24s}={value}')
 
         if not valid_keys >= set(templateFiles.keys()):
             raise ValueError(f'Extra entries are present in the dictionary. '\
@@ -1812,6 +1846,8 @@ class FFCaseCreation:
 
 
     def _create_copy_libdiscon(self):
+        if not self.hasController:
+            return
         # Make copies of libdiscon for each turbine if they don't exist
         copied = False
         for t in range(self.nTurbines):
@@ -1866,6 +1902,7 @@ class FFCaseCreation:
                 pass  # keep flat=True for single case/condition
             else:
                 self.flat = False
+        OK('Auxiliary arrays for all conditions and cases created')
 
 
     def _create_all_cond(self):
@@ -1873,8 +1910,8 @@ class FFCaseCreation:
         if len(self.vhub)==len(self.shear) and len(self.shear)==len(self.TIvalue):
             self.nConditions = len(self.vhub)
 
-            if self.verbose>0: INFO(f'The length of vhub, shear, and TI are the same. Assuming each position is a condition.')
-            if self.verbose>0: INFO(f'Creating {self.nConditions} conditions')
+            if self.verbose>0: WARN(f'The length of vhub, shear, and TI are the same. Assuming each position is a condition.')
+            if self.verbose>0: INFO(f'Creating {self.nConditions} condition(s)')
 
             self.allCond = xr.Dataset({'vhub':    (['cond'], self.vhub   ),
                                        'shear':   (['cond'], self.shear  ),
@@ -1909,7 +1946,7 @@ class FFCaseCreation:
             self.sweepEDmodel = False
             self.sweepADmodel = False
         else:
-            print(f"Sweeps in AD and ED enabled.")
+            INFO(f"Sweeps in AD and ED enabled")
             self.sweepEDmodel = True
             self.sweepADmodel = True
 
@@ -2079,8 +2116,18 @@ class FFCaseCreation:
                                     'BlPitch':     (['wspd'], [ -1, -1]),       # from input file
                                    },  coords={'wspd': [10, 15]} )              # 15 m/s is 'else', since method='nearest' is used on the variable `bins`
 
+
+        elif _isclose(self.D, 2.38, tol=0.5):   # OC7 WP3.1 model-scale rotor, fixed 240 rpm
+            self.bins = xr.Dataset({'WaveHs':   (['wspd'], [1.0, 1.0]),    # unused (no HydroDyn)
+                                    'WaveTp':   (['wspd'], [7.0, 7.0]),    # unused
+                                    'RotSpeed': (['wspd'], [240.0, 240.0]),
+                                    'BlPitch':  (['wspd'], [0.0, 0.0]),
+                                   }, coords={'wspd': [4.19, 15]})
+
         else:
-            raise ValueError(f'Unknown turbine with diameter {self.D}. Add values to the `_setRotorParameters` function.')
+            FAIL(f'Unknown turbine with diameter {self.D}. Add values to the `_setRotorParameters` function.')
+
+        OK('Rotor parameters set')
   
 
 
@@ -2088,7 +2135,7 @@ class FFCaseCreation:
     def TS_low_setup(self, writeFiles=True, runOnce=False):
         if self.inflowType == 'TS':
             # This function is called once for domain limits even when LES, so only printing the info when relevant
-            INFO('Preparing TurbSim low resolution input files.')
+            INFO('Preparing TurbSim low resolution input files')
 
         boxType='lowres'
         lowFilesName = []
@@ -2153,132 +2200,168 @@ class FFCaseCreation:
             OK(f'TurbSim low resolution input files generated, see e.g.:\n{lowFilesName[0]}\n{lowFilesName[-1]}')
 
 
-    def sed_inplace(self, sed_command, inplace):
-        '''
-        sed in place does not work on standard input. A workaround here
-        is to save to another file and then copy over
-        '''
+    def TS_low_prepare(self, scheduler, tsbin=None, modules='default', account=None, time=None, partition=None, ntasks_per_node=12):
+        """ Writes a script to run TurbSim on the low-res box(es).
 
-        if inplace:
-            _ = subprocess.call(sed_command, cwd=self.path, shell=True)
-        else:
-            sed_split = sed_command.split(' ')
-            filename  = sed_split[-1]
-            sed_split = f'sed ' + ' '.join(sed_split[2:]) + f"> {os.path.join(self.path, 'temp.txt')}"
-            _ = subprocess.call(sed_split, cwd=self.path, shell=True)
-            shutil.move(os.path.join(self.path,'temp.txt'), os.path.join(self.path,filename))
+        - scheduler: 'bash' (plain shell, run directly) or 'slurm' (submit via sbatch).
+          Required, no default. The `#SBATCH` header is always written (inert under bash).
+        - modules: 'default' (intel/oneAPI stack), None (no `module load`), or a list of
+          module-name strings. `$HOME/.bash_profile` is always sourced.
+        - account, time, partition: written as `#SBATCH` directives when not None (also
+          settable at submit time through TS_low_execute's A/t/p).
+        - ntasks_per_node: `#SBATCH --ntasks-per-node` value (default 12).
+        """
+        if scheduler not in ('bash', 'slurm'):
+            raise ValueError(f"`scheduler` is required and must be 'bash' or 'slurm'. Received {scheduler}.")
 
+        if os.name == 'nt':
+            WARN('Windows detected: the generated script is a bash/SLURM script. You may need to '
+                 'remove the SLURM-specific lines (#SBATCH, srun, scontrol) to run it locally.')
 
-
-    def TS_low_batch_prepare(self, tsbin=None, run=False, **kwargs):
-        """ Writes a flat batch file for TurbSim low"""
-
-        from openfast_toolbox.case_generation.runner import writeBatch
-
-        if tsbin is not None:
-            WARN(f'Overwritting the TurbSim binary from the previously set {self.tsbin} to {tsbin}.')
-            self.tsbin = tsbin
-        self._checkTSBinary()
-
-        ext = ".bat" if os.name == "nt" else ".sh"
-        batchfile = os.path.join(self.path, f'runAllLowBox{ext}')
-
-        TS_low_files = []
-        TS_low_logs  = []
-        for cond in range(self.nConditions):
-            for seed in range(self.nSeeds):
-                seedpath = self.getCondSeedPath(cond, seed)
-                TS_low_files.append(os.path.join(seedpath, 'Low.inp'))
-                TS_low_logs.append(os.path.join(seedpath, f'log.low.seed{seed}.txt'))
-
-        writeBatch(batchfile, TS_low_files, fastExe=self.tsbin, flags_after=[f"2>&1 | tee {log}" for log in TS_low_logs], **kwargs)
-        self.batchfile_low = batchfile
-        OK(f"Batch file written to {batchfile}")
-
-        if run:
-            self.TS_low_batch_run()
-
-    def TS_low_batch_run(self,  showOutputs=True, showCommand=True, verbose=True, **kwargs):
-        from openfast_toolbox.case_generation.runner import runBatch
-        if not os.path.exists(self.batchfile_low):
-            raise FFException(f'Batch file does not exist: {self.batchfile_low}.\nMake sure you run TS_low_batch_prepare first.')
-        stat = runBatch(self.batchfile_low, showOutputs=showOutputs, showCommand=showCommand, verbose=verbose, **kwargs)
-        if stat!=0:
-            raise FFException(f'Batch file failed: {self.batchfile_low}')
-
-
-
-
-    def TS_low_slurm_prepare(self, slurmfilepath, tsbin=None):
+        if modules == 'default':
+            modules = ['PrgEnv-intel/8.5.0',
+                       'intel-oneapi-mkl/2024.0.0-intel',
+                       'intel-oneapi',
+                       'binutils',
+                       'hdf5/1.14.3-intel-oneapi-mpi-intel',
+                       'netcdf-c/4.9.2-intel-oneapi-mpi-intel']
+        elif modules is not None and (not isinstance(modules, list) or not all(isinstance(m, str) for m in modules)):
+            raise ValueError("`modules` must be 'default', None, or a list of module-name strings.")
 
         if tsbin is not None:
             WARN(f'Overwritting the TurbSim binary from the previously set {self.tsbin} to {tsbin}.')
             self.tsbin = tsbin
         self._checkTSBinary()
 
-        # --------------------------------------------------
-        # ----- Prepare SLURM script for Low-res boxes -----
-        # --------------------------------------------------
-
-        if not os.path.isfile(slurmfilepath):
-            raise ValueError (f'SLURM script for low-res box {slurmfilepath} does not exist.')
-        
-        # Determine memory-per-cpu
-        memory_per_cpu = int(150000/self.nSeeds)
-       
         if self.nSeeds > 6:
             WARN(f'The memory-per-cpu on the low-res boxes SLURM script might be too low given {self.nSeeds} seeds.')
-        
-        self.slurmfilename_low =  os.path.join(self.path, os.path.basename(slurmfilepath))
-        shutil.copy2(slurmfilepath, self.slurmfilename_low)
-    
-        # Python version
-        with open(self.slurmfilename_low, "r") as f:
-            lines = f.read()
 
-        # Replacements
-        jobname   = f"#SBATCH --job-name=lowBox_{os.path.basename(self.path)}"
-        logfile   = "#SBATCH --output log.turbsim_low"
-        memcpu    = f"--mem-per-cpu={memory_per_cpu}M"
-        nodes     = f"#SBATCH --nodes={int(np.ceil(self.nConditions * self.nSeeds / 6))}"
-        turbsim   = f"turbsimbin='{self.tsbin}'"
-        basepath  = f"basepath='{self.path}'"
-        condlist  = "condList=('{}')".format("' '".join(self.condDirList))
-        seeds     = f"nSeeds={self.nSeeds}"
+        nodes          = int(np.ceil(self.nConditions * self.nSeeds / 6))
+        memory_per_cpu = int(150000 / self.nSeeds)
+        condList       = "condList=('{}')".format("' '".join(self.condDirList))
 
-        # Apply substitutions
-        import re
-        lines = re.sub(r"^#SBATCH --job-name=.*", jobname, lines, flags=re.M)
-        lines = re.sub(r"^#SBATCH --output .*",   logfile, lines, flags=re.M)
-        lines = re.sub(r"--mem-per-cpu=\d+M",     memcpu,  lines)
-        lines = re.sub(r"^#SBATCH --nodes=.*",    nodes,   lines, flags=re.M)
-        lines = re.sub(r"^turbsimbin=.*",         turbsim, lines, flags=re.M)
-        lines = re.sub(r"^basepath=.*",           basepath,lines, flags=re.M)
-        lines = re.sub(r"^condList=.*",           condlist,lines, flags=re.M)
-        lines = re.sub(r"^nSeeds=.*",             seeds,   lines, flags=re.M)
+        # HPC-only prefix on the run line (srun + per-node placement); empty for plain bash
+        if scheduler == 'slurm':
+            call_prefix = f'srun -n1 -N1 --exclusive --nodelist=$currNode --mem-per-cpu={memory_per_cpu}M '
+        else:
+            call_prefix = ''
 
-        with open(self.slurmfilename_low, "w") as f:
-            f.write(lines)
+        scriptfile = os.path.join(self.path, 'runAllLowBox.sh')
+        with open(scriptfile, 'w') as f:
+            f.write('#!/bin/bash\n')
+            f.write(f'#SBATCH --job-name=lowBox_{os.path.basename(self.path)}\n')
+            f.write('#SBATCH --output log.turbsim_low\n')
+            f.write(f'#SBATCH --nodes={nodes}\n')
+            f.write(f'#SBATCH --ntasks-per-node={ntasks_per_node}\n')
+            if time is not None:
+                f.write(f'#SBATCH --time={time}\n')
+            if account is not None:
+                f.write(f'#SBATCH --account={account}\n')
+            if partition is not None:
+                f.write(f'#SBATCH --partition={partition}\n')
+            f.write('\n')
+            f.write('source $HOME/.bash_profile\n\n')
+            if scheduler == 'slurm':
+                f.write('echo "Job ID is " $SLURM_JOBID\n\n')
+            if modules is not None:
+                f.write('module purge\n')
+                for m in modules:
+                    f.write(f'module load {m}\n')
+                f.write('\n')
+            f.write('# ********************************** USER INPUT ********************************** #\n')
+            f.write(f"turbsimbin='{self.tsbin}'\n")
+            f.write(f"basepath='{self.path}'\n\n")
+            f.write(f'{condList}\n\n')
+            f.write(f'nSeeds={self.nSeeds}\n')
+            f.write('# ****************************************************************************** #\n\n')
+            if scheduler == 'slurm':
+                f.write('nodelist=`scontrol show hostname $SLURM_NODELIST`\n')
+                f.write('nodelist=($nodelist)\n\n')
+                f.write('nodeToUse=0\n')
+            f.write('for cond in ${condList[@]}; do\n')
+            if scheduler == 'slurm':
+                f.write('    currNode=${nodelist[$nodeToUse]}\n')
+            f.write('    for((seed=0; seed<$nSeeds; seed++)); do\n')
+            f.write('       dir=$(printf "%s/%s/Seed_%01d" $basepath $cond $seed)\n')
+            if scheduler == 'bash':
+                f.write('       echo "Running $dir/Low.inp"\n')
+            f.write(f'       {call_prefix}$turbsimbin $dir/Low.inp > $dir/log.low.seed$seed.txt 2>&1 &\n')
+            f.write('   done\n')
+            if scheduler == 'slurm':
+                f.write('    (( nodeToUse++ ))\n')
+            f.write('done\n\n')
+            f.write('wait\n')
 
-        INFO(f'File written: {self.slurmfilename_low}')
+        self.scriptfile_low = scriptfile
+        self.scheduler_low  = scheduler
+        OK(f"Script written to {scriptfile}")
 
 
-    def TS_low_slurm_submit(self, qos='normal', A=None, t=None, p=None, inplace=True):
-        # ---------------------------------
-        # ----- Run turbSim Low boxes -----
-        # ---------------------------------
-        # Submit the script to SLURM
-        options = f"--qos='{qos}' "
-        if A is not None:
-            options += f'-A {A} '
-        if t is not None:
-            options += f'-t {t} '
-        if p is not None:
-            options += f'-p {p} '
+    def _execute(self, scriptfile, stored_scheduler, name, scheduler, qos, A, t, p, **kwargs):
+        """
+        Execute function shared by TS_low, TS_high, and FF.
 
-        sub_command = f"sbatch {options}{self.slurmfilename_low}"
-        print(f'Calling: {sub_command}')
-        self.sed_inplace(sub_command, inplace)
+        'bash'  runs the script synchronously via runBatch
+        'slurm' submits the script with `sbatch`
+        """
+        if scheduler is None:
+            scheduler = stored_scheduler
+        if scheduler not in ('bash', 'slurm'):
+            raise ValueError(f"{name}_execute: `scheduler` must be 'bash' or 'slurm' (run {name}_prepare "
+                             f"first, or pass scheduler=). Received {scheduler!r}.")
+
+        # Reject args that belong to the other scheduler
+        slurm_passed = [k for k, v in (('qos', qos), ('A', A), ('t', t), ('p', p)) if v is not None]
+        if scheduler == 'bash' and slurm_passed:
+            raise ValueError(f"{name}_execute: scheduler='bash' does not accept SLURM args {slurm_passed}. "
+                             f"SLURM-only args are: qos, A, t, p.")
+        if scheduler == 'slurm' and kwargs:
+            raise ValueError(f"{name}_execute: scheduler='slurm' does not accept args {list(kwargs)}. "
+                             f"SLURM args are: qos, A, t, p.")
+
+        if not scriptfile or not os.path.exists(scriptfile):
+            raise FFException(f'{name}_execute: script does not exist: {scriptfile}.\nMake sure you run {name}_prepare first.')
+
+        if scheduler == 'bash':
+            from openfast_toolbox.case_generation.runner import runBatch
+            stat = runBatch(scriptfile, **kwargs)
+            if stat != 0:
+                raise FFException(f'{name}: script failed: {scriptfile}')
+        else:
+            options = f"--qos='{qos or 'normal'}' "
+            if A is not None:
+                options += f'-A {A} '
+            if t is not None:
+                options += f'-t {t} '
+            if p is not None:
+                options += f'-p {p} '
+            sub_command = f"sbatch {options}{scriptfile}"
+            INFO(f'Calling: {sub_command}')
+            subprocess.call(sub_command, cwd=self.path, shell=True)
+
+    def TS_low_execute(self, scheduler=None, qos=None, A=None, t=None, p=None, **kwargs):
+        """ Execute the low-res TurbSim script
+
+        scheduler defaults to the one used in TS_low_prepare.
+        - scheduler='bash':  runs the script synchronously, like `bash <script>`.
+        - scheduler='slurm': submits the script with `sbatch <script>`.
+
+        SLURM args (added to the `sbatch` call, only with scheduler='slurm'):
+        - qos : --qos value (default 'normal')
+        - A   : -A, account
+        - t   : -t, time limit
+        - p   : -p, partition
+
+        bash **kwargs (only with scheduler='bash'; forwarded to runBatch):
+        - showOutputs (bool, True) : True prints stdout & stderr live; False captures
+          stdout internally and prints only stderr live.
+        - showCommand (bool, True) : print the command being run.
+        - verbose     (bool, True) : extra logging.
+        - shell_cmd   (str, 'bash'): shell used to run the script.
+        - nBuffer     (int, 0)     : stdout lines to buffer before flushing.
+        - newWindow / closeWindow  : run in a separate window (Windows only).
+        """
+        self._execute(self.scriptfile_low, self.scheduler_low, 'TS_low', scheduler, qos, A, t, p, **kwargs)
 
 
     def TS_low_createSymlinks(self):
@@ -2330,8 +2413,8 @@ class FFCaseCreation:
         self.xoffset_turbsOrigin2TSOrigin = -self.extent_low[0]*self.D
         
         if self.verbose>0:
-            INFO(f"    The x offset between the turbine ref frame and turbsim is {self.xoffset_turbsOrigin2TSOrigin}")
-            INFO(f"    The y offset between the turbine ref frame and turbsim is {self.yoffset_turbsOrigin2TSOrigin}")
+            INFO(f"  The x offset between the turbine ref frame and turbsim is {self.xoffset_turbsOrigin2TSOrigin}")
+            INFO(f"  The y offset between the turbine ref frame and turbsim is {self.yoffset_turbsOrigin2TSOrigin}")
 
 
     def TS_high_get_time_series(self):
@@ -2409,9 +2492,9 @@ class FFCaseCreation:
                         # time-series file will have a y of 2 m.
                         yoffset = bts['y'][jTurb] - yt
                         if yoffset != 0 and self.verbose>1:
-                            print(f"Seed {seed}, Case {case}: Turbine {t+1} is not at a grid point location. Tubine is at y={yloc_}",\
-                                  f"on the turbine reference frame, which is y={yt} on the low-res TurbSim reference frame. The",\
-                                  f"nearest grid point in y is {bts['y'][jTurb]} so printing y={yoffset} to the time-series file.")
+                            WARN(f"Seed {seed}, Case {case}: Turbine {t+1} is not at a grid point location. Tubine is at y={yloc_}",\
+                                 f"on the turbine reference frame, which is y={yt} on the low-res TurbSim reference frame. The",\
+                                 f"nearest grid point in y is {bts['y'][jTurb]} so printing y={yoffset} to the time-series file.")
                         writeTimeSeriesFile(timeSeriesOutputFile, yoffset, Hub_series, uvel_hr, vvel_hr, wvel_hr, time_hr)
 
 
@@ -2497,93 +2580,129 @@ class FFCaseCreation:
 
         
 
-    def TS_high_batch_prepare(self, run=False, **kwargs):
-        """ Writes a flat batch file for TurbSim low"""
-        from openfast_toolbox.case_generation.runner import writeBatch
+    def TS_high_prepare(self, scheduler, tsbin=None, modules='default', account=None, time=None, partition=None, ntasks_per_node=104):
+        """ Writes (from scratch) a script to run TurbSim on the high-res boxes.
 
-        ext = ".bat" if os.name == "nt" else ".sh"
-        batchfile = os.path.join(self.path, f'runAllHighBox{ext}')
+        - scheduler: 'bash' (plain shell, run directly) or 'slurm' (submit via sbatch).
+          Required, no default. The `#SBATCH` header is always written (it is an inert
+          comment under bash) and only used when submitted with sbatch.
+        - modules: 'default' (intel/oneAPI stack), None (no `module load`), or a list of
+          module-name strings. `$HOME/.bash_profile` is always sourced.
+        - account, time, partition: written as `#SBATCH` directives when not None (also
+          settable at submit time through TS_high_execute's A/t/p).
+        - ntasks_per_node: `#SBATCH --ntasks-per-node` value (default 104).
+        """
+        if scheduler not in ('bash', 'slurm'):
+            raise ValueError(f"`scheduler` is required and must be 'bash' or 'slurm'. Received {scheduler}.")
 
-        TS_high_files = [f.replace('.bts', '.inp') for f in self.high_res_bts]
-        TS_high_logs  = self.high_res_log
-        writeBatch(batchfile, TS_high_files, fastExe=self.tsbin, flags_after=[f"2>&1 | tee {log}" for log in TS_high_logs], **kwargs)
-        self.batchfile_high = batchfile
+        if os.name == 'nt':
+            WARN('Windows detected: the generated script is a bash/SLURM script. You may need to '
+                 'remove the SLURM-specific lines (#SBATCH, srun) to run it locally.')
 
-        OK(f"Batch file written to {batchfile}")
+        if modules == 'default':
+            modules = ['PrgEnv-intel/8.5.0',
+                       'intel-oneapi-mkl/2024.0.0-intel',
+                       'intel-oneapi',
+                       'binutils',
+                       'hdf5/1.14.3-intel-oneapi-mpi-intel',
+                       'netcdf-c/4.9.2-intel-oneapi-mpi-intel']
+        elif modules is not None and (not isinstance(modules, list) or not all(isinstance(m, str) for m in modules)):
+            raise ValueError("`modules` must be 'default', None, or a list of module-name strings.")
 
-        if run:
-            self.TS_high_batch_run()
+        if tsbin is not None:
+            WARN(f'Overwritting the TurbSim binary from the previously set {self.tsbin} to {tsbin}.')
+            self.tsbin = tsbin
+        self._checkTSBinary()
 
-    def TS_high_batch_run(self, showOutputs=True, showCommand=True, verbose=True, **kwargs):
-        from openfast_toolbox.case_generation.runner import runBatch
-        if not os.path.exists(self.batchfile_high):
-            raise FFException(f'Batch file does not exist: {self.batchfile_high}.\nMake sure you run TS_high_batch_prepare first.')
-        stat = runBatch(self.batchfile_high, showOutputs=showOutputs, showCommand=showCommand, verbose=verbose, **kwargs)
-        if stat!=0:
-            raise FFException(f'Batch file failed: {self.batchfile_high}')
-
-
-    def TS_high_slurm_prepare(self, slurmfilepath):
-        # ---------------------------------------------------
-        # ----- Prepare SLURM script for High-res boxes -----
-        # ---------------------------------------------------
-        
-        if not os.path.isfile(slurmfilepath):
-            raise ValueError (f'SLURM script for high-res box {slurmfilepath} does not exist.')
-        ntasks = self.nConditions*self.nHighBoxCases*self.nSeeds*self.nTurbines
-
-        self.slurmfilename_high = os.path.join(self.path, os.path.basename(slurmfilepath))
-        shutil.copy2(slurmfilepath, self.slurmfilename_high)
-
-        with open(self.slurmfilename_high, "r") as f:
-            lines = f.read()
-
-        # Prepare replacement strings
-        jobname  = f"#SBATCH --job-name=highBox_{os.path.basename(self.path)}"
-        logfile  = "#SBATCH --output log.turbsim_high"
-        nodes    = f"#SBATCH --nodes={int(np.ceil(ntasks/36))}"
-        turbsim  = f"turbsimbin='{self.tsbin}'"
-        basepath = f"basepath='{self.path}'"
-        nTurb    = f"nTurbines={self.nTurbines}"
-        nSeed    = f"nSeeds={self.nSeeds}"
-        condlist = "condList=('{}')".format("' '".join(self.condDirList))
+        ntasks   = self.nConditions * self.nHighBoxCases * self.nSeeds * self.nTurbines
+        nodes    = int(np.ceil(ntasks / 36))
+        condList = "condList=('{}')".format("' '".join(self.condDirList))
         highBoxesCaseDirList = [self.caseDirList[c] for c in self.allHighBoxCases.case.values]
-        caselist = "caseList=('{}')".format("' '".join(highBoxesCaseDirList))
+        caseList = "caseList=('{}')".format("' '".join(highBoxesCaseDirList))
 
-        # Apply substitutions
-        import re
-        lines = re.sub(r"^#SBATCH --job-name.*", jobname, lines, flags=re.M)
-        lines = re.sub(r"^#SBATCH --output .*",  logfile, lines, flags=re.M)
-        lines = re.sub(r"^#SBATCH --nodes.*",   nodes,   lines, flags=re.M)
-        lines = re.sub(r"^turbsimbin.*",        turbsim, lines, flags=re.M)
-        lines = re.sub(r"^basepath.*",          basepath,lines, flags=re.M)
-        lines = re.sub(r"^nTurbines.*",         nTurb,  lines, flags=re.M)
-        lines = re.sub(r"^nSeeds.*",            nSeed,  lines, flags=re.M)
-        lines = re.sub(r"^condList.*",          condlist,lines, flags=re.M)
-        lines = re.sub(r"^caseList.*",          caselist,lines, flags=re.M)
+        # HPC-only prefix on the run line (srun); empty for plain bash
+        if scheduler == 'slurm':
+            call_prefix = 'srun -n1 -N1 --exclusive --mem-per-cpu=$rampercpu '
+        else:
+            call_prefix = ''
 
-        with open(self.slurmfilename_high, "w") as f:
-            f.write(lines)
+        scriptfile = os.path.join(self.path, 'runAllHighBox.sh')
+        with open(scriptfile, 'w') as f:
+            f.write('#!/bin/bash\n')
+            f.write(f'#SBATCH --job-name=highBox_{os.path.basename(self.path)}\n')
+            f.write('#SBATCH --output log.turbsim_high\n')
+            f.write(f'#SBATCH --nodes={nodes}\n')
+            f.write(f'#SBATCH --ntasks-per-node={ntasks_per_node}\n')
+            f.write('#SBATCH --mem=250G\n')
+            if time is not None:
+                f.write(f'#SBATCH --time={time}\n')
+            if account is not None:
+                f.write(f'#SBATCH --account={account}\n')
+            if partition is not None:
+                f.write(f'#SBATCH --partition={partition}\n')
+            f.write('\n')
+            f.write('source $HOME/.bash_profile\n\n')
+            if scheduler == 'slurm':
+                f.write('echo "Job ID is " $SLURM_JOBID\n\n')
+            if modules is not None:
+                f.write('module purge\n')
+                for m in modules:
+                    f.write(f'module load {m}\n')
+                f.write('\n')
+            f.write('# ********************************** USER INPUT ********************************** #\n')
+            f.write(f"turbsimbin='{self.tsbin}'\n")
+            f.write(f"basepath='{self.path}'\n\n")
+            f.write(f'{condList}\n\n')
+            f.write(f'{caseList}\n\n')
+            f.write(f'nSeeds={self.nSeeds}\n')
+            f.write(f'nTurbines={self.nTurbines}\n')
+            f.write('# ****************************************************************************** #\n\n')
+            if scheduler == 'slurm':
+                f.write('rampercpu=$((249000/36))\n\n')
+            f.write('for cond in ${condList[@]}; do\n')
+            f.write('    for case in ${caseList[@]}; do\n')
+            f.write('        for ((seed=0; seed<$nSeeds; seed++)); do\n')
+            f.write('            for ((t=1; t<=$nTurbines; t++)); do\n')
+            f.write('                dir=$(printf "%s/%s/%s/Seed_%01d/TurbSim" $basepath $cond $case $seed)\n')
+            if scheduler == 'bash':
+                f.write('                echo "Running $dir/HighT$t.inp"\n')
+            f.write(f'                {call_prefix}$turbsimbin $dir/HighT$t.inp > $dir/log.high$t.seed$seed.txt 2>&1 &\n')
+            if scheduler == 'slurm':
+                f.write('                sleep 0.1\n')
+            f.write('            done\n')
+            f.write('        done\n')
+            f.write('    done\n')
+            f.write('done\n\n')
+            f.write('wait\n')
 
-        INFO(f'File written: {self.slurmfilename_high}')
+        self.scriptfile_high = scriptfile
+        self.scheduler_high  = scheduler
+        OK(f"Script written to {scriptfile}")
 
 
-    def TS_high_slurm_submit(self, qos='normal', A=None, t=None, p=None, inplace=True):
-        # ----------------------------------
-        # ----- Run turbSim High boxes -----
-        # ----------------------------------
-        # Submit the script to SLURM
-        options = f"--qos='{qos}' "
-        if A is not None:
-            options += f'-A {A} '
-        if t is not None:
-            options += f'-t {t} '
-        if p is not None:
-            options += f'-p {p} '
+    def TS_high_execute(self, scheduler=None, qos=None, A=None, t=None, p=None, **kwargs):
+        """ Execute the high-res TurbSim script
 
-        sub_command = f"sbatch {options}{self.slurmfilename_high}"
-        print(f'Calling: {sub_command}')
-        self.sed_inplace(sub_command, inplace)
+        scheduler defaults to the one used in TS_high_prepare.
+        - scheduler='bash':  runs the script synchronously, like `bash <script>`.
+        - scheduler='slurm': submits the script with `sbatch <script>`.
+
+        SLURM args (added to the `sbatch` call, only with scheduler='slurm'):
+        - qos : --qos value (default 'normal')
+        - A   : -A, account
+        - t   : -t, time limit
+        - p   : -p, partition
+
+        bash **kwargs (only with scheduler='bash'; forwarded to runBatch):
+        - showOutputs (bool, True) : True prints stdout & stderr live; False captures
+          stdout internally and prints only stderr live.
+        - showCommand (bool, True) : print the command being run.
+        - verbose     (bool, True) : extra logging.
+        - shell_cmd   (str, 'bash'): shell used to run the script.
+        - nBuffer     (int, 0)     : stdout lines to buffer before flushing.
+        - newWindow / closeWindow  : run in a separate window (Windows only).
+        """
+        self._execute(self.scriptfile_high, self.scheduler_high, 'TS_high', scheduler, qos, A, t, p, **kwargs)
 
     
     def TS_high_create_symlink(self):
@@ -2591,7 +2710,7 @@ class FFCaseCreation:
         # Create symlink of all the high boxes for the cases with different turbine properties (e.g. yaw). These are the "repeated" boxes
 
         if self.verbose>0:
-            print(f'Creating symlinks for all the high-resolution boxes')
+            INFO(f'Creating symlinks for all the high-resolution boxes')
             
         for cond in range(self.nConditions):
             for case in range(self.nCases):
@@ -2628,8 +2747,12 @@ class FFCaseCreation:
                         self._symlink(src, dst)
 
 
-    def FF_setup(self, outlistFF=None, **kwargs):
+    def FF_setup(self, outlistFF=None, offset=None, **kwargs):
         '''
+        outlistFF: list of strings
+            Requested output from FAST.FArm
+        offset: scalar
+            Offset for the rotor-normal slices, so it doesn't land on the exact rotor location. Default 0.01*D
 
         **kwargs:
             seedsToKeep: int
@@ -2651,27 +2774,11 @@ class FFCaseCreation:
                 'RtCtAvgT1',
                 'W1VAmbX, W1VAmbY, W1VAmbZ',
                 "W1VDisX, W1VDisY, W1VDisZ",
-                "CtT1N01      , CtT1N02      , CtT1N03      , CtT1N04      , CtT1N05      , CtT1N06      , CtT1N07      , CtT1N08      , CtT1N09      , CtT1N10      , CtT1N11      , CtT1N12      , CtT1N13      , CtT1N14      , CtT1N15      , CtT1N16      , CtT1N17      , CtT1N18      , CtT1N19      ,  CtT1N20",
-            #    "WkAxsXT1D1   , WkAxsXT1D2   , WkAxsXT1D3   , WkAxsXT1D4   , WkAxsXT1D5   , WkAxsXT1D6   , WkAxsXT1D7",
-            #    "WkAxsYT1D1   , WkAxsYT1D2   , WkAxsYT1D3   , WkAxsYT1D4   , WkAxsYT1D5   , WkAxsYT1D6   , WkAxsYT1D7",
-            #    "WkAxsZT1D1   , WkAxsZT1D2   , WkAxsZT1D3   , WkAxsZT1D4   , WkAxsZT1D5   , WkAxsZT1D6   , WkAxsZT1D7",
                 "WkPosXT1D1   , WkPosXT1D2   , WkPosXT1D3   , WkPosXT1D4   , WkPosXT1D5   , WkPosXT1D6   , WkPosXT1D7   , WkPosXT1D8   , WkPosXT1D9",
                 "WkPosYT1D1   , WkPosYT1D2   , WkPosYT1D3   , WkPosYT1D4   , WkPosYT1D5   , WkPosYT1D6   , WkPosYT1D7   , WkPosYT1D8   , WkPosYT1D9",
                 "WkPosZT1D1   , WkPosZT1D2   , WkPosZT1D3   , WkPosZT1D4   , WkPosZT1D5   , WkPosZT1D6   , WkPosZT1D7   , WkPosZT1D8   , WkPosZT1D9",
-            #    "WkDfVxT1N01D1, WkDfVxT1N02D1, WkDfVxT1N03D1, WkDfVxT1N04D1, WkDfVxT1N05D1, WkDfVxT1N06D1, WkDfVxT1N07D1, WkDfVxT1N08D1, WkDfVxT1N09D1, WkDfVxT1N10D1, WkDfVxT1N11D1, WkDfVxT1N12D1, WkDfVxT1N13D1, WkDfVxT1N14D1, WkDfVxT1N15D1, WkDfVxT1N16D1, WkDfVxT1N17D1, WkDfVxT1N18D1, WkDfVxT1N19D1, WkDfVxT1N20D1",
-            #    "WkDfVxT1N01D2, WkDfVxT1N02D2, WkDfVxT1N03D2, WkDfVxT1N04D2, WkDfVxT1N05D2, WkDfVxT1N06D2, WkDfVxT1N07D2, WkDfVxT1N08D2, WkDfVxT1N09D2, WkDfVxT1N10D2, WkDfVxT1N11D2, WkDfVxT1N12D2, WkDfVxT1N13D2, WkDfVxT1N14D2, WkDfVxT1N15D2, WkDfVxT1N16D2, WkDfVxT1N17D2, WkDfVxT1N18D2, WkDfVxT1N19D2, WkDfVxT1N20D2",
-            #    "WkDfVxT1N01D3, WkDfVxT1N02D3, WkDfVxT1N03D3, WkDfVxT1N04D3, WkDfVxT1N05D3, WkDfVxT1N06D3, WkDfVxT1N07D3, WkDfVxT1N08D3, WkDfVxT1N09D3, WkDfVxT1N10D3, WkDfVxT1N11D3, WkDfVxT1N12D3, WkDfVxT1N13D3, WkDfVxT1N14D3, WkDfVxT1N15D3, WkDfVxT1N16D3, WkDfVxT1N17D3, WkDfVxT1N18D3, WkDfVxT1N19D3, WkDfVxT1N20D3",
-            #    "WkDfVxT1N01D4, WkDfVxT1N02D4, WkDfVxT1N03D4, WkDfVxT1N04D4, WkDfVxT1N05D4, WkDfVxT1N06D4, WkDfVxT1N07D4, WkDfVxT1N08D4, WkDfVxT1N09D4, WkDfVxT1N10D4, WkDfVxT1N11D4, WkDfVxT1N12D4, WkDfVxT1N13D4, WkDfVxT1N14D4, WkDfVxT1N15D4, WkDfVxT1N16D4, WkDfVxT1N17D4, WkDfVxT1N18D4, WkDfVxT1N19D4, WkDfVxT1N20D4",
-            #    "WkDfVxT1N01D5, WkDfVxT1N02D5, WkDfVxT1N03D5, WkDfVxT1N04D5, WkDfVxT1N05D5, WkDfVxT1N06D5, WkDfVxT1N07D5, WkDfVxT1N08D5, WkDfVxT1N09D5, WkDfVxT1N10D5, WkDfVxT1N11D5, WkDfVxT1N12D5, WkDfVxT1N13D5, WkDfVxT1N14D5, WkDfVxT1N15D5, WkDfVxT1N16D5, WkDfVxT1N17D5, WkDfVxT1N18D5, WkDfVxT1N19D5, WkDfVxT1N20D5",
-            #    "WkDfVxT1N01D6, WkDfVxT1N02D6, WkDfVxT1N03D6, WkDfVxT1N04D6, WkDfVxT1N05D6, WkDfVxT1N06D6, WkDfVxT1N07D6, WkDfVxT1N08D6, WkDfVxT1N09D6, WkDfVxT1N10D6, WkDfVxT1N11D6, WkDfVxT1N12D6, WkDfVxT1N13D6, WkDfVxT1N14D6, WkDfVxT1N15D6, WkDfVxT1N16D6, WkDfVxT1N17D6, WkDfVxT1N18D6, WkDfVxT1N19D6, WkDfVxT1N20D6",
-            #    "WkDfVxT1N01D7, WkDfVxT1N02D7, WkDfVxT1N03D7, WkDfVxT1N04D7, WkDfVxT1N05D7, WkDfVxT1N06D7, WkDfVxT1N07D7, WkDfVxT1N08D7, WkDfVxT1N09D7, WkDfVxT1N10D7, WkDfVxT1N11D7, WkDfVxT1N12D7, WkDfVxT1N13D7, WkDfVxT1N14D7, WkDfVxT1N15D7, WkDfVxT1N16D7, WkDfVxT1N17D7, WkDfVxT1N18D7, WkDfVxT1N19D7, WkDfVxT1N20D7",
-            #    "WkDfVrT1N01D1, WkDfVrT1N02D1, WkDfVrT1N03D1, WkDfVrT1N04D1, WkDfVrT1N05D1, WkDfVrT1N06D1, WkDfVrT1N07D1, WkDfVrT1N08D1, WkDfVrT1N09D1, WkDfVrT1N10D1, WkDfVrT1N11D1, WkDfVrT1N12D1, WkDfVrT1N13D1, WkDfVrT1N14D1, WkDfVrT1N15D1, WkDfVrT1N16D1, WkDfVrT1N17D1, WkDfVrT1N18D1, WkDfVrT1N19D1, WkDfVrT1N20D1",
-            #    "WkDfVrT1N01D2, WkDfVrT1N02D2, WkDfVrT1N03D2, WkDfVrT1N04D2, WkDfVrT1N05D2, WkDfVrT1N06D2, WkDfVrT1N07D2, WkDfVrT1N08D2, WkDfVrT1N09D2, WkDfVrT1N10D2, WkDfVrT1N11D2, WkDfVrT1N12D2, WkDfVrT1N13D2, WkDfVrT1N14D2, WkDfVrT1N15D2, WkDfVrT1N16D2, WkDfVrT1N17D2, WkDfVrT1N18D2, WkDfVrT1N19D2, WkDfVrT1N20D2",
-            #    "WkDfVrT1N01D3, WkDfVrT1N02D3, WkDfVrT1N03D3, WkDfVrT1N04D3, WkDfVrT1N05D3, WkDfVrT1N06D3, WkDfVrT1N07D3, WkDfVrT1N08D3, WkDfVrT1N09D3, WkDfVrT1N10D3, WkDfVrT1N11D3, WkDfVrT1N12D3, WkDfVrT1N13D3, WkDfVrT1N14D3, WkDfVrT1N15D3, WkDfVrT1N16D3, WkDfVrT1N17D3, WkDfVrT1N18D3, WkDfVrT1N19D3, WkDfVrT1N20D3",
-            #    "WkDfVrT1N01D4, WkDfVrT1N02D4, WkDfVrT1N03D4, WkDfVrT1N04D4, WkDfVrT1N05D4, WkDfVrT1N06D4, WkDfVrT1N07D4, WkDfVrT1N08D4, WkDfVrT1N09D4, WkDfVrT1N10D4, WkDfVrT1N11D4, WkDfVrT1N12D4, WkDfVrT1N13D4, WkDfVrT1N14D4, WkDfVrT1N15D4, WkDfVrT1N16D4, WkDfVrT1N17D4, WkDfVrT1N18D4, WkDfVrT1N19D4, WkDfVrT1N20D4",
-            #    "WkDfVrT1N01D5, WkDfVrT1N02D5, WkDfVrT1N03D5, WkDfVrT1N04D5, WkDfVrT1N05D5, WkDfVrT1N06D5, WkDfVrT1N07D5, WkDfVrT1N08D5, WkDfVrT1N09D5, WkDfVrT1N10D5, WkDfVrT1N11D5, WkDfVrT1N12D5, WkDfVrT1N13D5, WkDfVrT1N14D5, WkDfVrT1N15D5, WkDfVrT1N16D5, WkDfVrT1N17D5, WkDfVrT1N18D5, WkDfVrT1N19D5, WkDfVrT1N20D5",
-            #    "WkDfVrT1N01D6, WkDfVrT1N02D6, WkDfVrT1N03D6, WkDfVrT1N04D6, WkDfVrT1N05D6, WkDfVrT1N06D6, WkDfVrT1N07D6, WkDfVrT1N08D6, WkDfVrT1N09D6, WkDfVrT1N10D6, WkDfVrT1N11D6, WkDfVrT1N12D6, WkDfVrT1N13D6, WkDfVrT1N14D6, WkDfVrT1N15D6, WkDfVrT1N16D6, WkDfVrT1N17D6, WkDfVrT1N18D6, WkDfVrT1N19D6, WkDfVrT1N20D6",
-            #    "WkDfVrT1N01D7, WkDfVrT1N02D7, WkDfVrT1N03D7, WkDfVrT1N04D7, WkDfVrT1N05D7, WkDfVrT1N06D7, WkDfVrT1N07D7, WkDfVrT1N08D7, WkDfVrT1N09D7, WkDfVrT1N10D7, WkDfVrT1N11D7, WkDfVrT1N12D7, WkDfVrT1N13D7, WkDfVrT1N14D7, WkDfVrT1N15D7, WkDfVrT1N16D7, WkDfVrT1N17D7, WkDfVrT1N18D7, WkDfVrT1N19D7, WkDfVrT1N20D7",
+                "CtT1N01, CtT1N02, CtT1N03, CtT1N04, CtT1N05, CtT1N06, CtT1N07, CtT1N08, CtT1N09, CtT1N10",
+                "CtT1N11, CtT1N12, CtT1N13, CtT1N14, CtT1N15, CtT1N16, CtT1N17, CtT1N18, CtT1N19, CtT1N20",
             ]
         self.outlistFF = outlistFF
 
@@ -2681,11 +2788,12 @@ class FFCaseCreation:
         # Ensure at least one case with inflow_deg == 0 exists before selecting
         if 'case' not in aligned_cases.dims or aligned_cases.sizes.get('case', 0) == 0:
             WARN("No case with inflow_deg == 0 found; unable to set aligned plane for sampling.")
-            planes_xy = [self.zhub+self.zbot]
+            planes_xy = [self.zhub]
             planes_yz = [0]
             planes_xz = [0]
         else:
             alignedTurbs = aligned_cases.isel(case=0)
+            zWT = alignedTurbs['Tz'].values
             if self.inflowStr == 'TurbSim':
                 # Turbine location in TurbSim reference frame
                 xWT = alignedTurbs['Tx'].values + self.xoffset_turbsOrigin2TSOrigin
@@ -2695,8 +2803,9 @@ class FFCaseCreation:
                 xWT = alignedTurbs['Tx'].values
                 yWT = alignedTurbs['Ty'].values
         
-            offset=10
-            planes_xy = [self.zhub+self.zbot]
+            if offset is None:
+                offset=round(0.01*self.D,2)
+            planes_xy = np.unique(np.round(zWT + self.zhub, 2))
             planes_yz = np.unique(np.round(xWT+offset, 2))
             planes_xz = np.unique(np.round(yWT, 2))
         
@@ -2939,10 +3048,15 @@ class FFCaseCreation:
                         self.dr = self.cmax
                     else: # Curled; Cartesian
                         self.dr = round(self.D/15)
+                        if self.dr == 0:
+                            # Likely a small, scaled rotor
+                            self.dr = round(self.D/15, 2)
                     ff_file['dr'] = self.dr
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
                     if 'NumPlanes' in ff_file.keys():
                         ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
+                    # Cutoff frequency of the low-pass time filter. Guidance recommends 1.28*U0/R
+                    ff_file['f_c'] = round(1.28*Vhub_/(D_/2), 4) if self.f_c is None else self.f_c
 
                     ff_file['OutRadii'] = [ff_file['OutRadii']] if isinstance(ff_file['OutRadii'],(float,int)) else ff_file['OutRadii'] 
                     # If NOutRadii is 0 we find some default radii
@@ -2990,9 +3104,9 @@ class FFCaseCreation:
         
         # Loops on all conditions/cases and cases for FAST.Farm
         for cond in range(self.nConditions):
-            if self.verbose>0: print(f'Processing condition {self.condDirList[cond]}')
+            if self.verbose>0: INFO(f'Processing condition {self.condDirList[cond]}')
             for case in range(self.nCases):
-                if self.verbose>0: print(f'    Processing all {self.nSeeds} seeds of case {self.caseDirList[case]}', end='\r')
+                if self.verbose>0: INFO(f'  Processing {self.nSeeds} seed(s) of case {self.caseDirList[case]}', end='\r')
                 for seed in range(self.nSeeds):
                     seedPath = self.getCaseSeedPath(cond, case, seed)
         
@@ -3058,10 +3172,16 @@ class FFCaseCreation:
                     if self.mod_wake == 1: # Polar model
                         self.dr = self.cmax
                     else: # Curled; Cartesian
-                        self.dr = round(self.D/10)
+                        self.dr = round(self.D/15)
+                        if self.dr == 0:
+                            # Likely a small, scaled rotor
+                            self.dr = round(self.D/15, 2)
                     ff_file['dr'] = self.dr
                     ff_file['NumRadii']  = int(np.ceil(3*D_/(2*self.dr) + 1))
-                    ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
+                    if 'NumPlanes' in ff_file.keys(): # keep backward compatibility
+                        ff_file['NumPlanes'] = int(np.ceil( 20*D_/(self.dt_low*Vhub_*(1-1/6)) ) )
+                    # Cutoff frequency of the low-pass time filter. Guidance recommends 1.28*U0/R
+                    ff_file['f_c'] = round(1.28*Vhub_/(D_/2), 4) if self.f_c is None else self.f_c
                     ff_file['OutRadii'] = [ff_file['OutRadii']] if isinstance(ff_file['OutRadii'],(float,int)) else ff_file['OutRadii'] 
                     # If NOutRadii is 0 we find some default radii
                     if ff_file['NOutRadii']==0:
@@ -3100,7 +3220,7 @@ class FFCaseCreation:
                     ff_file['WindVelZ'] = ', '.join(map(str, zWT[:9]+self.zhub))
         
                     ff_file.write(outputFSTF)
-            if self.verbose>0: print(f'Done processing condition {self.condDirList[cond]}                                              ')
+            if self.verbose>0: OK(f'Done processing condition {self.condDirList[cond]}                                              ')
 
         return
 
@@ -3116,10 +3236,10 @@ class FFCaseCreation:
         # dX_High can sometimes be too high. So get the closest to the cmax, but multiple of what should have been
         dX_High = meanU_High*dT_High
         if self.verbose>1:
-            print(f'original dX_High is {dX_High}')
+            INFO(f'  Original dX_High is {dX_High}')
         dX_High = round(self.cmax/dX_High) * dX_High
         if self.verbose>1:
-            print(f'after adjusting to closes multiple of cmax, dX_High is {dX_High}')
+            INFO(f'  After adjusting to closes multiple of cmax, dX_High is {dX_High}')
         dY_High = highbts.y[1] - highbts.y[0]
         dZ_High = highbts.z[1] - highbts.z[0]
     
@@ -3138,8 +3258,8 @@ class FFCaseCreation:
     
         X0_Low = np.floor( (min(xWT) - self.extent_low[0]*D ))
         X0_Low = getMultipleOf(X0_Low, multipleof=dX_Low)
-        Y0_Low = np.floor( -LY_Low/2                   )   # Starting on integer value for aesthetics
-        Z0_Low = lowbts.z[0]                               # we start at lowest to include tower
+        Y0_Low = -LY_Low/2    # equivalent to lowbts.y[0], the first grid point
+        Z0_Low = lowbts.z[0]  # we start at lowest to include tower
     
         XMax_Low = getMultipleOf(max(xWT) + self.extent_low[1]*D, multipleof=dX_Low)
         LX_Low = XMax_Low-X0_Low
@@ -3182,21 +3302,21 @@ class FFCaseCreation:
             Y0_High    = Y0_Low + np.floor((Y0_desired-Y0_Low)/dY_High)*dY_High
     
         if self.verbose>2:
-            print(f'  Low Box  \t\t  High box   ')
-            print(f'dT_Low: {dT_Low}\t\t dT_High: {dT_High}')
-            print(f'dX_Low: {dX_Low}\t\t dX_High: {dX_High}')
-            print(f'dY_Low: {dY_Low}\t\t dY_High: {dY_High}')
-            print(f'dZ_Low: {dZ_Low}\t\t dZ_High: {dZ_High}')
-            print(f'LX_Low: {LX_Low}\t\t LX_High: {LX_High}')
-            print(f'LY_Low: {LY_Low}\t\t LY_High: {LY_High}')
-            print(f'LZ_Low: {LZ_Low}\t\t LZ_High: {LZ_High}')
-            print(f'LT_Low: {LT_Low}\t\t LT_High: {LT_High}')
-            print(f'nX_Low: {nX_Low}\t\t nX_High: {nX_High}')
-            print(f'nY_Low: {nY_Low}\t\t nY_High: {nY_High}')
-            print(f'nZ_Low: {nZ_Low}\t\t nZ_High: {nZ_High}')
-            print(f'X0_Low: {X0_Low}\t\t X0_High: {X0_High}')
-            print(f'Y0_Low: {Y0_Low}  \t Y0_High: {Y0_High}')
-            print(f'Z0_Low: {Z0_Low}\t\t Z0_High: {Z0_High}')
+            INFO(f'  Low Box  \t\t  High box   ')
+            INFO(f'dT_Low: {dT_Low}\t\t dT_High: {dT_High}')
+            INFO(f'dX_Low: {dX_Low}\t\t dX_High: {dX_High}')
+            INFO(f'dY_Low: {dY_Low}\t\t dY_High: {dY_High}')
+            INFO(f'dZ_Low: {dZ_Low}\t\t dZ_High: {dZ_High}')
+            INFO(f'LX_Low: {LX_Low}\t\t LX_High: {LX_High}')
+            INFO(f'LY_Low: {LY_Low}\t\t LY_High: {LY_High}')
+            INFO(f'LZ_Low: {LZ_Low}\t\t LZ_High: {LZ_High}')
+            INFO(f'LT_Low: {LT_Low}\t\t LT_High: {LT_High}')
+            INFO(f'nX_Low: {nX_Low}\t\t nX_High: {nX_High}')
+            INFO(f'nY_Low: {nY_Low}\t\t nY_High: {nY_High}')
+            INFO(f'nZ_Low: {nZ_Low}\t\t nZ_High: {nZ_High}')
+            INFO(f'X0_Low: {X0_Low}\t\t X0_High: {X0_High}')
+            INFO(f'Y0_Low: {Y0_Low}  \t Y0_High: {Y0_High}')
+            INFO(f'Z0_Low: {Z0_Low}\t\t Z0_High: {Z0_High}')
     
     
         # Fill dictionary with all values
@@ -3235,120 +3355,132 @@ class FFCaseCreation:
             dY = Y_rel - np.round(Y_rel) # Should be close to zero
         
             if any(abs(dX)>1e-3):
-                print('Deltas:',dX)
+                WARN('Deltas:',dX)
                 raise Exception('Some X0_High are not on an integer multiple of the high-res grid')
             if any(abs(dY)>1e-3):
-                print('Deltas:',dY)
+                WARN('Deltas:',dY)
                 raise Exception('Some Y0_High are not on an integer multiple of the high-res grid')
             
         return d
 
 
-    def FF_batch_prepare(self, ffbin=None, run=False, **kwargs):
+    def FF_prepare(self, scheduler, ffbin=None, modules='default', account=None, time=None, partition=None, ntasks_per_node=104):
+        """ Writes a script to run all FAST.Farm cases.
+
+        - scheduler: 'bash' (plain shell, run directly) or 'slurm' (submit via sbatch). Required,
+          no default. The `#SBATCH` header is always written (it is an inert comment under bash)
+          and only used when submitted with sbatch. Under SLURM the script is a job array with one
+          task per (cond, case, seed) that naturally collapses to a single-node job for a single
+          case; under bash all cases run sequentially.
+        - modules: 'default' (intel/oneAPI stack), None (no `module load`), or a list of
+          module-name strings. `$HOME/.bash_profile` is always sourced.
+        - account, time, partition: written as `#SBATCH` directives when not None (also settable
+          at submit time through FF_execute's A/t/p).
+        - ntasks_per_node: `#SBATCH --ntasks-per-node` value (default 104).
         """
-            Writes a flat batch file for FASTFarm cases.
-            Allows specification of a different binary.
-        """
-        from openfast_toolbox.case_generation.runner import writeBatch
+        if scheduler not in ('bash', 'slurm'):
+            raise ValueError(f"`scheduler` is required and must be 'bash' or 'slurm'. Received {scheduler}.")
+
+        if os.name == 'nt':
+            WARN('Windows detected: the generated script is a bash/SLURM script. You may need to '
+                 'remove the SLURM-specific lines (#SBATCH) to run it locally.')
+
+        if modules == 'default':
+            modules = ['PrgEnv-intel/8.5.0',
+                       'intel-oneapi-mkl/2024.0.0-intel',
+                       'intel-oneapi',
+                       'binutils',
+                       'hdf5/1.14.3-intel-oneapi-mpi-intel',
+                       'netcdf-c/4.9.2-intel-oneapi-mpi-intel']
+        elif modules is not None and (not isinstance(modules, list) or not all(isinstance(m, str) for m in modules)):
+            raise ValueError("`modules` must be 'default', None, or a list of module-name strings.")
 
         if ffbin is not None:
+            WARN(f'Overwritting the FAST.Farm binary from the previously set {self.ffbin} to {ffbin}.')
             self.ffbin = ffbin
         self._checkFFBinary()
 
-        ext = ".bat" if os.name == "nt" else ".sh"
-        batchfile = os.path.join(self.path, f'runAllFASTFarm{ext}')
+        nTasks   = self.nConditions * self.nCases * self.nSeeds
+        condList = "condList=('{}')".format("' '".join(self.condDirList))
+        caseList = "caseList=('{}')".format("' '".join(self.caseDirList))
 
-        writeBatch(batchfile, self.FFFiles, fastExe=self.ffbin, **kwargs)
-        self.batchfile_ff = batchfile
+        scriptfile = os.path.join(self.path, 'runAllFASTFarm.sh')
+        with open(scriptfile, 'w') as f:
+            f.write('#!/bin/bash\n\n')
+            f.write(f'#SBATCH --job-name=runFF_{os.path.basename(self.path)}\n')
+            f.write('#SBATCH --output log.fastfarm_%A_%a\n')
+            f.write(f'#SBATCH --array=0-{nTasks-1}\n')
+            f.write('#SBATCH --nodes=1\n')
+            f.write(f'#SBATCH --ntasks-per-node={ntasks_per_node}\n')
+            if time is not None:
+                f.write(f'#SBATCH --time={time}\n')
+            if account is not None:
+                f.write(f'#SBATCH --account={account}\n')
+            if partition is not None:
+                f.write(f'#SBATCH --partition={partition}\n')
+            f.write('\n')
+            f.write('source $HOME/.bash_profile\n\n')
+            if scheduler == 'slurm':
+                f.write('echo "Job ID is " $SLURM_JOBID\n\n')
+            if modules is not None:
+                f.write('module purge\n')
+                for m in modules:
+                    f.write(f'module load {m}\n')
+                f.write('\n')
+            f.write('# ********************************** USER INPUT ********************************** #\n')
+            f.write(f"fastfarmbin='{self.ffbin}'\n")
+            f.write(f"basepath='{self.path}'\n\n")
+            f.write(f'{condList}\n\n')
+            f.write(f'{caseList}\n\n')
+            f.write(f'nSeeds={self.nSeeds}\n')
+            f.write('# ****************************************************************************** #\n\n')
+            f.write('export OMP_STACKSIZE="32 M"\n\n')
+            # Under SLURM only the array task matching $SLURM_ARRAY_TASK_ID runs; unset (plain bash) runs all
+            f.write('task=${SLURM_ARRAY_TASK_ID:--1}\n')
+            f.write('i=0\n')
+            f.write('for cond in ${condList[@]}; do\n')
+            f.write('    for case in ${caseList[@]}; do\n')
+            f.write('        for((seed=0; seed<$nSeeds; seed++)); do\n')
+            f.write('            if [ $task -eq -1 ] || [ $task -eq $i ]; then\n')
+            f.write('                dir=$(printf "%s/%s/%s/Seed_%01d" $basepath $cond $case $seed)\n')
+            f.write('                cd $dir\n')
+            f.write('                echo "Running $dir/FF.fstf"\n')
+            f.write('                $fastfarmbin $dir/FF.fstf > $dir/log.fastfarm.seed$seed.txt 2>&1\n')
+            f.write('            fi\n')
+            f.write('            i=$((i+1))\n')
+            f.write('        done\n')
+            f.write('    done\n')
+            f.write('done\n')
 
-        OK(f"Batch file written to {batchfile}")
-
-        if run:
-            self.FF_batch_run()
-
-    def FF_batch_run(self, showOutputs=True, showCommand=True, verbose=True, **kwargs):
-        from openfast_toolbox.case_generation.runner import runBatch
-        if not os.path.exists(self.batchfile_ff):
-            raise FFException(f'Batch file does not exist: {self.batchfile_ff}.\nMake sure you run FF_batch_prepare first.')
-        stat = runBatch(self.batchfile_ff, showOutputs=showOutputs, showCommand=showCommand, verbose=verbose, **kwargs)
-        if stat!=0:
-            raise FFException(f'Batch file failed: {self.batchfile_ff}')
-
-    def FF_slurm_prepare(self, slurmfilepath, inplace=True, useSed=True, ffbin=None):
-        # ----------------------------------------------
-        # ----- Prepare SLURM script for FAST.Farm -----
-        # ------------- ONE SCRIPT PER CASE ------------
-        # ----------------------------------------------
-        if ffbin is not None:
-            self.ffbin = ffbin
-        self._checkFFBinary()
-
-        if not os.path.isfile(slurmfilepath):
-            raise ValueError (f'SLURM script for FAST.Farm {slurmfilepath} does not exist.')
-        self.slurmfilename_ff = os.path.basename(slurmfilepath)
-
-        WARN('Implementation Note: Developer help needed. This function requires sed. Please use regexp similar to what was done for `TS_low_slurm_prepare` or `TS_high_slurm_prepare`.')
-
-        for cond in range(self.nConditions):
-            for case in range(self.nCases):
-                for seed in range(self.nSeeds):
-                    
-                    fname = f'runFASTFarm_cond{cond}_case{case}_seed{seed}.sh'
-                    shutil.copy2(slurmfilepath, os.path.join(self.path, fname))
-        
-                    # Change job name (for convenience only)
-                    sed_command = f"sed -i 's|#SBATCH --job-name=runFF|#SBATCH --job-name=c{cond}_c{case}_s{seed}_runFF_{os.path.basename(self.path)}|g' {fname}"
-                    self.sed_inplace(sed_command, inplace)
-                    # Change logfile name (for convenience only)
-                    sed_command = f"sed -i 's|#SBATCH --output log.fastfarm_c0_c0_seed0|#SBATCH --output log.fastfarm_c{cond}_c{case}_s{seed}|g' {fname}"
-                    self.sed_inplace(sed_command, inplace)
-                    # Change the fastfarm binary to be called
-                    sed_command = f"""sed -i "s|^fastfarmbin.*|fastfarmbin='{self.ffbin}'|g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
-                    # Change the path inside the script to the desired one
-                    sed_command = f"""sed -i "s|^basepath.*|basepath='{self.path}'|g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
-                    # Write condition
-                    sed_command = f"""sed -i "s|^cond.*|cond='{self.condDirList[cond]}'|g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
-                    # Write case
-                    sed_command = f"""sed -i "s|^case.*|case='{self.caseDirList[case]}'|g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
-                    # Write seed
-                    sed_command = f"""sed -i "s|^seed.*|seed={seed}|g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
-                    # Wirte FAST.Farm filename
-                    sed_command = f"""sed -i "s/FFarm_mod.fstf/FF.fstf/g" {fname}"""
-                    self.sed_inplace(sed_command, inplace)
+        self.scriptfile_ff = scriptfile
+        self.scheduler_ff  = scheduler
+        OK(f"Script written to {scriptfile}")
 
 
-    def FF_slurm_submit(self, qos='normal', A=None, t=None, p=None, delay=4, inplace=True):
+    def FF_execute(self, scheduler=None, qos=None, A=None, t=None, p=None, **kwargs):
+        """ Execute the FAST.Farm script
 
-        # ----------------------------------
-        # ---------- Run FAST.Farm ---------
-        # ------- ONE SCRIPT PER CASE ------
-        # ----------------------------------
-        import time
-            
-        for cond in range(self.nConditions):
-            for case in range(self.nCases):
-                for seed in range(self.nSeeds):
-                    
-                    # Submit the script to SLURM
-                    fname = f'runFASTFarm_cond{cond}_case{case}_seed{seed}.sh'
+        scheduler defaults to the one used in FF_prepare.
+        - scheduler='bash':  runs the script synchronously, like `bash <script>` (all cases
+          in sequence).
+        - scheduler='slurm': submits the job-array script with `sbatch <script>`.
 
-                    options = f"--qos='{qos}' "
-                    if A is not None:
-                        options += f'-A {A} '
-                    if t is not None:
-                        options += f'-t {t} '
-                    if p is not None:
-                        options += f'-p {p} '
+        SLURM args (added to the `sbatch` call, only with scheduler='slurm'):
+        - qos : --qos value (default 'normal')
+        - A   : -A, account
+        - t   : -t, time limit
+        - p   : -p, partition
 
-                    sub_command = f"sbatch {options}{fname}"
-                    print(f'Calling: {sub_command}')
-                    self.sed_inplace(sub_command, inplace)
-                    time.sleep(delay) # Sometimes the same job gets submitted twice. This gets around it.
+        bash **kwargs (only with scheduler='bash'; forwarded to runBatch):
+        - showOutputs (bool, True) : True prints stdout & stderr live; False captures
+          stdout internally and prints only stderr live.
+        - showCommand (bool, True) : print the command being run.
+        - verbose     (bool, True) : extra logging.
+        - shell_cmd   (str, 'bash'): shell used to run the script.
+        - nBuffer     (int, 0)     : stdout lines to buffer before flushing.
+        - newWindow / closeWindow  : run in a separate window (Windows only).
+        """
+        self._execute(self.scriptfile_ff, self.scheduler_ff, 'FF', scheduler, qos, A, t, p, **kwargs)
 
 # ----------------------------------------------
 #                 HELPER FUNCTIONS
@@ -3362,26 +3494,25 @@ class FFCaseCreation:
         ff_run_failed = False
         for cond in range(self.nConditions):
             for case in range(self.nCases):
-                if self.verbose>1:  print(f'Checking {self.condDirList[cond]}, {self.caseDirList[case]}')
+                if self.verbose>1:  INFO(f'Checking {self.condDirList[cond]}, {self.caseDirList[case]}')
                 for seed in range(self.nSeeds):
                     # Let's check the last line of the logfile
                     fflog_path = os.path.join(self.path, self.condDirList[cond], self.caseDirList[case], f'Seed_{seed}', f'log.fastfarm.seed{seed}.txt')
                     if not os.path.isfile(fflog_path):
-                        print(f'{self.condDirList[cond]}, {self.caseDirList[case]}, seed {seed}: FAST.Farm log file does not exist.')
+                        WARN(f'{self.condDirList[cond]}, {self.caseDirList[case]}, seed {seed}: FAST.Farm log file does not exist.')
                         ff_run_failed=True
 
                     else:
                         tail_command = ['tail', '-n', '2', fflog_path]
                         tail = subprocess.check_output(tail_command).decode('utf-8')
                         if tail.strip() != 'FAST.Farm terminated normally.':
-                            print(f'{self.condDirList[cond]}, {self.caseDirList[case]}, seed {seed}: FAST.Farm did not complete successfully.')
+                            FAIL(f'{self.condDirList[cond]}, {self.caseDirList[case]}, seed {seed}: FAST.Farm did not complete successfully.')
                             ff_run_failed=True
 
         if ff_run_failed:
-            print('')
-            raise ValueError(f'Not all FAST.Farm runs were successful')
+            FAIL(f'Not all FAST.Farm runs were successful')
         else:
-            print(f'All cases finished successfully.')
+            OK(f'All cases finished successfully.')
 
 
     def set_wake_model_params(self, C_HWkDfl_OY=None, C_HWkDfl_xY=None, k_VortexDecay=None, k_vCurl=None):

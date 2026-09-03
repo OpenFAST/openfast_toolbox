@@ -119,8 +119,10 @@ def main(test=False):
 
     # ----------- Template files
     # --- Option 1
-    templateFSTF = os.path.join(scriptDir, '../../../data/IEA15MW/v4/FF.fstf')
-    templateFiles = {'libdisconfilepath' : libdiscon}    
+    templateFSTF = os.path.join(scriptDir, '../../../data/template_files_v4.2/IEA15MW/FAST.Farm.fstf')
+    templateFiles = {'libdisconfilepath' : libdiscon,
+                     'turbfilename'            : 'Model.T',
+                     }
     # --- Option 2
     #templatePath = '/full/path/where/template/files/are'
     ## Files should be in templatePath. Put None on any input that is not applicable.
@@ -148,11 +150,6 @@ def main(test=False):
     #    'turbsimLowfilepath'      : './SampleFiles/template_Low_InflowXX_SeedY.inp',
     #    'turbsimHighfilepath'     : './SampleFiles/template_HighT1_InflowXX_SeedY.inp'
     #}
-    # SLURM scripts
-    slurm_TS_high           = os.path.join(scriptDir, './SampleFiles/runAllHighBox.sh')
-    slurm_TS_low            = os.path.join(scriptDir, './SampleFiles/runAllLowBox.sh')
-    slurm_FF_single         = './SampleFiles/runFASTFarm_cond0_case0_seed0.sh'
-
 
     # -----------------------------------------------------------------------------
     # ---------------------- Discretization parameters ----------------------------
@@ -208,11 +205,10 @@ def main(test=False):
     # ----------- TurbSim low-res setup
     ffcase.TS_low_setup() # Create TurbSim input files for low res
     # ----------- Prepare script for submission
-    ffcase.TS_low_batch_prepare()
-    #ffcase.TS_low_slurm_prepare(slurm_TS_low)
+    ffcase.TS_low_prepare(scheduler='bash')   # write a plain shell script
+    #ffcase.TS_low_prepare(scheduler='slurm') # Alternative, write a SLURM submission script
     # ----------- Submit the low-res script (can be done from the command line)
-    #ffcase.TS_low_batch_run() # Write a batch file to disk
-    #ffcase.TS_low_slurm_submit() # Alternative, write a slurm batch file, see below
+    #ffcase.TS_low_execute() # Execute/submit prepared script
 
     # The low-resolution boxes need to be executed before we can proceed setting up
     # the high-resolution and the overall FAST.Farm case. The lines below will need
@@ -225,11 +221,10 @@ def main(test=False):
     # ----------- TurbSim high-res setup
     ffcase.TS_high_setup() # Create TurbSim input files
     # ----------- Prepare script for submission
-    ffcase.TS_high_batch_prepare() # Write a batch file to disk
-    #ffcase.TS_high_slurm_prepare(slurm_TS_high) # Alternative, write a slurm batch file
+    ffcase.TS_high_prepare(scheduler='bash')   # write a plain shell script
+    #ffcase.TS_high_prepare(scheduler='slurm') # Alternative, write a SLURM submission script
     # ----------- Submit the high-res script (can be done from the command line)
-    ffcase.TS_high_batch_run(showOutputs=True, showCommand=True, nBuffer=8, shell_cmd='bash')
-    #ffcase.TS_high_slurm_submit() # Alternative, submit a slurm batch file
+    ffcase.TS_high_execute() # Execute/submit prepared script
 
 
     # -----------------------------------------------------------------------------
@@ -241,18 +236,16 @@ def main(test=False):
     ffcase.set_wake_model_params(k_VortexDecay=0, k_vCurl=2.8)
 
     # ----------- Prepare script for submission
-    ffcase.FF_batch_prepare() # Write batch files with all commands to be run
-    #ffcase.FF_slurm_prepare(slurm_FF_single) # Alternative, prepare a slurm batch file
+    ffcase.FF_prepare(scheduler='bash')   # write a plain shell script
+    #ffcase.FF_prepare(scheduler='slurm') # Alternative, write a SLURM job-array script
 
     # We can do simple modifications:
     modifyProperty(ffcase.FFFiles[0], 'NX_Low', 100) # Making the domain longer for visualization purposes
     # We can visualize the setup:
     plotFastFarmSetup(ffcase.FFFiles[0], grid=True, figsize=(10,3));
 
-
     # ----------- Submit the FAST.Farm script (can be done from the command line)
-    ffcase.FF_batch_run(showOutputs=True, showCommand=True, nBuffer=10, shell_cmd='bash')
-    #ffcase.FF_slurm_submit(p='debug', t='1:00:00') # Alternative, submit a slurm batch file
+    #ffcase.FF_execute(scheduler='slurm', p='debug', t='1:00:00') # For slurm, you have additional options
     return ffcase
 
 

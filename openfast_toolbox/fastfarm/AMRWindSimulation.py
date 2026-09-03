@@ -444,30 +444,42 @@ class AMRWindSimulation:
             zlow_hr_min  = wt_z
             zhigh_hr_max = wt_z + wt_h + self.buffer_hr * wt_D 
 
-            # Calculate the minimum/maximum HR domain coordinate lengths & number of grid cells
-            xdist_hr_min = xhigh_hr_max - xlow_hr_min  # Minumum possible length of x-extent of HR domain
-            xdist_hr = self.ds_high_les * np.ceil(xdist_hr_min/self.ds_high_les)  
-            nx_hr = int(xdist_hr/self.ds_high_les) + 1
+            # Snap the requested extent outward onto the LES sampling grid: floor the low edge and ceil the
+            # high edge (both relative to prob_lo, where the grid lines actually sit), then derive the extent
+            # and point count from what came out. This guarantees the box contains [wt - buffer, wt + buffer]
+            # on every side regardless of where the turbine falls on the grid, at the cost of at most one
+            # extra cell per direction.
+            tol = 1e-6
+            xlow_hr_aligned  = self.prob_lo[0] + self.ds_high_les*np.floor((xlow_hr_min  - self.prob_lo[0])/self.ds_high_les + tol)
+            xhigh_hr_aligned = self.prob_lo[0] + self.ds_high_les*np.ceil( (xhigh_hr_max - self.prob_lo[0])/self.ds_high_les - tol)
+            xdist_hr = xhigh_hr_aligned - xlow_hr_aligned
+            nx_hr = int(round(xdist_hr/self.ds_high_les)) + 1
 
-            ydist_hr_min = yhigh_hr_max - ylow_hr_min
-            ydist_hr = self.ds_high_les * np.ceil(ydist_hr_min/self.ds_high_les)
-            ny_hr = int(ydist_hr/self.ds_high_les) + 1
-
-            zdist_hr_min = zhigh_hr_max - zlow_hr_min
-            zdist_hr = self.ds_high_les * np.ceil(zdist_hr_min/self.ds_high_les)
-            nz_hr = int(zdist_hr/self.ds_high_les) + 1
+            ylow_hr_aligned  = self.prob_lo[1] + self.ds_high_les*np.floor((ylow_hr_min  - self.prob_lo[1])/self.ds_high_les + tol)
+            yhigh_hr_aligned = self.prob_lo[1] + self.ds_high_les*np.ceil( (yhigh_hr_max - self.prob_lo[1])/self.ds_high_les - tol)
+            ydist_hr = yhigh_hr_aligned - ylow_hr_aligned
+            ny_hr = int(round(ydist_hr/self.ds_high_les)) + 1
 
             # Calculate actual HR domain extent
             #  NOTE: Sampling planes should measure at AMR-Wind cell centers, not cell edges
-            xlow_hr = getMultipleOf(xlow_hr_min, multipleof=self.ds_high_les) - 0.5*self.dx_at_hr_level+ self.prob_lo[0]%self.ds_high_les
+            xlow_hr = xlow_hr_aligned - 0.5*self.dx_at_hr_level
             xhigh_hr = xlow_hr + xdist_hr
 
-            ylow_hr = getMultipleOf(ylow_hr_min, multipleof=self.ds_high_les) - 0.5*self.dy_at_hr_level + self.prob_lo[1]%self.ds_high_les
+            ylow_hr = ylow_hr_aligned - 0.5*self.dy_at_hr_level
             yhigh_hr = ylow_hr + ydist_hr
 
-            #zlow_hr = zlow_hr_min + 0.5 * self.dz_at_hr_level
-            # !!!! 2024-07-23: changed to positive the 0.5*gridres below so that z>0 in flat terrain. The wfip files will be off
-            zlow_hr = getMultipleOf(zlow_hr_min, multipleof=self.ds_high_les) + 0.5*self.dz_at_hr_level + self.prob_lo[2]%self.ds_high_les
+            # The z floor is snapped UP (ceil), unlike x/y: the requested floor is the tower base, and the
+            # per-turbine refinement region does not extend below it, so the sample box must start at or
+            # above it to be contained in that level. The top is snapped up as well (below) so the requested
+            # zhigh_hr_max is always covered.
+            zlow_hr_snapped = self.prob_lo[2] + self.ds_high_les*np.ceil((zlow_hr_min - self.prob_lo[2])/self.ds_high_les - tol)
+            zlow_hr = zlow_hr_snapped + 0.5*self.dz_at_hr_level
+
+            # Recompute z-extent from the (now snapped-up) floor so we still cover zhigh_hr_max
+            zdist_hr_min = zhigh_hr_max - zlow_hr
+            zdist_hr = self.ds_high_les * np.ceil(zdist_hr_min/self.ds_high_les)
+            nz_hr = int(zdist_hr/self.ds_high_les) + 1
+
             zhigh_hr = zlow_hr + zdist_hr
             zoffsets_hr = np.arange(zlow_hr, zhigh_hr+self.ds_high_les, self.ds_high_les) - zlow_hr
 
@@ -475,22 +487,16 @@ class AMRWindSimulation:
             # Check domain extents
             if xhigh_hr > self.prob_hi[0]:
                 raise ValueError(f"Turbine {turbkey}: HR domain point {xhigh_hr} extends beyond maximum AMR-Wind x-extent!")
-                #print(f"Turbine {turbkey}: ERROR: HR domain point {xhigh_hr} extends beyond maximum AMR-Wind x-extent!")
             if xlow_hr < self.prob_lo[0]:
                 raise ValueError(f"Turbine {turbkey}: HR domain point {xlow_hr} extends beyond minimum AMR-Wind x-extent!")
-                #print(f"Turbine {turbkey}: ERROR: HR domain point {xlow_hr} extends beyond minimum AMR-Wind x-extent!")
             if yhigh_hr > self.prob_hi[1]:
                 raise ValueError(f"Turbine {turbkey}: HR domain point {yhigh_hr} extends beyond maximum AMR-Wind y-extent!")
-                #print(f"Turbine {turbkey}: ERROR: HR domain point {yhigh_hr} extends beyond maximum AMR-Wind y-extent!")
             if ylow_hr < self.prob_lo[1]:
                 raise ValueError(f"Turbine {turbkey}: HR domain point {ylow_hr} extends beyond minimum AMR-Wind y-extent!")
-                #print(f"Turbine {turbkey}: ERROR: HR domain point {ylow_hr} extends beyond minimum AMR-Wind y-extent!")
             if zhigh_hr > self.prob_hi[2]:
                 raise ValueError(f"Turbine {turbkey}: HR domain point {zhigh_hr} extends beyond maximum AMR-Wind z-extent!")
-                #print(f"Turbine {turbkey}: ERROR: HR domain point {zhigh_hr} extends beyond maximum AMR-Wind z-extent!")
             if zlow_hr < self.prob_lo[2]:
                 raise ValueError(f"Turbine {turbkey}: HR domain point {zlow_hr} extends beyond minimum AMR-Wind z-extent!")
-                #print(f"Turbine {turbkey}: ERROR: HR domain point {zlow_hr} extends beyond minimum AMR-Wind z-extent!")
 
             # Save out info for FFCaseCreation
             self.extent_high = self.buffer_hr*2
@@ -663,7 +669,7 @@ class AMRWindSimulation:
 
 
 
-    def write_sampling_params(self, out=None, format='netcdf', terrain=None, overwrite=False, chunk_size_vec=(8,8,1)):
+    def write_sampling_params(self, out=None, format='netcdf', terrain=None, overwrite=False, chunk_size_vec_lowres=(32,32,'auto')):
         '''
         Write out text that can be used for the sampling planes in an 
           AMR-Wind input file
@@ -680,8 +686,12 @@ class AMRWindSimulation:
         overwrite: bool
             If saving to a file, whether or not to overwrite potentially
             existing file
-        chunk_size_vec: vector of int
-            Size of AMReX-based chunk, used with the sub-volume sampling.
+        chunk_size_vec_lowres: vector of int
+            Size of AMReX-based chunk for the low-res only, used with the sub-volume sampling.
+            This is a *maximum* box size, so the box count in each direction is
+            ceil(num_points/chunk_size). The vertical entry may be given as 'auto' (default),
+            in which case it is set to the full vertical extent of the low-res box.
+            High-res boxes have no chunking and each high-res box is given as a single chunk.
 
         '''
 
@@ -690,6 +700,8 @@ class AMRWindSimulation:
         self.sampling_format = format
 
         if terrain == True:
+            # The version where mu_turb is saved is only for netcdf/native
+            # The amrex version includes the terrain mask through the use of derived fields
             fields = 'velocity mu_turb'
         elif terrain == False:
             fields = 'velocity'
@@ -702,7 +714,7 @@ class AMRWindSimulation:
             s += f"#.......................................#\n"
             s += f"# Sampling info generated by openfast_toolbox on {self.curr_datetime}, commit {self.commit}.\n"
             s += f"erf.fixed_dt          = {self.dt}\n\n"
-            s += self._write_sampling_params_amrex_erf(fields, chunk_size_vec)
+            s += self._write_sampling_params_amrex_erf(fields, chunk_size_vec_lowres)
         elif self.sampling_format == 'amrex_amrwind':
             # Write time step information for consistency with sampling interval
             s = f"time.fixed_dt    = {self.dt}\n\n"
@@ -714,7 +726,7 @@ class AMRWindSimulation:
             s += f"#.......................................#\n"
             s += f"# Sampling info generated by openfast_toolbox on {self.curr_datetime}, commit {self.commit}.\n"
             s += f"incflo.post_processing                = {self.postproc_name_lr} {self.postproc_name_hr}\n\n\n"
-            s += self._write_sampling_params_amrex_amrwind(fields, chunk_size_vec)
+            s += self._write_sampling_params_amrex_amrwind(terrain, chunk_size_vec_lowres)
         else:
             # Write time step information for consistency with sampling interval
             s = f"time.fixed_dt    = {self.dt}\n\n"
@@ -816,7 +828,7 @@ class AMRWindSimulation:
         return s
 
 
-    def _write_sampling_params_amrex_erf(self, fields, chunk_size_vec):
+    def _write_sampling_params_amrex_erf(self, fields, chunk_size_vec_lowres):
         def _to_erf_sampling_vars(fields_in):
             vars_out = []
             for field in fields_in.split():
@@ -833,12 +845,18 @@ class AMRWindSimulation:
         ylow_lr_corner = self.ylow_lr - 0.5 * self.dy_at_lr_level
         zlow_lr_corner = self.zlow_lr - 0.5 * self.dz_at_lr_level
 
+        chunk_z_lr = chunk_size_vec_lowres[2]
+        if chunk_z_lr == 'auto':
+            # 'auto' gives chunks spanning the full vertical extent, i.e. one box per column
+            chunk_z_lr = self.nz_lr
+
         origins = [f"{xlow_lr_corner:.4f} {ylow_lr_corner:.4f} {zlow_lr_corner:.4f}"]
         nxnynz = [f"{self.nx_lr} {self.ny_lr} {self.nz_lr}"]
         dxdydz = [f"{self.ds_low_les} {self.ds_low_les} {self.ds_low_les}"]
+        chunks = [f"{chunk_size_vec_lowres[0]} {chunk_size_vec_lowres[1]} {chunk_z_lr}"]
 
         s  = f"# ---- ERF subvolume sampling parameters ----\n"
-        s += f"# Order of boxes in origin/nxnynz/dxdydz: low-res first, then each high-res turbine box\n"
+        s += f"# Order of boxes in origin/nxnynz/dxdydz/chunk_size: low-res first, then each high-res turbine box\n"
 
         for turbkey in self.hr_domains:
             xlow_hr_corner = self.hr_domains[turbkey]['xlow_hr'] - 0.5 * self.dx_at_hr_level
@@ -850,6 +868,10 @@ class AMRWindSimulation:
                 f"{self.hr_domains[turbkey]['nx_hr']} {self.hr_domains[turbkey]['ny_hr']} {self.hr_domains[turbkey]['nz_hr']}"
             )
             dxdydz.append(f"{self.ds_high_les} {self.ds_high_les} {self.ds_high_les}")
+            # Each high-res box is a single chunk, sized to this turbine's own grid
+            chunks.append(
+                f"{self.hr_domains[turbkey]['nx_hr']} {self.hr_domains[turbkey]['ny_hr']} {self.hr_domains[turbkey]['nz_hr']}"
+            )
 
         erf_sampling_vars = _to_erf_sampling_vars(fields)
         subvol_file = os.path.join('post_processing',f"{self.postproc_name_lr}_{self.postproc_name_hr}") # TODO fix
@@ -860,12 +882,12 @@ class AMRWindSimulation:
         s += f"erf.subvol.origin        = {'       '.join(origins)}\n"
         s += f"erf.subvol.nxnynz        = {'       '.join(nxnynz)}\n"
         s += f"erf.subvol.dxdydz        = {'       '.join(dxdydz)}\n"
-        s += f"erf.subvol.chunk_size    = {chunk_size_vec[0]} {chunk_size_vec[1]} {chunk_size_vec[2]}\n"
+        s += f"erf.subvol.chunk_size    = {'       '.join(chunks)}\n"
 
         return s
 
 
-    def _write_sampling_params_amrex_amrwind(self, fields, chunk_size_vec):
+    def _write_sampling_params_amrex_amrwind(self, terrain, chunk_size_vec_lowres):
 
         # Here we need to modify the labels so that is consistent with ERF-based AMReX samping
         sampling_labels_lr = ['0_']
@@ -882,11 +904,10 @@ class AMRWindSimulation:
             and np.isclose(self.dz_at_lr_level, self.ds_low_les)
         )
         if not is_lr_aligned:
-            raise ValueError(
-                "amrex_amrwind sampling requires low-res AMR cell spacing to match sampling spacing. "
-                f"Received dx/dy/dz at level {self.level_lr} = ({self.dx_at_lr_level}, {self.dy_at_lr_level}, {self.dz_at_lr_level}) "
-                f"and ds_low_les = {self.ds_low_les}."
-            )
+            WARN(
+                "amrex_amrwind low-res sampling not perfectly matching a certain level. "
+                f"Received LES dx/dy/dz at level {self.level_lr} = ({self.dx_at_lr_level}, {self.dy_at_lr_level}, {self.dz_at_lr_level}) "
+                f"and ds_low_les = {self.ds_low_les}. Skipping cells to get the desired sampling at {self.ds_low_les} m uniform resolution.")
 
         is_hr_aligned = (
             np.isclose(self.dx_at_hr_level, self.ds_high_les)
@@ -894,11 +915,10 @@ class AMRWindSimulation:
             and np.isclose(self.dz_at_hr_level, self.ds_high_les)
         )
         if not is_hr_aligned:
-            raise ValueError(
-                "amrex_amrwind sampling requires high-res AMR cell spacing to match sampling spacing. "
-                f"Received dx/dy/dz at level {self.level_hr} = ({self.dx_at_hr_level}, {self.dy_at_hr_level}, {self.dz_at_hr_level}) "
-                f"and ds_high_les = {self.ds_high_les}."
-            )
+            WARN(
+                "amrex_amrwind high-res sampling not perfectly matching a certain level."
+                f"Received LES dx/dy/dz at level {self.level_hr} = ({self.dx_at_hr_level}, {self.dy_at_hr_level}, {self.dz_at_hr_level}) "
+                f"and ds_high_les = {self.ds_high_les}. Skipping cells to get the desired sampling at {self.ds_high_les} m uniform resolution.")
 
         #sampleAt = 'cell_centers'
         sampleAt = 'cell_corners'
@@ -928,7 +948,11 @@ class AMRWindSimulation:
         s += f"{self.postproc_name_lr}.output_after_final_step = false\n"
         s += f"{self.postproc_name_lr}.output_from_restart     = true\n"
         s += f"{self.postproc_name_lr}.output_time_interval    = {output_time_interval_lr_str}\n"
-        s += f"{self.postproc_name_lr}.fields                  = {fields}\n"
+        if terrain:
+            s += f"{self.postproc_name_lr}.derived_fields          = mask_terrain(velocity)\n"
+            s += f"{self.postproc_name_lr}.fields                  = none\n"
+        else:
+            s += f"{self.postproc_name_lr}.fields                  = velocity\n"
         s += f"{self.postproc_name_lr}.labels                  = {sampling_labels_lr_str}\n\n"
 
         s += f"# Low sampling grid spacing = {self.ds_lr} m\n"
@@ -936,7 +960,12 @@ class AMRWindSimulation:
         s += f"{self.postproc_name_lr}.{sampling_labels_lr_str}.origin         = {xlow_lr_out:.4f} {ylow_lr_out:.4f} {zlow_lr_out:.4f} # {origin_comment}\n"
         s += f"{self.postproc_name_lr}.{sampling_labels_lr_str}.num_points     = {self.nx_lr} {self.ny_lr} {self.nz_lr}\n"
         s += f"{self.postproc_name_lr}.{sampling_labels_lr_str}.dx_vec         = {self.ds_low_les} {self.ds_low_les} {self.ds_low_les}\n"
-        s += f"{self.postproc_name_lr}.{sampling_labels_lr_str}.chunk_size_vec = {chunk_size_vec[0]} {chunk_size_vec[1]} {chunk_size_vec[2]}\n\n\n"
+        chunk_z_lr = chunk_size_vec_lowres[2]
+        if chunk_z_lr == 'auto':
+            # 'auto' gives chunks spanning the full vertical extent, i.e. one box per column
+            chunk_z_lr = self.nz_lr
+
+        s += f"{self.postproc_name_lr}.{sampling_labels_lr_str}.chunk_size_vec = {chunk_size_vec_lowres[0]} {chunk_size_vec_lowres[1]} {chunk_z_lr}\n\n\n"
 
         s += f"# ---- High-res sampling parameters ----\n"
         s += f"{self.postproc_name_hr}.type                    = Subvolume\n"
@@ -944,7 +973,11 @@ class AMRWindSimulation:
         s += f"{self.postproc_name_hr}.output_after_final_step = false\n"
         s += f"{self.postproc_name_hr}.output_from_restart     = true\n"
         s += f"{self.postproc_name_hr}.output_time_interval    = {output_time_interval_hr_str}\n"
-        s += f"{self.postproc_name_hr}.fields                  = {fields}\n"
+        if terrain:
+            s += f"{self.postproc_name_hr}.derived_fields          = mask_terrain(velocity)\n"
+            s += f"{self.postproc_name_hr}.fields                  = none\n"
+        else:
+            s += f"{self.postproc_name_hr}.fields                  = velocity\n"
         s += f"{self.postproc_name_hr}.labels                  = {sampling_labels_hr_str}\n"
 
         for turbkey in self.hr_domains:
@@ -973,7 +1006,7 @@ class AMRWindSimulation:
             s += f"{self.postproc_name_hr}.{sampling_name}.origin         = {xlow_hr_out:.4f} {ylow_hr_out:.4f} {zlow_hr_out:.4f}  # {origin_comment}\n"
             s += f"{self.postproc_name_hr}.{sampling_name}.num_points     = {nx_hr} {ny_hr} {nz_hr}\n"
             s += f"{self.postproc_name_hr}.{sampling_name}.dx_vec         = {self.ds_high_les} {self.ds_high_les} {self.ds_high_les}\n"
-            s += f"{self.postproc_name_hr}.{sampling_name}.chunk_size_vec = {chunk_size_vec[0]} {chunk_size_vec[1]} {chunk_size_vec[2]}\n"
+            s += f"{self.postproc_name_hr}.{sampling_name}.chunk_size_vec = {nx_hr} {ny_hr} {nz_hr} # Entire box\n"
 
         return s
 
