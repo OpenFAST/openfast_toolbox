@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import xarray as xr
-import os, sys
+import os, sys, re
 from multiprocessing import Pool
 from itertools import repeat
 
@@ -27,6 +27,19 @@ def _getCaseSeedPath(caseobj, cond, case, seed):
         print('>>> get CaseSeedPath failed')
         return os.path.join(caseobj.path, caseobj.condDirList[cond], caseobj.caseDirList[case], f'Seed_{seed}')
 
+def _getDT_Low(ff_file):
+    '''
+    Low-resolution (farm) time step actually used by FAST.Farm. The input file has one DT_Low entry per ambient-wind model and
+    Mod_AmbWind selects it: 1 -> DT_Low-VTK, 2 and 3 -> DT_Low, 4 -> DT_Low-AMReX (older input files only have the first two).
+    '''
+
+    if ff_file['Mod_AmbWind'] == 1:
+        return ff_file['DT_Low-VTK']
+    elif ff_file['Mod_AmbWind'] == 4:
+        return ff_file['DT_Low-AMReX']
+    else:
+        return ff_file['DT_Low']
+
 def readTurbineOutputPar(caseobj, dt_openfast, dt_processing, saveOutput=True, output='nc',
                          iCondition=0, fCondition=-1, iCase=0, fCase=-1, iSeed=0, fSeed=-1, iTurbine=0, fTurbine=-1,
                          nCores=36):
@@ -39,14 +52,6 @@ def readTurbineOutputPar(caseobj, dt_openfast, dt_processing, saveOutput=True, o
 
 
     '''
-
-
-    #from multiprocessing import set_start_method
-    #try:
-    #    set_start_method("spawn")
-    #except RuntimeError:
-    #    print(f'Fell into RunTime error on `set_start_method("spawn")`. Continuing..\n')
-
 
     if fCondition==-1:
         fCondition = caseobj.nConditions
@@ -83,11 +88,11 @@ def readTurbineOutputPar(caseobj, dt_openfast, dt_processing, saveOutput=True, o
     outputzarr = os.path.join(caseobj.path, zarrstore)
     outputnc   = os.path.join(caseobj.path, ncfile)
 
-    if output=='zarr' and os.path.isdir(outputzarr) and saveOutput:
+    if output=='zarr' and os.path.isdir(outputzarr):
        print(f'Output file {zarrstore} exists. Loading it.')
        comb_ds = xr.open_zarr(outputzarr)
        return comb_ds
-    if output=='nc' and os.path.isfile(outputnc) and saveOutput:
+    if output=='nc' and os.path.isfile(outputnc):
        print(f'Output file {ncfile} exists. Loading it.')
        comb_ds = xr.open_dataset(outputnc)
        return comb_ds
@@ -107,8 +112,8 @@ def readTurbineOutputPar(caseobj, dt_openfast, dt_processing, saveOutput=True, o
     ds_ = p.starmap(readTurbineOutput, zip(repeat(caseobj),          # caseobj
                                            repeat(dt_openfast),      # dt_openfast
                                            repeat(dt_processing),    # dt_processing
-                                           repeat(False),       # saveOutput
-                                           repeat(output),      # output
+                                           repeat(False),            # saveOutput
+                                           repeat(output),           # output
                                            repeat(iCondition),       # iCondition
                                            repeat(fCondition),       # fCondition
                                            iCase_list,               # iCase
@@ -119,9 +124,6 @@ def readTurbineOutputPar(caseobj, dt_openfast, dt_processing, saveOutput=True, o
                                            repeat(fTurbine),         # fTurbine
                                           )
                                        )
-
-    # Trying this out
-    print('trying to close the pool. does this seem to work better on notebooks?')
     p.close()
     p.terminate()
     p.join()
@@ -139,16 +141,15 @@ def readTurbineOutputPar(caseobj, dt_openfast, dt_processing, saveOutput=True, o
         else:
             raise
 
-
     if saveOutput:
         print(f'Done concatenating. Saving {output} file.')
         if output == 'zarr':  comb_ds.to_zarr(outputzarr)
         elif output == 'nc':  comb_ds.to_netcdf(outputnc)
 
-
     print('Finished.')
 
     return comb_ds
+
 
 def readTurbineOutput(caseobj, dt_openfast, dt_processing=1, saveOutput=True, output='nc',
                       iCondition=0, fCondition=-1, iCase=0, fCase=-1, iSeed=0, fSeed=-1, iTurbine=0, fTurbine=-1):
@@ -167,32 +168,23 @@ def readTurbineOutput(caseobj, dt_openfast, dt_processing=1, saveOutput=True, ou
     
     if fCondition==-1:
         fCondition = caseobj.nConditions
-    #else:
-    #    fCondition += 1  # The user sets the last desired condition. This if for the np.arange.
     if fCondition-iCondition <= 0:
         raise ValueError (f'Final condition to read needs to be larger than initial.')
 
     if fCase==-1:
         fCase = caseobj.nCases
-    #else:
-        #fCase += 1  # The user sets the last desired case. This if for the np.arange.
     if fCase-iCase <= 0:
         raise ValueError (f'Final case to read needs to be larger than initial.')
 
     if fSeed==-1:
         fSeed = caseobj.nSeeds
-    #else:
-    #    fSeed += 1 # The user sets the last desired seed. This is for the np.arange
     if fSeed-iSeed <= 0:
         raise ValueError (f'Final seed to read needs to be larger than initial.')
 
     if fTurbine==-1:
         fTurbine = caseobj.nTurbines
-    #else:
-    #    fTurbine += 1  # The user sets the last desired turbine. This if for the np.arange.
     if fTurbine-iTurbine <= 0:
         raise ValueError (f'Final turbine to read needs to be larger than initial.')
-
 
     outfilename = f'ds_turbineOutput_temp_cond{iCondition}_{fCondition}_case{iCase}_{fCase}_seed{iSeed}_{fSeed}_turb{iTurbine}_{fTurbine}_dt{dt_processing}s'
     zarrstore = f'{outfilename}.zarr'
@@ -267,10 +259,40 @@ def readTurbineOutput(caseobj, dt_openfast, dt_processing=1, saveOutput=True, ou
 
 
 
+def _nOutputTimes(caseobj, cond, case, seed, sliceToRead, terrainSlice=None):
+    '''
+    Number of snapshots that readFFPlanes reads for one cond/case/seed when ftime=-1: the smaller of the number expected from TMax and
+    the output time step, and the number of files on disk of the slice's first family (same rule as in readFFPlanes). Used by
+    readFFPlanesPar to split the time range among the workers.
+    '''
+    seedPath = _getCaseSeedPath(caseobj, cond, case, seed)
+    ff_file = FASTInputFile(os.path.join(seedPath,f'{_get_fstf_filename(caseobj)}.fstf'))
+    vtkfiles = os.listdir( os.path.join(seedPath, 'vtk_ff'))
+
+    if sliceToRead == 'terrain':
+        if terrainSlice is None:  terrainSlice = _terrainSliceRow(ff_file['TerrainSlices'][0])[0]
+        WrTerrainDT = ff_file['WrTerrainDT']
+        if str(WrTerrainDT).strip('"').upper() == 'DEFAULT':  WrTerrainDT = _getDT_Low(ff_file)
+        prefix = f'{_get_fstf_filename(caseobj)}.TerrSlice.{terrainSlice}.'
+        ext = '.vtp'
+        nOutputTimes_expected = int(np.floor(ff_file['TMax']/WrTerrainDT))
+    else:
+        prefix = f'{_get_fstf_filename(caseobj)}.Low.DisXY001.'
+        ext = '.vtk'
+        nOutputTimes_expected = int(np.floor(ff_file['TMax']/ff_file['WrDisDT']))
+
+    nOutputTimes_available = len([f for f in vtkfiles if f.startswith(prefix) and f.endswith(ext)])
+
+    return min(nOutputTimes_expected, nOutputTimes_available)
 
 
 
-def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondition=0, fCondition=-1, iCase=0, fCase=-1, iSeed=0, fSeed=-1, itime=0, ftime=-1, skiptime=1, nCores=36, outputformat='nc'):
+def readFFPlanesPar(caseobj, slicesToRead, verbose=False, saveOutput=True, iCondition=0, fCondition=-1, iCase=0, fCase=-1, iSeed=0, fSeed=-1, itime=0, ftime=-1, skiptime=1, nCores=36, outputformat='nc', terrainSlice=None):
+    '''
+    Parallel version of readFFPlanes for one slice ('x', 'y', 'z' or 'terrain'; see readFFPlanes for the inputs). The work is split
+    among the workers by condition, by case, or, for a single condition and case, by time. Each worker calls readFFPlanes on its share,
+    and the result is combined and saved under the same file name readFFPlanes uses, so a later call to either function loads it.
+    '''
 
     if fCondition==-1:
         fCondition = caseobj.nConditions
@@ -287,20 +309,45 @@ def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondi
     if fSeed-iSeed <= 0:
         raise ValueError (f'Final seed to read needs to be larger than initial.')
 
+    if outputformat not in ['zarr','nc']:
+        raise ValueError (f'Output can only be zarr or nc')
 
-    zarrstore = f'ds_{sliceToRead}Slices_temp_cond{iCondition}_{fCondition}_case{iCase}_{fCase}_seed{iSeed}_{fSeed}.zarr'
+
+    outfilename = f'ds_{slicesToRead}Slices_temp_cond{iCondition}_{fCondition}_case{iCase}_{fCase}_seed{iSeed}_{fSeed}'
+    if slicesToRead == 'terrain' and terrainSlice is not None:  outfilename = f'ds_terrainSlices_{terrainSlice}_temp_cond{iCondition}_{fCondition}_case{iCase}_{fCase}_seed{iSeed}_{fSeed}'
+    zarrstore = f'{outfilename}.zarr'
+    ncfile = f'{outfilename}.nc'
     outputzarr = os.path.join(caseobj.path, zarrstore)
+    outputnc   = os.path.join(caseobj.path, ncfile)
 
-    if os.path.isdir(outputzarr) and saveOutput:
-       print(f'Output file {zarrstore} exists. Attempting to read it..')
+    if outputformat=='zarr' and os.path.isdir(outputzarr):
+       print(f'Output file {zarrstore} exists. Loading it.')
        comb_ds = xr.open_zarr(outputzarr)
+       return comb_ds
+    if outputformat=='nc' and os.path.isfile(outputnc):
+       print(f'Output file {ncfile} exists. Loading it.')
+       comb_ds = xr.open_dataset(outputnc)
        return comb_ds
 
 
     # We will loop in the variable that we have more entries. E.g. if we have several condition, and only one case,
     # then we will loop on the conditions. Analogous, if we have single conditions with many cases, we will loop on
-    # cases. Here we figure out where the loop will take place and set the appropriate number of cores to be used.
-    if fCondition-iCondition > fCase-iCase:
+    # cases. A single condition and case is looped in time. Here we figure out where the loop will take place and set
+    # the appropriate number of cores to be used.
+    if fCondition-iCondition == 1 and fCase-iCase == 1:
+        loopOn = 'time'
+        print(f'Single condition, single case. Looping in time.')
+        if ftime == -1:
+            ftime = _nOutputTimes(caseobj, iCondition, iCase, iSeed, slicesToRead, terrainSlice)
+        nTimes = len(range(itime,ftime,skiptime))
+        if nTimes == 0:
+            raise ValueError (f'No snapshots to read between itime={itime} and ftime={ftime} with skiptime={skiptime}.')
+        if nTimes < nCores:
+            print(f'Total number of times requested ({nTimes}) is lower than number of cores {nCores}.')
+            print(f'Changing the number of cores to {nTimes}.')
+            nCores = nTimes
+
+    elif fCondition-iCondition >= fCase-iCase:
         loopOn = 'cond'
         print(f'Looping on conditions.')
         if fCondition-iCondition < nCores:
@@ -308,7 +355,7 @@ def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondi
             print(f'Changing the number of cores to {fCondition-iCondition}.')
             nCores = fCondition-iCondition
 
-    elif fCondition-iCondition < fCase-iCase:
+    else:
         loopOn = 'case'
         print(f'Looping on cases.')
         if fCase-iCase < nCores:
@@ -316,20 +363,11 @@ def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondi
             print(f'Changing the number of cores to {fCase-iCase}.')
             nCores = fCase-iCase
 
-    # Special case of a single cond, single case
-    if fCondition == 1 and fCase == 1:
-        loopOn = 'time'
-        print(f'Single condition, single case. Looping in time.')
-        if ftime-itime < nCores:
-            print(f'Total number of times requested ({ftime-itime}) is lower than number of cores {nCores}.')
-            print(f'Changing the number of cores to {ftime-itime}.')
-            nCores = ftime-itime
-
 
     print(f'Running readFFPlanes in parallel using {nCores} workers')
 
     if loopOn == 'cond':
-        # Split all the cases in arrays of roughly the same size
+        # Split all the conditions in arrays of roughly the same size
         chunks =  np.array_split(range(iCondition,fCondition), nCores)
         # Now, get the beginning and end of each separate chunk
         iCond_list = [i[0]    for i in chunks]
@@ -359,7 +397,7 @@ def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondi
         ftime_list = repeat(ftime)
 
     elif loopOn == 'time':
-        # Split all the cases in arrays of roughly the same size
+        # Split all the times in arrays of roughly the same size
         chunks =  np.array_split(range(itime,ftime,skiptime), nCores)
         # Now, get the beginning and end of each separate chunk
         itime_list = [i[0]    for i in chunks]
@@ -374,9 +412,9 @@ def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondi
         fCase_list = repeat(fCase)
 
 
-    p = Pool()
+    p = Pool(nCores)
     ds_ = p.starmap(readFFPlanes, zip(repeat(caseobj),          # caseobj
-                                      repeat(sliceToRead),      # slicesToRead
+                                      repeat([slicesToRead]),   # slicesToRead
                                       repeat(verbose),          # verbose
                                       repeat(False),            # saveOutput
                                       iCond_list,               # iCondition
@@ -388,17 +426,33 @@ def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondi
                                       itime_list,               # itime
                                       ftime_list,               # ftime
                                       repeat(skiptime),         # skiptime
-                                      repeat(outputformat)      # outputformat
+                                      repeat(outputformat),     # outformat
+                                      repeat(terrainSlice)      # terrainSlice
                                      )
                                   )
+    p.close()
+    p.terminate()
+    p.join()
 
     print(f'Done reading all output. Concatenating the arrays')
-    comb_ds = xr.combine_by_coords(ds_)
+
+    try:
+        comb_ds = xr.combine_by_coords(ds_)
+    except ValueError as e:
+        if 'neither monotonically increasing nor monotonically decreasing' in str(e):
+            print('Concatenation using combine_by_coords failed. Concatenating using merge instead.')
+            print('  WARNING: Indexes are _not_ monotonically increasing. Do not use `isel`.')
+            print('           Try using `.sortby(<dimstr>)` to sort it.')
+            comb_ds = xr.merge(ds_)
+        else:
+            raise
+
 
     if saveOutput:
-        pass
-        print('Done concatenating. Saving zarr file.')
-        comb_ds.to_zarr(outputzarr)
+        print(f'Done concatenating. Saving {outputformat} file.')
+        if outputformat == 'zarr':  comb_ds.to_zarr(outputzarr)
+        elif outputformat == 'nc':  comb_ds.to_netcdf(outputnc)
+
 
     print('Finished.')
 
@@ -406,18 +460,20 @@ def readFFPlanesPar(caseobj, sliceToRead, verbose=False, saveOutput=True, iCondi
 
 
 
-
-
-
-
-
-
-def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=True, iCondition=0, fCondition=-1, iCase=0, fCase=-1, iSeed=0, fSeed=-1, itime=0, ftime=-1, skiptime=1, outformat='nc'):
+def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=True, iCondition=0, fCondition=-1, iCase=0, fCase=-1, iSeed=0, fSeed=-1, itime=0, ftime=-1, skiptime=1, outformat='nc', terrainSlice=None):
     '''
     Read and process FAST.Farm planes into xarrays.
 
     INPUTS
     ======
+    slicesToRead: list of str
+        Slices to read: 'x', 'y', 'z' for the disturbed-wind planes normal to that axis (Low.DisYZ, Low.DisXZ, Low.DisXY .vtk files),
+        and 'terrain' for the terrain-following point clouds (TerrSlice .vtp files). The terrain
+        dataset has dimensions (time, seed, case, cond, slice, offset, x, y) with z(slice, offset, x, y) as a coordinate, or
+        (time, seed, case, cond, slice, offset, point) with x, y, z as (slice, offset, point) coordinates when the cloud is not on a
+        regular x-y lattice (e.g. sampled from an STL surface) or the offsets are not vertical. Its time is the snapshot number times WrTerrainDT.
+    terrainSlice: str
+        Name (SliceName in the FAST.Farm input file) of the single terrain slice to read. Default None reads all of them, concatenated along `slice`.
     i<quant>, f<quant>: int
         Initial and end index of <quant> to read
     itime: int
@@ -429,24 +485,20 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
 
     '''
 
+    if isinstance(slicesToRead, str):  slicesToRead = [slicesToRead]
+
     if fCondition==-1:
         fCondition = caseobj.nConditions
-    #else:
-    #    fCondition += 1  # The user sets the last desired condition. This if for the np.arange.
     if fCondition-iCondition <= 0:
         raise ValueError (f'Final condition to read needs to be larger than initial.')
 
     if fCase==-1:
         fCase = caseobj.nCases
-    #else:
-        #fCase += 1  # The user sets the last desired case. This if for the np.arange.
     if fCase-iCase <= 0:
         raise ValueError (f'Final case to read needs to be larger than initial.')
 
     if fSeed==-1:
         fSeed = caseobj.nSeeds
-    #else:
-    #    fSeed += 1 # The user sets the last desired seed. This is for the np.arange
     if fSeed-iSeed <= 0:
         raise ValueError (f'Final seed to read needs to be larger than initial.')
 
@@ -455,37 +507,20 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
 
     if verbose: print(f'Requesting to save {slicesToRead} slices')
 
-    #if nConditions is None:
-    #    nConditions = caseobj.nConditions
-    #else:
-    #    if nConditions > caseobj.nConditions:
-    #        print(f'WARNING: Requested {nConditions} conditions, but only {caseobj.nConditions} are available. Reading {caseobj.nConditions} conditions')
-    #        nConditions = caseobj.nConditions
-
-    #if nCases is None:
-    #    nCases = caseobj.nCases
-    #else:
-    #    if nCases > caseobj.nCases:
-    #        print(f'WARNING: Requested {nCases} cases, but only {caseobj.nCases} are available. Reading {caseobj.nCases} cases')
-    #        nCases = caseobj.nCases
-
-    #if nSeeds is None:
-    #    nSeeds = caseobj.nSeeds
-    #else:
-    #    if nSeeds > caseobj.nSeeds:
-    #        print(f'WARNING: Requested {nSeeds} seeds, but only {caseobj.nSeeds} are available. Reading {caseobj.nSeeds} seeds')
-    #        nSeeds = caseobj.nSeeds
-    
     # Read all VTK output for each plane and save an nc files for each normal. Load files if present.
     for slices in slicesToRead:
     
         storefile = f'ds_{slices}Slices_temp_cond{iCondition}_{fCondition}_case{iCase}_{fCase}_seed{iSeed}_{fSeed}'
+        if slices == 'terrain' and terrainSlice is not None:
+            storefile = f'ds_terrainSlices_{terrainSlice}_temp_cond{iCondition}_{fCondition}_case{iCase}_{fCase}_seed{iSeed}_{fSeed}'
+        ftime_read = ftime   # resolved from the files of the first cond/case/seed read and then kept for the whole slice family
+
         if outformat == 'zarr':
             outputfile = os.path.join(caseobj.path, f'{storefile}.zarr')
         elif outformat == 'nc':
             outputfile = os.path.join(caseobj.path, f'{storefile}.nc')
 
-        if os.path.isdir(outputfile): # it's zarr
+        if os.path.isdir(outputfile): # zarr
             if len(slicesToRead) > 1:
                 print(f"!! WARNING: Asked for multiple slices. Returning only the first one, {slices}\n",
                       f"           To load other slices, request `slicesToRead='y'`")
@@ -494,7 +529,7 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
             Slices = xr.open_zarr(outputfile)
             return Slices
 
-        elif os.path.isfile(outputfile):  # it's nc
+        elif os.path.isfile(outputfile): # nc
             if len(slicesToRead) > 1:
                 print(f"!! WARNING: Asked for multiple slices. Returning only the first one, {slices}\n",
                       f"           To load other slices, request `slicesToRead='y'`")
@@ -505,9 +540,7 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
 
             
         else:
-            
-            # This for-loop is due to memory allocation requirements
-            #print(f'Processing slices normal in the {slices} direction...')
+            # This loop is due to memory allocation requirements
             Slices_cond = []
             for cond in np.arange(iCondition, fCondition, 1):
                 Slices_case = []
@@ -526,34 +559,75 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
                         OutDisWindX   = ff_file['OutDisWindX']
                         NOutDisWindXZ = ff_file['NOutDisWindXZ']
                         WrDisDT       = ff_file['WrDisDT']
+                        # Terrain-following slices. Older input files do not have the block.
+                        if 'NumTerrainSlices' in ff_file.keys():
+                            NumTerrainSlices = ff_file['NumTerrainSlices']
+                            WrTerrainDT      = ff_file['WrTerrainDT']
+                            TerrainSlices    = ff_file['TerrainSlices']
+                            if str(WrTerrainDT).strip('"').upper() == 'DEFAULT':  WrTerrainDT = _getDT_Low(ff_file)   # DEFAULT means DT_Low in FAST.Farm
+                        else:
+                            NumTerrainSlices = 0
 
-                        # Determine number of output VTKs based on succesful completion
-                        nOutputTimes_expected = int(np.floor(tmax/WrDisDT))
-                        # Determine number of actually available snapshots from files on disk
-                        disxy001_prefix = f'{_get_fstf_filename(caseobj)}.Low.DisXY001.'
-                        disxy001_files = [f for f in os.listdir( os.path.join(seedPath, 'vtk_ff')) if f.startswith(disxy001_prefix) and f.endswith('.vtk')]
-                        nOutputTimes_available = len(disxy001_files)
+                        # Determine number of output VTKs based on succesful completion, and the number of actually available snapshots from the
+                        # files on disk: the Low.DisXY001 family for the x, y, z planes, and the terrain slices themselves for the terrain point clouds
+                        vtkfiles = os.listdir( os.path.join(seedPath, 'vtk_ff'))
+                        if slices == 'terrain':
+                            if NumTerrainSlices == 0:
+                                raise ValueError(f'Terrain slices requested, but NumTerrainSlices=0 (or no terrain-following block) in the FAST.Farm input file.')
+                            if WrTerrainDT < WrDisDT:
+                                print(f'WARNING: WrTerrainDT ({WrTerrainDT}) < WrDisDT ({WrDisDT}). FAST.Farm names the terrain files with the disturbed-wind output counter,'
+                                      f' so files overwrite each other and the times are unreliable.')
+                            # Slices to read (the one requested, or all rows) and their files on disk, sorted by time. FAST.Farm writes no files for a
+                            # slice it disabled at initialization (all points outside the low-resolution domain); such slices are skipped
+                            deckSliceNames = []
+                            terrainSliceNames = []
+                            terrainSliceOffsets = []
+                            terrainSliceFiles = []
+                            for row in TerrainSlices:
+                                name, offsets = _terrainSliceRow(row)
+                                deckSliceNames.append(name)
+                                if terrainSlice is not None and name != terrainSlice:
+                                    continue
+                                sliceprefix = f'{_get_fstf_filename(caseobj)}.TerrSlice.{name}.'
+                                files = sorted([f for f in vtkfiles if f.startswith(sliceprefix) and f.endswith('.vtp')])
+                                if len(files) == 0:
+                                    print(f'WARNING: No files found for terrain slice {name} (FAST.Farm skips slices that fall entirely outside the low-resolution domain). Skipping it.')
+                                    continue
+                                terrainSliceNames.append(name)
+                                terrainSliceOffsets.append(offsets)
+                                terrainSliceFiles.append(files)
+                            if terrainSlice is not None and terrainSlice not in deckSliceNames:
+                                raise ValueError(f'Terrain slice {terrainSlice} is not in the FAST.Farm input file. Available terrain slices: {deckSliceNames}')
+                            if len(terrainSliceNames) == 0:
+                                raise ValueError(f'No terrain slice files found in {os.path.join(seedPath, "vtk_ff")}.')
+                            firstfamily_files = terrainSliceFiles[0]
+                            nOutputTimes_expected = int(np.floor(tmax/WrTerrainDT))
+                            nOutputTimes_available = min([len(files) for files in terrainSliceFiles])
+                        else:
+                            disxy001_prefix = f'{_get_fstf_filename(caseobj)}.Low.DisXY001.'
+                            firstfamily_files = [f for f in vtkfiles if f.startswith(disxy001_prefix) and f.endswith('.vtk')]
+                            nOutputTimes_expected = int(np.floor(tmax/WrDisDT))
+                            nOutputTimes_available = len(firstfamily_files)
                         if nOutputTimes_available != nOutputTimes_expected:
-                            print(f'WARNING: Expected {nOutputTimes_expected} outputs from TMax/WrDisDT, but found {nOutputTimes_available}'
+                            print(f'WARNING: Expected {nOutputTimes_expected} outputs from TMax and the output time step, but found {nOutputTimes_available}'
                                   f' files matching. Reading only available snapshots.')
                         nOutputTimes = min(nOutputTimes_expected, nOutputTimes_available)
                         
 
                         # Determine number of output digits for reading
                         ndigitsplane = max(len(str(max(NOutDisWindXY,NOutDisWindXZ,NOutDisWindYZ))), 3)
-                        ndigitstime = len(str(nOutputTimes_expected)) + 1  # this +1 is experimental. I had 1800 planes and got 5 digits.
-                        # If this breaks again and I need to come here to fix, I need to ask Andy how the amount of digits is determined.
+                        # Number of time digits is taken from the files actually on disk
+                        ndigitstime = len(firstfamily_files[0].split('.')[-2]) if nOutputTimes_available > 0 else len(str(nOutputTimes_expected))
 
 
                         # Determine how many snapshots to read depending on input
-                        if ftime==-1:
-                            ftime=nOutputTimes
-                        elif ftime>nOutputTimes:
-                            raise ValueError (f'Final time step requested ({ftime}) is greater than the total available ({nOutputTimes})')
+                        if ftime_read==-1:
+                            ftime_read=nOutputTimes
+                        elif ftime_read>nOutputTimes:
+                            raise ValueError (f'Final time step requested ({ftime_read}) is greater than the total available ({nOutputTimes})')
 
-
-                        # Print info
-                        if verbose: print(f'Processing {slices} slice: Condition {cond}, Case {case}, Seed {seed}, snapshot {itime} to {ftime} ({nOutputTimes} available)')
+                        if verbose:
+                            print(f'Processing {slices} slice: Condition {cond}, Case {case}, Seed {seed}, snapshot {itime} to {ftime_read} ({nOutputTimes} available)')
 
                         if slices == 'z':
                             # Read Low-res z-planes
@@ -561,7 +635,7 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
                             for zplane in range(NOutDisWindXY):
                                 Slices_t=[]
                                 #for t in range(nOutputTimes):
-                                for t in np.arange(itime,ftime,skiptime):
+                                for t in np.arange(itime,ftime_read,skiptime):
                                     file = f'{_get_fstf_filename(caseobj)}.Low.DisXY{zplane+1:0{ndigitsplane}d}.{t:0{ndigitstime}d}.vtk'
                                     if verbose: print(f'Reading z plane {zplane} for time step {t}: \t {file}')
 
@@ -579,7 +653,7 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
                             for yplane in range(NOutDisWindXZ):
                                 Slices_t=[]
                                 #for t in range(nOutputTimes):
-                                for t in np.arange(itime,ftime,skiptime):
+                                for t in np.arange(itime,ftime_read,skiptime):
                                     file = f'{_get_fstf_filename(caseobj)}.Low.DisXZ{yplane+1:0{ndigitsplane}d}.{t:0{ndigitstime}d}.vtk'
                                     if verbose: print(f'Reading y plane {yplane} for time step {t}: \t {file}')
 
@@ -598,7 +672,7 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
                                 Slices_t=[]
                                 print(f'Processing {slices} slice: Condition {cond}, Case {case}, Seed {seed}, x plane {xplane}')
                                 #for t in range(nOutputTimes):
-                                for t in np.arange(itime,ftime,skiptime):
+                                for t in np.arange(itime,ftime_read,skiptime):
                                     file = f'{_get_fstf_filename(caseobj)}.Low.DisYZ{xplane+1:0{ndigitsplane}d}.{t:0{ndigitstime}d}.vtk'
                                     if verbose: print(f'Reading x plane {xplane} for time step {t}: \t {file}')
 
@@ -610,8 +684,33 @@ def readFFPlanes(caseobj, slicesToRead=['x','y','z'], verbose=False, saveOutput=
                                 Slices.append(Slices_t)
                             Slices = xr.concat(Slices, dim='x', data_vars='all')
 
+                        elif slices == 'terrain':
+                            # Read terrain-following point clouds: one .vtp per slice and snapshot, with all offsets of the slice in the same file.
+                            # FAST.Farm names these files with the disturbed-wind output counter (n/WrDisSkp1 in AWAE.f90), not with a terrain
+                            # counter, so the file of a snapshot is looked up in the sorted list from disk and the time is the snapshot number
+                            # times WrTerrainDT
+                            Slices=[]
+                            for terrslice in range(len(terrainSliceNames)):
+                                sliceName = terrainSliceNames[terrslice]
+                                offsets = terrainSliceOffsets[terrslice]
+                                Slices_t=[]
+                                for t in np.arange(itime,ftime_read,skiptime):
+                                    file = terrainSliceFiles[terrslice][t]
+                                    if verbose: print(f'Reading terrain slice {sliceName} for time step {t}: \t {file}')
+
+                                    points, vel = readVTP_pointCloud(os.path.join(seedPath, 'vtk_ff', file))
+                                    ds = readAndCreateDatasetTerrain(points, vel, sliceName, offsets, caseobj, cond=cond, case=case, seed=seed, t=t, WrTerrainDT=WrTerrainDT)
+
+                                    Slices_t.append(ds)
+                                Slices_t = xr.concat(Slices_t, dim='time', data_vars='all')
+                                Slices.append(Slices_t)
+                            for Slices_t in Slices:
+                                if set(Slices_t.dims) != set(Slices[0].dims):
+                                    raise ValueError(f'The terrain slices {terrainSliceNames} are not all on a regular lattice, so they cannot be combined in one dataset. Read them one at a time with terrainSlice=<name>.')
+                            Slices = xr.concat(Slices, dim='slice', data_vars='all', join='outer')   # slices may be on different grids
+
                         else:
-                            raise ValueError(f'Only slices x, y, z are available. Slice {slices} was requested. Stopping.')
+                            raise ValueError(f'Only slices x, y, z, terrain are available. Slice {slices} was requested. Stopping.')
 
                         Slices_seed.append(Slices)
                     Slices_seed = xr.concat(Slices_seed, dim='seed', data_vars='all')
@@ -665,6 +764,141 @@ def readAndCreateDataset(vtk, caseobj, cond=None, case=None, seed=None, t=None, 
     if seed is not None:  ds = ds.expand_dims('seed').assign_coords({'seed': [seed]})           
         
     return ds        
+
+
+def _terrainSliceRow(row):
+    '''
+    Name and offsets (m) of one row of the TERRAIN-FOLLOWING SAMPLING table, `"name"  off1 [off2 ...]  (Nx Ny Nz | default)  SourceType  "file"`.
+    The name is the first quoted string. The numeric tokens after it are the offsets, unless the run of numbers ends at the SourceType instead of
+    at `default`, in which case its last three numbers are the (Nx Ny Nz) normal.
+    '''
+    name = row.split('"')[1]
+    tokens = row.split('"')[2].replace('(',' ').replace(')',' ').replace(',',' ').split()   # everything between the name and the file name
+    numbers = []
+    for token in tokens:
+        try:
+            numbers.append(float(token))
+        except ValueError:
+            break
+    normalIsDefault = len(numbers) < len(tokens) and tokens[len(numbers)].lower() == 'default'
+    if normalIsDefault:
+        offsets = numbers
+    else:
+        offsets = numbers[:-3]
+    if len(offsets) == 0:  offsets = [0.0]   # no offset given means sampling on the surface itself
+    return name, offsets
+
+
+def readAndCreateDatasetTerrain(points, vel, sliceName, offsets, caseobj, cond=None, case=None, seed=None, t=None, WrTerrainDT=None):
+    '''
+    Terrain-following counterpart of readAndCreateDataset. `points` and `vel` are the (N,3) arrays of one .vtp, which holds all the offsets of
+    the slice back to back (the first N/nOffsets points are the first offset, and so on). When the offsets are vertical (`default` normal) all
+    the sheets share their x, y, and a cloud on a regular x-y lattice is gridded to (offset, x, y) with z(offset, x, y) as a coordinate (lattice
+    nodes not in the cloud become NaN). Any other cloud is kept on a `point` dimension, with x, y, z as (offset, point) coordinates.
+    '''
+
+    nOffsets = len(offsets)
+    nPoints = points.shape[0]//nOffsets
+    x = points[:,0].reshape(nOffsets, nPoints)
+    y = points[:,1].reshape(nOffsets, nPoints)
+    z = points[:,2].reshape(nOffsets, nPoints)
+    u = vel[:,0].reshape(nOffsets, nPoints)
+    v = vel[:,1].reshape(nOffsets, nPoints)
+    w = vel[:,2].reshape(nOffsets, nPoints)
+
+    if t is None and WrTerrainDT is None:
+        t=1
+        WrTerrainDT = 1
+
+    # The sheets share their x, y only when the offsets are vertical; a tilted normal shifts every sheet sideways
+    sheetsShareXY = np.all(x == x[0]) and np.all(y == y[0])
+    # A cloud is a regular lattice when at most half of the unique-x by unique-y nodes are missing from it. A cloud sampled from an STL surface
+    # has about as many distinct x and y values as points, so its lattice would be almost empty and it is kept as points
+    xlattice = np.unique(x[0])
+    ylattice = np.unique(y[0])
+    isLattice = len(xlattice)*len(ylattice) <= 2*nPoints
+
+    if sheetsShareXY and isLattice:
+        # Scatter every point onto its lattice node
+        ix = np.searchsorted(xlattice, x[0])
+        iy = np.searchsorted(ylattice, y[0])
+        z_grid = np.full((nOffsets, len(xlattice), len(ylattice)), np.nan, dtype=z.dtype)
+        u_grid = np.full((nOffsets, len(xlattice), len(ylattice)), np.nan, dtype=u.dtype)
+        v_grid = np.full((nOffsets, len(xlattice), len(ylattice)), np.nan, dtype=v.dtype)
+        w_grid = np.full((nOffsets, len(xlattice), len(ylattice)), np.nan, dtype=w.dtype)
+        z_grid[:,ix,iy] = z
+        u_grid[:,ix,iy] = u
+        v_grid[:,ix,iy] = v
+        w_grid[:,ix,iy] = w
+
+        ds = xr.Dataset({
+                'u': (['offset', 'x', 'y'], u_grid),
+                'v': (['offset', 'x', 'y'], v_grid),
+                'w': (['offset', 'x', 'y'], w_grid),
+                'z': (['offset', 'x', 'y'], z_grid), },
+               coords={
+                'offset': (['offset'], offsets),
+                'x': (['x'], xlattice),
+                'y': (['y'], ylattice),
+                'time': [t*WrTerrainDT] },
+              )
+        coordVars = ['z']
+    else:
+        ds = xr.Dataset({
+                'u': (['offset', 'point'], u),
+                'v': (['offset', 'point'], v),
+                'w': (['offset', 'point'], w),
+                'x': (['offset', 'point'], x),
+                'y': (['offset', 'point'], y),
+                'z': (['offset', 'point'], z), },
+               coords={
+                'offset': (['offset'], offsets),
+                'point': (['point'], np.arange(nPoints)),
+                'time': [t*WrTerrainDT] },
+              )
+        coordVars = ['x', 'y', 'z']
+
+    # The coordinates that vary per point are data variables up to here so that they also get the slice dimension
+    ds = ds.expand_dims('slice').assign_coords({'slice': [sliceName]}).set_coords(coordVars)
+    if cond is not None:  ds = ds.expand_dims('cond').assign_coords({'cond': [caseobj.condDirList[cond]]})
+    if case is not None:  ds = ds.expand_dims('case').assign_coords({'case': [caseobj.caseDirList[case]]})
+    if seed is not None:  ds = ds.expand_dims('seed').assign_coords({'seed': [seed]})
+
+    return ds
+
+
+def readVTP_pointCloud(vtppath):
+    '''
+    Read a VTK XML PolyData (.vtp) point cloud written by FAST.Farm's terrain-following sampling, either in its
+    binary appended-raw form (the default) or in its ASCII form (FF_SLICE_ASCII environment variable set at run time).
+    Returns the point coordinates (N,3) as float64 and the velocity vectors (N,3) as float32.
+    '''
+
+    with open(vtppath, 'rb') as f:
+        raw = f.read()
+
+    if b'format="appended"' in raw[:4096]:
+        # Binary: each DataArray is a [uint32 byte count][payload] block at its `offset` after the underscore that opens the appended data
+        vtktypes = {b'Float32': '<f4', b'Int64': '<i8'}
+        header = raw[:raw.index(b'<AppendedData')]
+        blob = raw[raw.index(b'_', raw.index(b'<AppendedData'))+1:]
+        arrays = []
+        for tag in re.findall(rb'<DataArray [^>]*>', header):
+            offset = int(re.search(rb'offset="(\d+)"', tag).group(1))
+            dtype = vtktypes[re.search(rb'type="(\w+)"', tag).group(1)]
+            nbytes = int(np.frombuffer(blob[offset:offset+4], '<u4')[0])
+            arrays.append(np.frombuffer(blob[offset+4:offset+4+nbytes], dtype))
+    else:
+        # ASCII: the values are written between the DataArray tags (NaN as the text NaN)
+        arrays = []
+        for text in re.findall(rb'<DataArray[^>]*>(.*?)</DataArray>', raw, re.S):
+            arrays.append(np.array(text.split(), dtype=float))
+
+    # The arrays are, in file order: points, verts connectivity, verts offsets, velocity
+    points = arrays[0].reshape(-1,3).astype(float)
+    vel    = arrays[3].reshape(-1,3).astype(np.float32)
+
+    return points, vel
 
 
 def readVTK_structuredPoints (vtkpath):

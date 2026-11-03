@@ -1,0 +1,72 @@
+# The files in here were copied as shown below.
+
+# Aug 14 2025: copied this v4.1 from v4.0 and adapted the following:
+
+
+
+
+
+
+# april 2025:
+
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT/Airfoils/ .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT/Cp_Ct_Cq.IEA15MW.txt .
+cp /projects/tcwnd/rthedin/repos/openfast_r-test_v4.0.2/glue-codes/fast-farm/LESinflow/FAST.Farm.fstf .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT-Monopile/IEA-15-240-RWT-Monopile.fst .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT-Monopile/IEA-15-240-RWT-Monopile_AeroDyn15.dat .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT-Monopile/IEA-15-240-RWT-Monopile_DISCON.IN .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT-Monopile/IEA-15-240-RWT-Monopile_ElastoDyn.dat .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT-Monopile/IEA-15-240-RWT-Monopile_ElastoDyn_tower.dat .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT-Monopile/IEA-15-240-RWT-Monopile_ServoDyn.dat .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT-Monopile/IEA-15-240-RWT-Monopile_SubDyn.dat .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT/IEA-15-240-RWT_AeroDyn15_blade.dat .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT/IEA-15-240-RWT_BeamDyn.dat .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT/IEA-15-240-RWT_BeamDyn_blade.dat .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT/IEA-15-240-RWT_ElastoDyn_blade.dat .
+cp /projects/tcwnd/rthedin/repos/IEA-15-240-RWT_v1.1.14/OpenFAST/IEA-15-240-RWT-OLAF/IEA-15-240-RWT_OLAF.fst .
+cp /projects/tcwnd/rthedin/repos/openfast_r-test_v4.0.2/glue-codes/fast-farm/LESinflow/IW_WT.dat .
+
+# Rename to FAST.Farm toolbox conventions
+mv IEA-15-240-RWT-Monopile.fst IEA-15-240-RWT-Monopile.T.fst
+mv IEA-15-240-RWT-Monopile_ServoDyn.dat IEA-15-240-RWT-Monopile_ServoDyn.T.dat
+mv IEA-15-240-RWT-Monopile_ElastoDyn.dat IEA-15-240-RWT-Monopile_ElastoDyn.T.dat
+mv IEA-15-240-RWT_OLAF.fst IEA-15-240-RWT_OLAF.dat
+mv IEA-15-240-RWT-Monopile_DISCON.IN IEA-15-240-RWT-Monopile_DISCON_ROSCOv2.9.IN
+
+# Differences between this v4.0 and the old values I had for v3.5 inputs
+ - FAST.Farm input:
+	- Kept WAT off
+ - fst
+	- Kept hydrodyn/seastate off
+ - AeroDyn
+ 	- Used to have Wake_Mod 0, changed to Wake_Mod 1 (BEMT)
+	- ADBlFile(1) does not seem to be used
+- The Airfoil files below have additional unsteady aerodynamics settings. Used the new ones
+    - Airfoils/IEA-15-240-RWT_AeroDyn15_Polar_00.dat
+    - Airfoils/IEA-15-240-RWT_AeroDyn15_Polar_01.dat
+    - Airfoils/IEA-15-240-RWT_AeroDyn15_Polar_02.dat
+    - Airfoils/IEA-15-240-RWT_AeroDyn15_Polar_03.dat
+    - Airfoils/IEA-15-240-RWT_AeroDyn15_Polar_04.dat
+- DISCON
+	- Updated PC_GS_KP and PC_GS_KI to new values
+- ElastoDyn
+	- Turn drivetrain DrTrDOF on (my files were on; github is off)
+	- Turn yaw YawDOW off (my files were off; github on)
+	- Turn all platform DOFs Ptfm* off (all github on)
+	- NacCMxn and NacCMzn were kept my old values (not updated!)
+	- Same for HubMass, HubIner, NacMass, NacYIner, YawBrMass - all my old values were kept
+	- Added new YAW-FRICTION section
+	- kept DTTorSpr, DTTorDmp values
+- IEA-15-240-RWT-Monopile_ElastoDyn_tower.dat
+	- all mode shapes have different values; using my old ones
+- SubDyn
+	- left all the new numbers since I do not use this module
+- ElastoDyn blade file
+	- left all the old nubmers on the mode shapes
+
+# Note: it does not work as of april 2 2025
+
+# rthedin, April 1 2025
+
+
+
