@@ -336,7 +336,7 @@ class Polar(object):
         Returns
         -------
         polar : Polar
-            A new Polar object corrected for 3-D effects
+            A new Polar object corrected for 3-D effects, with angles in degrees.
 
         Notes
         -----
@@ -345,29 +345,16 @@ class Polar(object):
 
         """
 
-        if alpha_max_corr == None and alpha_linear_min == None and alpha_linear_max == None:
-            alpha_linear_region, _, cl_slope, alpha0 = self.linear_region()
-            alpha_linear_min = alpha_linear_region[0]
-            alpha_linear_max = alpha_linear_region[-1]
-            _, alpha_max_corr = self.cl_max()
-            find_linear_region = False
-        elif alpha_max_corr * alpha_linear_min * alpha_linear_max == None:
+        fit_limits = (alpha_max_corr, alpha_linear_min, alpha_linear_max)
+        fit_explicit_range = any(limit is not None for limit in fit_limits)
+        if fit_explicit_range and any(limit is None for limit in fit_limits):
             raise Exception(
                 "Define all or none of the keyword arguments alpha_max_corr, alpha_linear_min, and alpha_linear_max"
             )
-        else:
-            find_linear_region = True
 
-        # rename and convert units for convenience
-        if self._radians:
-            alpha = alpha
-        else:
-            alpha = np.radians(self.alpha)
+        alpha = self.alpha if self._radians else np.deg2rad(self.alpha)
         cl_2d = self.cl
         cd_2d = self.cd
-        alpha_max_corr = np.radians(alpha_max_corr)
-        alpha_linear_min = np.radians(alpha_linear_min)
-        alpha_linear_max = np.radians(alpha_linear_max)
 
         # parameters in Du-Selig model
         a = 1
@@ -380,14 +367,17 @@ class Polar(object):
             expon = d / lam / 1e-4
 
         # find linear region with numpy polyfit
-        if find_linear_region:
+        if fit_explicit_range:
+            alpha_max_corr, alpha_linear_min, alpha_linear_max = np.deg2rad(fit_limits)
             idx = np.logical_and(alpha >= alpha_linear_min, alpha <= alpha_linear_max)
             p = np.polyfit(alpha[idx], cl_2d[idx], 1)
             cl_slope = p[0]
             alpha0 = -p[1] / cl_slope
         else:
-            cl_slope = np.degrees(cl_slope)
-            alpha0 = np.radians(alpha0)
+            cl_slope, alpha0 = self.cl_linear_slope(radians=True)
+            _, alpha_max_corr = self.cl_max()
+            if not self._radians:
+                alpha_max_corr = np.deg2rad(alpha_max_corr)
 
         if lift_method == "DuSelig":
             # Du-Selig correction factor
