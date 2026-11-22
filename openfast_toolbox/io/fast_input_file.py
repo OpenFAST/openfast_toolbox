@@ -18,6 +18,7 @@ TABTYPE_NUM_NO_HEADER      = 4
 TABTYPE_NUM_BEAMDYN        = 5
 TABTYPE_NUM_SUBDYNOUT      = 7
 TABTYPE_MIX_WITH_HEADER    = 6
+TABTYPE_RAW_WITH_HEADER    = 8  # rows kept as verbatim strings (e.g. FAST.Farm plane/terrain slice tables)
 TABTYPE_FIL                = 3
 TABTYPE_OUTLIST            = 33
 TABTYPE_FMT                = 9999 # TODO
@@ -527,12 +528,19 @@ class FASTInputFileBase(File):
         NUMTAB_FROM_LAB_NHEADER  += [0            ]
         NUMTAB_FROM_LAB_NOFFSET  += [2            ]
         NUMTAB_FROM_LAB_TYPE     += ['mix'        ]
+        # FAST.Farm slice-output tables
+        NUMTAB_FROM_LAB_DETECT   += ['origin(m)'      , 'Offsets(m)'      ]
+        NUMTAB_FROM_LAB_DIM_VAR  += ['NumPlaneSlices' , 'NumTerrainSlices']
+        NUMTAB_FROM_LAB_VARNAME  += ['PlaneSlices'    , 'TerrainSlices'   ]
+        NUMTAB_FROM_LAB_NHEADER  += [2                , 2                 ]
+        NUMTAB_FROM_LAB_NOFFSET  += [0                , 0                 ]
+        NUMTAB_FROM_LAB_TYPE     += ['raw'            , 'raw'             ]
 
         FILTAB_FROM_LAB_DETECT   = ['FoilNm' ,'AFNames']
         FILTAB_FROM_LAB_DIM_VAR  = ['NumFoil','NumAFfiles']
         FILTAB_FROM_LAB_VARNAME  = ['FoilNm' ,'AFNames']
 
-        TABTYPE2ID={'num': TABTYPE_NUM_WITH_HEADER, 'mix':TABTYPE_MIX_WITH_HEADER, 'sdout': TABTYPE_NUM_SUBDYNOUT}
+        TABTYPE2ID={'num': TABTYPE_NUM_WITH_HEADER, 'mix':TABTYPE_MIX_WITH_HEADER, 'raw': TABTYPE_RAW_WITH_HEADER, 'sdout': TABTYPE_NUM_SUBDYNOUT}
 
 
         # Using lower case to be more tolerant..
@@ -844,11 +852,17 @@ class FASTInputFileBase(File):
                 d['label']  += labOffset
                 if verbose:
                     print('From lab: Reading table {} Dimension {} (based on {})'.format(d['label'],nTabLines,d['tabDimVar']));
-                try:
-                    d['value'], d['tabColumnNames'], d['tabUnits'] = parseFASTNumTable(self.filename,lines[i:i+nTabLines+nHeaders+nOffset],nTabLines,i, nHeaders, tableType=tab_type, nOffset=nOffset, varNumLines=d['tabDimVar'])
-                except:
-                    print(f'Failed at {self.filename}')
-                    import pdb; pdb.set_trace()
+                if tab_type=='raw':
+                    # Header/units/rows kept as verbatim strings (written back untouched)
+                    d['tabColumnNames'] = lines[i]
+                    d['tabUnits']       = lines[i+1]
+                    d['value']          = [lines[i+nHeaders+n] for n in range(nTabLines)]
+                else:
+                    try:
+                        d['value'], d['tabColumnNames'], d['tabUnits'] = parseFASTNumTable(self.filename,lines[i:i+nTabLines+nHeaders+nOffset],nTabLines,i, nHeaders, tableType=tab_type, nOffset=nOffset, varNumLines=d['tabDimVar'])
+                    except:
+                        print(f'Failed at {self.filename}')
+                        import pdb; pdb.set_trace()
                 d['descr'] = '' #
                 i += nTabLines+1-nOffset
 
@@ -995,6 +1009,12 @@ class FASTInputFileBase(File):
                 if np.size(d['value'],0) > 0 :
                     s+='\n'
                     s+='\n'.join('\t'.join(toStringIntFloatStr(x) for x in y) for y in d['value'])
+            elif d['tabType']==TABTYPE_RAW_WITH_HEADER:
+                s+='{}'.format(d['tabColumnNames'])
+                if d['tabUnits'] is not None:
+                    s+='\n'+'{}'.format(d['tabUnits'])
+                if len(d['value'])>0:
+                    s+='\n'+'\n'.join(str(row) for row in d['value'])
             elif d['tabType']==TABTYPE_NUM_WITH_HEADERCOM:
                 s+='! {}\n'.format(' '.join(['{:^15s}'.format(s) for s in d['tabColumnNames']]))
                 s+='! {}\n'.format(' '.join(['{:^15s}'.format(s) for s in d['tabUnits']]))

@@ -49,3 +49,7 @@ version = {file = "VERSION"}
 
 [tool.setuptools.packages.find]
 include = ["openfast_toolbox*"]
+
+[tool.pytest.ini_options]
+# importlib mode avoids a name clash from the stray repo-root __init__.py
+addopts = "--import-mode=importlib"
