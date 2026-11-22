@@ -20,6 +20,7 @@ TABTYPE_NUM_SUBDYNOUT      = 7
 TABTYPE_MIX_WITH_HEADER    = 6
 TABTYPE_FIL                = 3
 TABTYPE_OUTLIST            = 33
+TABTYPE_OUTLIST_NO_HEADER  = 34
 TABTYPE_FMT                = 9999 # TODO
 
 
@@ -322,18 +323,13 @@ class FASTInputFileBase(File):
 
     # Making it behave like a dictionary
     def __setitem__(self, key, item):
-        I = self.getIDs(key)
-        for i in I: 
-            if self.data[i]['tabType'] != TABTYPE_NOT_A_TAB:
-                # For tables, we automatically update variable that stores the dimension 
-                nRows   = len(item)
-                if 'tabDimVar' in self.data[i].keys():
-                    dimVar  = self.data[i]['tabDimVar']
-                    iDimVar = self.getID(dimVar)
-                    self.data[iDimVar]['value'] = nRows # Avoiding a recursive call to __setitem__ here
-                else:
-                    pass
-            self.data[i]['value'] = item
+        for i in self.getIDs(key):
+            entry = self.data[i]
+            dim_var = entry.get('tabDimVar')
+            # Automatically sized tables do not store a separate row count.
+            if entry['tabType'] != TABTYPE_NOT_A_TAB and dim_var not in (None, 'AUTO'):
+                self.data[self.getID(dim_var)]['value'] = len(item)
+            entry['value'] = item
 
     def __getitem__(self, key):
         i = self.getID(key)
@@ -645,13 +641,13 @@ class FASTInputFileBase(File):
                 continue
 
                 #---The following 3 by 3 matrix is the direction cosine matirx ,GlbDCM(3,3),
-            elif line.upper().find('OUTPUTS')>0:
-                if 'Points' in self.keys() and 'dtM' in self.keys():
+            elif line.lstrip().startswith('---') and 'OUTPUTS' in line.upper():
+                if 'Points' in self and 'LineProp' in self:
                     OutList,i = parseFASTOutList(lines,i+1) 
                     d = getDict()
                     d['label']   = 'Outlist'
                     d['descr']   = ''
-                    d['tabType'] = TABTYPE_OUTLIST
+                    d['tabType'] = TABTYPE_OUTLIST_NO_HEADER
                     d['value']   = OutList
                     self.addComment('------------------------ OUTPUTS --------------------------------------------')
                     self.data.append(d)
@@ -813,12 +809,17 @@ class FASTInputFileBase(File):
                     self.data.append(dd)
 
                 d['label']     = NUMTAB_FROM_LAB_VARNAME[ii]
+                tabDimVar = NUMTAB_FROM_LAB_DIM_VAR[ii]
+                # MoorDyn v2 also uses "ID Type" without a point count.
+                if (labelRaw == 'type' and i > 0
+                        and lines[i - 1].strip(' -\t').lower() == 'points'):
+                    d['label'] = 'Points'
+                    tabDimVar = 'AUTO'
                 if d['label'].lower()=='afcoeff' :
                     d['tabType']        = TABTYPE_NUM_WITH_HEADERCOM
                 else:
                     d['tabType']   = TABTYPE2ID [ tab_type ]
                 # Finding table dimension (number of lines)
-                tabDimVar = NUMTAB_FROM_LAB_DIM_VAR[ii]
                 nTabLines = np.nan
                 if isinstance(tabDimVar, int): # dimension hardcoded
                     d['tabDimVar'] = tabDimVar
@@ -1012,6 +1013,10 @@ class FASTInputFileBase(File):
                 label = d['label']
                 s+='{:22s} {:11s} - {}\n'.format('', label, d['descr'])
                 s+='\n'.join(fil for fil in d['value'][1:])
+            elif d['tabType']==TABTYPE_OUTLIST_NO_HEADER:
+                if len(d['value']) == 0:
+                    continue
+                s+='\n'.join(d['value'])
             elif d['tabType']==TABTYPE_NUM_BEAMDYN:
                 # TODO use dedicated sub-class
                 data = d['value']
