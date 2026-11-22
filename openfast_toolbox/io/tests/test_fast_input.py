@@ -1,5 +1,7 @@
 import unittest
 import os
+from pathlib import Path
+from tempfile import TemporaryDirectory
 import numpy as np
 from openfast_toolbox.io.tests.helpers_for_test import MyDir, reading_test 
 from openfast_toolbox.io.fast_input_file import FASTInputFile
@@ -179,6 +181,68 @@ class Test(unittest.TestCase):
         self.assertEqual(F['LineProp'][0,0] , '1')
         self.assertEqual(F['LineProp'][0,1] , 'main')
         self.assertEqual(F['LineProp'][0,6] , '-')
+
+    def test_FASTInMoorDynV1TableReplacementUpdatesCount(self):
+        mooring = FASTInputFile(os.path.join(MyDir, 'FASTIn_MD-v1.dat'))
+        lines = mooring['LineProp'][:3]
+        mooring['LineProp'] = lines
+        self.assertEqual(mooring['NLines'], len(lines))
+        np.testing.assert_array_equal(mooring['LineProp'], lines)
+
+    def test_FASTInMoorDynV2TableReplacement(self):
+        from openfast_toolbox.case_generation.case_gen import templateReplace
+
+        fixture = Path(MyDir) / 'FASTIn_MD-v2.dat'
+        mooring = FASTInputFile(str(fixture))
+        line_types = mooring['LineTypes']
+        new_type = line_types[0].copy()
+        new_type[0] = 'spare'
+        points = mooring['Points'].copy()
+        points[0, 2] = '420.0'
+        lines = mooring['LineProp'].copy()
+        lines[0, 1] = 'spare'
+        tables = {
+            'LineTypes': np.vstack((line_types, new_type)),
+            'Points': points,
+            'LineProp': lines,
+        }
+
+        for header, has_timestep in [('Attachment', True), ('Type', True), ('Type', False)]:
+            with self.subTest(header=header, has_timestep=has_timestep), TemporaryDirectory() as folder:
+                template = Path(folder) / 'template'
+                template.mkdir()
+                (template / 'main.fst').write_text(
+                    '! OpenFAST input file\nMoorDyn case generation\n"MoorDyn.dat" MooringFile\n',
+                    encoding='ascii',
+                )
+                mooring_text = fixture.read_text(encoding='ascii').replace('Attachment', header, 1)
+                if not has_timestep:
+                    mooring_text = ''.join(
+                        line for line in mooring_text.splitlines(keepends=True) if 'dtM' not in line.split()
+                    )
+                (template / 'MoorDyn.dat').write_text(mooring_text, encoding='ascii')
+                params = {'__name__': 'case'}
+                params.update({'MooringFile|' + name: rows for name, rows in tables.items()})
+                [case_path] = templateReplace(
+                    [params], str(template), outputDir=str(Path(folder) / 'generated'),
+                    main_file='main.fst',
+                )
+                relative_name = FASTInputFile(case_path)['MooringFile'].strip('"')
+                generated = FASTInputFile(str(Path(case_path).parent / relative_name))
+                for name, rows in tables.items():
+                    np.testing.assert_array_equal(generated[name], rows)
+                self.assertEqual(generated['Outlist'], mooring['Outlist'])
+                for count in ('NTypes', 'NConnects', 'NPoints', 'NLines'):
+                    self.assertNotIn(count, generated.keys())
+
+    def test_FASTInMoorDynV2OutlistRoundTrip(self):
+        mooring = FASTInputFile(os.path.join(MyDir, 'FASTIn_MD-v2.dat'))
+        for channels in (mooring['Outlist'], []):
+            with self.subTest(channels=channels), TemporaryDirectory() as folder:
+                mooring['Outlist'] = channels
+                filename = str(Path(folder) / 'MoorDyn.dat')
+                mooring.write(filename)
+                self.assertEqual(FASTInputFile(filename)['Outlist'], channels)
 
     def test_FASTInAirfoil(self):
         F=FASTInputFile(os.path.join(MyDir,'FASTIn_AD15_arfl.dat'))
