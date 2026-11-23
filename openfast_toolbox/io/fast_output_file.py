@@ -614,7 +614,8 @@ def load_binary_output(filename, use_buffer=False, method='mix', **kwargs):
         data[:,0] = time
     else:
         # NOTE: memory expensive due to time conversion, and concatenation
-        data = (data - ColOff) / ColScl
+        if FileID != FileFmtID_NoCompressWithoutTime: # uncompressed data are not scaled
+            data = (data - ColOff) / ColScl
         data = np.concatenate([time.reshape(NT, 1), data], 1)
 
     info = {'name': os.path.splitext(os.path.basename(filename))[0],
