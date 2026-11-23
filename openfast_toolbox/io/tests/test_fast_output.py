@@ -39,6 +39,17 @@ class Test(unittest.TestCase):
         except:
             pass
 
+    def test_FASTOutBin_uncompressed(self):
+        # Uncompressed binary (FileID 3), written by OpenFAST with OutFileFmt=4
+        filename = os.path.join(MyDir,'FASTOutBin_ID3.outb')
+        M = FASTOutputFile(filename).toDataFrame()
+        np.testing.assert_allclose(M['Time_[s]'].values, [0, 0.025, 0.05, 0.075, 0.1])
+        # Values from the text output of the same run
+        np.testing.assert_allclose(M['TwrBsFxt_[kN]'].values, [10.448863, 0.17119217, 8.0563698, -1.2610151, 26.274128], rtol=1e-7)
+        # Buffered reading gives the same data
+        M2 = FASTOutputFile(filename, use_buffer=True).toDataFrame()
+        np.testing.assert_array_equal(M.values, M2.values)
+
 if __name__ == '__main__':
 #     Test().test_000_debug()
     unittest.main()
