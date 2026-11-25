@@ -930,6 +930,8 @@ class FASTInputFileBase(File):
             return val+' '+lab+' - '+descr.strip().lstrip('-').lstrip()
 
         def toStringIntFloatStr(x):
+            if isinstance(x, (bool, np.bool_)):
+                return str(x)
             try:
                 if int(x)==x:
                     s='{:15.0f}'.format(x)

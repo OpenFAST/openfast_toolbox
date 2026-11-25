@@ -1,5 +1,6 @@
 import unittest
 import os
+from tempfile import TemporaryDirectory
 import numpy as np
 from openfast_toolbox.io.tests.helpers_for_test import MyDir, reading_test 
 from openfast_toolbox.io.fast_input_file import FASTInputFile
@@ -67,6 +68,20 @@ class Test(unittest.TestCase):
         F=FASTInputFile(os.path.join(MyDir,'FASTIn_SD.dat'))
         F.test_ascii(bCompareWritesOnly=True,bDelete=True)
         self.assertEqual(F['PitManRat(1)'],2)
+
+    def test_HydroDyn_members_boolean_round_trip(self):
+        hydro = FASTInputFile(os.path.join(MyDir, 'FASTIn_HD2.dat'))
+        members = hydro['Members']
+        members[:4, -1] = [True, False, np.bool_(True), np.bool_(False)]
+
+        with TemporaryDirectory() as temp_dir:
+            path = os.path.join(temp_dir, 'HydroDyn.dat')
+            hydro.write(path)
+            reread_members = FASTInputFile(path)['Members']
+
+        self.assertEqual(reread_members[:4, -1].tolist(), ['True', 'False', 'True', 'False'])
+        np.testing.assert_array_equal(reread_members[4:, -1], members[4:, -1])
+        np.testing.assert_array_equal(reread_members[:, :-1], members[:, :-1])
         
     def test_FASTADBld(self):
         F=FASTInputFile(os.path.join(MyDir,'FASTIn_AD15_bld.dat'))
