@@ -234,7 +234,7 @@ class CactusFile(File):
         df.insert(c , 'RtAeroFzh_[N]'   ,-(np.cos(theta)*df['Fz Coeff. (-)'] + np.sin(theta)*df['Fx Coeff. (-)'])*F0  ); c+=1
         df.insert(c , 'RtAeroMxh_[N-m]' , df['Torque Coeff. (-)']*Q0)              ; c+=1
         df.insert(c , 'RtAeroPwr_[W]'   , df['Power Coeff. (-)']*P0)               ; c+=1
-        df['RtAeroPwr_[W]'].values[0]=df['RtAeroPwr_[W]'].values[1]
+        df.iloc[0, df.columns.get_loc('RtAeroPwr_[W]')] = df['RtAeroPwr_[W]'].iloc[1]
 
         df.insert(c , 'RotSpeed_[rpm]'   , self.RPM*ones)                               ; c+=1
 
@@ -260,7 +260,7 @@ class CactusFile(File):
             df.insert(c , 'Z'+sb+'AeroFzg_[N]'   , df['Blade'+sb+' Fy Coeff. (-)']*F0)           ; c+=1
             df.insert(c , 'Z'+sb+'AeroMzg_[N-m]' , df['Blade'+sb+' Torque Coeff. (-)']*Q0)       ; c+=1
 
-            df['Y'+sb+'AeroPwr_[W]'].values[0] = df['Y'+sb+'AeroPwr_[W]'].values[1]
+            df.iloc[0, df.columns.get_loc('Y'+sb+'AeroPwr_[W]')] = df['Y'+sb+'AeroPwr_[W]'].iloc[1]
 
         df.insert(c , 'Wind1VelX_[m/s]' , U*ones)                                  ; c+=1
 

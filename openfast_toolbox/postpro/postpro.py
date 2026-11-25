@@ -1392,14 +1392,16 @@ def remap_df(df, ColMap, bColKeepNewOnly=False, inPlace=False, dataDict=None, ve
 
 
     # Applying renaming only now so that expressions may be applied in any order
+    # Index values are read-only with pandas 3, rename through a list
+    new_cols = list(df.columns)
     for k,v in RenameMap.items():
         if verbose:
             print('Renaming column {:15s} > {}'.format(v,k))
         k=k.strip()
-        iCol = list(df.columns).index(v)
-        df.columns.values[iCol]=k
+        iCol = new_cols.index(v)
+        new_cols[iCol]=k
         ColNew.append(k)
-    df.columns = df.columns.values # Hack to ensure columns are updated
+    df.columns = new_cols
 
     if len(ColMapMiss)>0:
         print('[FAIL] The following columns were not found in the dataframe:',ColMapMiss)
