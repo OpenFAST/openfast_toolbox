@@ -142,7 +142,7 @@ def hawc2ToBeamDyn(H2MeanLine, H2Structure, BDBldFileOut, BDMainFileOut=None, BD
     else:
         c2def = CSVFile(H2MeanLine).toDataFrame()
     # For the equations below to be generic we force the column names
-    c2def.columns.values[0:4]=['x_[m]','y_[m]','z_[m]','twist_[deg]']
+    c2def.columns = ['x_[m]','y_[m]','z_[m]','twist_[deg]'] + list(c2def.columns[4:])
 
     # --- If necessary, interpolate mean line to user defined positions
     c2def_old = c2def.copy()

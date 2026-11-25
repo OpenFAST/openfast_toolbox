@@ -236,6 +236,8 @@ def loadPolarFile(filename, fformat='auto', to_radians=False, standardizeCols=Tr
     # --- Rename columns - Standardize column names
     if standardizeCols:
         COLS_TODO= {**DEFAULT_COLUMNS,**DEFAULT_COLUMNS_EXT}
+        # Index values are read-only with pandas 3, rename through a list
+        new_cols = list(df.columns)
         for ic, col in enumerate(df.columns):
             c = col.strip().lower().replace('_','')
             c = c.replace('aoa','alpha')
@@ -249,11 +251,12 @@ def loadPolarFile(filename, fformat='auto', to_radians=False, standardizeCols=Tr
                 if c.startswith(kk):
                     cnew = COLS_TODO.pop(kk)
                     #print('changing {} to {}'.format(c, cnew))
-                    df.columns.values[ic] = cnew # rename column
+                    new_cols[ic] = cnew # rename column
                     found=True
                     break
             if not found:
                 print('[WARN] PolarFile: The following column was not understood: {}'.format(col))
+        df.columns = new_cols
 
         # --- Standardize data
         for k,v in DEFAULT_COLUMNS.items():
